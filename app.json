@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Restamp",
+    "slug": "Restamp",
+    "version": "1.0.0",
+
+    "orientation": "portrait",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+
+    "android": {
+      "package": "com.restamp.app"
+    },
+
+    "ios": {
+      "bundleIdentifier": "com.restamp.app"
+    },
+
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    }
+  }
+}
