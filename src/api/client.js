@@ -10,7 +10,7 @@ const RAW_BASE_URL =
     process.env.EXPO_PUBLIC_API_URL) ||
   "https://restamp-backend.onrender.com";
 
-export const API_BASE_URL = (RAW_BASE_URL || "http://127.0.0.1:8000").replace(
+export const API_BASE_URL = (RAW_BASE_URL || "https://restamp-backend.onrender.com").replace(
   /\/+$/,
   "",
 );
