@@ -61,7 +61,11 @@ export default function OwnerPropertyCard({
   return (
     <View style={styles.card}>
       {/* Top Image + Badges */}
-      <View style={styles.imageContainer}>
+      <TouchableOpacity
+        style={styles.imageContainer}
+        activeOpacity={0.92}
+        onPress={() => onViewProperty?.(property)}
+      >
         <SafeImage
           source={{
             uri:
@@ -89,84 +93,89 @@ export default function OwnerPropertyCard({
             <Text style={styles.purposeText}>FOR {property.purpose.toUpperCase()}</Text>
           </View>
         )}
-      </View>
+      </TouchableOpacity>
 
       {/* Card Content */}
       <View style={styles.body}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title} numberOfLines={1}>
-            {property.title}
-          </Text>
-        </View>
-
-        <View style={styles.locationRow}>
-          <MapPin size={13} color={COLORS.textSecondary} style={{ marginRight: 4 }} />
-          <Text style={styles.locationText} numberOfLines={1}>
-            {property.locality}, {property.city}
-          </Text>
-        </View>
-
-        <Text style={styles.priceText}>{formattedPrice}</Text>
-
-        {metadataString ? (
-          <Text style={styles.metadataText} numberOfLines={1}>
-            {metadataString}
-          </Text>
-        ) : null}
-
-        {/* Rejection / Moderation Alert if applicable */}
-        {isRejected && (
-          <View style={styles.rejectionBox}>
-            <AlertTriangle size={15} color="#DC2626" style={{ marginRight: 6, marginTop: 1 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rejectionTitle}>Listing Rejected</Text>
-              <Text style={styles.rejectionReason}>
-                {property.rejectionReason || "Verification document requirement not met."}
-              </Text>
-            </View>
+        <TouchableOpacity
+          activeOpacity={0.95}
+          onPress={() => onViewProperty?.(property)}
+        >
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={1}>
+              {property.title}
+            </Text>
           </View>
-        )}
 
-        {isPending && (
-          <View style={styles.pendingBox}>
-            <Clock size={15} color="#D97706" style={{ marginRight: 6, marginTop: 1 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.pendingTitle}>Pending Verification</Text>
-              <Text style={styles.pendingReason}>
-                {property.moderationNote || "Listing will go live once RESTAMP team validates ownership."}
-              </Text>
-            </View>
+          <View style={styles.locationRow}>
+            <MapPin size={13} color={COLORS.textSecondary} style={{ marginRight: 4 }} />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {property.locality}, {property.city}
+            </Text>
           </View>
-        )}
 
-        {/* Statistics Bar for active/closed */}
-        {!isDraft && !isPending && (
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Eye size={13} color={COLORS.textSecondary} style={{ marginRight: 4 }} />
-              <Text style={styles.statValue}>
-                {property.views >= 1000 ? `${(property.views / 1000).toFixed(1)}K` : property.views || 0}
-              </Text>
-              <Text style={styles.statLabel}>Views</Text>
+          <Text style={styles.priceText}>{formattedPrice}</Text>
+
+          {metadataString ? (
+            <Text style={styles.metadataText} numberOfLines={1}>
+              {metadataString}
+            </Text>
+          ) : null}
+
+          {/* Rejection / Moderation Alert if applicable */}
+          {isRejected && (
+            <View style={styles.rejectionBox}>
+              <AlertTriangle size={15} color="#DC2626" style={{ marginRight: 6, marginTop: 1 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rejectionTitle}>Listing Rejected</Text>
+                <Text style={styles.rejectionReason}>
+                  {property.rejectionReason || "Verification document requirement not met."}
+                </Text>
+              </View>
             </View>
+          )}
 
-            <View style={styles.statDivider} />
-
-            <View style={styles.statItem}>
-              <MessageSquare size={13} color={COLORS.textSecondary} style={{ marginRight: 4 }} />
-              <Text style={styles.statValue}>{property.enquiries || 0}</Text>
-              <Text style={styles.statLabel}>Enquiries</Text>
+          {isPending && (
+            <View style={styles.pendingBox}>
+              <Clock size={15} color="#D97706" style={{ marginRight: 6, marginTop: 1 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pendingTitle}>Pending Verification</Text>
+                <Text style={styles.pendingReason}>
+                  {property.moderationNote || "Listing will go live once RESTAMP team validates ownership."}
+                </Text>
+              </View>
             </View>
+          )}
 
-            <View style={styles.statDivider} />
+          {/* Statistics Bar for active/closed */}
+          {!isDraft && !isPending && (
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Eye size={13} color={COLORS.textSecondary} style={{ marginRight: 4 }} />
+                <Text style={styles.statValue}>
+                  {property.views >= 1000 ? `${(property.views / 1000).toFixed(1)}K` : property.views || 0}
+                </Text>
+                <Text style={styles.statLabel}>Views</Text>
+              </View>
 
-            <View style={styles.statItem}>
-              <Calendar size={13} color={COLORS.textSecondary} style={{ marginRight: 4 }} />
-              <Text style={styles.statValue}>{property.visits || 0}</Text>
-              <Text style={styles.statLabel}>Visits</Text>
+              <View style={styles.statDivider} />
+
+              <View style={styles.statItem}>
+                <MessageSquare size={13} color={COLORS.textSecondary} style={{ marginRight: 4 }} />
+                <Text style={styles.statValue}>{property.enquiries || 0}</Text>
+                <Text style={styles.statLabel}>Enquiries</Text>
+              </View>
+
+              <View style={styles.statDivider} />
+
+              <View style={styles.statItem}>
+                <Calendar size={13} color={COLORS.textSecondary} style={{ marginRight: 4 }} />
+                <Text style={styles.statValue}>{property.visits || 0}</Text>
+                <Text style={styles.statLabel}>Visits</Text>
+              </View>
             </View>
-          </View>
-        )}
+          )}
+        </TouchableOpacity>
 
         {/* Action Buttons based on status */}
         <View style={styles.actionRow}>

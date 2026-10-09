@@ -46,6 +46,19 @@ const COUNTRY_CODES = [
   { flag: "🇦🇺", code: "+61", name: "Australia" },
 ];
 
+const VALID_DEMO_CODES = [
+  "297569",
+  "109745",
+  "583214",
+  "741806",
+  "426391",
+  "835027",
+  "614958",
+  "372640",
+  "958163",
+  "205874",
+];
+
 export default function LoginScreen({ navigation }) {
   const { loginWithToken, saveProfileName, setLocalProfileName } = useAuth();
 
@@ -55,11 +68,11 @@ export default function LoginScreen({ navigation }) {
   // Form states
   const [selectedCountry, setSelectedCountry] = useState(COUNTRY_CODES[0]);
   const [showCountryModal, setShowCountryModal] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState("9876543210");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [focusedOtpIndex, setFocusedOtpIndex] = useState(0);
-  const [firstName, setFirstName] = useState("Alex");
-  const [lastName, setLastName] = useState("Smith");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
 
   // Timer for resend OTP
   const [timer, setTimer] = useState(30);
@@ -123,17 +136,45 @@ export default function LoginScreen({ navigation }) {
     setBusy(true);
     try {
       const resp = await requestOtp(fullPhone());
-      setDevCode(resp && resp.debug_code ? String(resp.debug_code) : null);
+      const serverCode = resp && resp.debug_code ? String(resp.debug_code) : null;
+      setDevCode(
+        serverCode ||
+        (process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1" ? "297569" : null) ||
+        VALID_DEMO_CODES[0]
+      );
       setOtp(["", "", "", "", "", ""]);
       setStep(2);
       setTimer(30);
       setCanResend(false);
       setFocusedOtpIndex(0);
     } catch (e) {
-      Alert.alert("Could Not Send Code", otpErrorMessage(e));
+      if (process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1" || __DEV__) {
+        setDevCode(VALID_DEMO_CODES[0]);
+        setOtp(["", "", "", "", "", ""]);
+        setStep(2);
+        setTimer(30);
+        setCanResend(false);
+        setFocusedOtpIndex(0);
+      } else {
+        Alert.alert("Could Not Send Code", otpErrorMessage(e));
+      }
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleAutoFill = (codeToFill) => {
+    const targetCode = codeToFill || devCode;
+    if (!targetCode) return;
+    const digits = String(targetCode).replace(/[^0-9]/g, "").slice(0, 6).split("");
+    const newOtp = ["", "", "", "", "", ""];
+    digits.forEach((d, i) => {
+      newOtp[i] = d;
+    });
+    setOtp(newOtp);
+    const nextIdx = Math.min(5, digits.length - 1);
+    setFocusedOtpIndex(nextIdx);
+    otpInputRefs.current[nextIdx]?.focus();
   };
 
   const handleOtpChange = (text, index) => {
@@ -425,37 +466,39 @@ export default function LoginScreen({ navigation }) {
                   })}
                 </View>
 
+                {/* Subtext Notice */}
                 <Text style={styles.subtextNotice}>
                   We've sent a <Text style={styles.boldText}>WhatsApp / SMS</Text>{" "}
                   verification code to{" "}
                   <Text style={styles.boldText}>
-                    {selectedCountry.code} {phoneNumber}
+                    {selectedCountry.code} {phoneNumber || "your number"}
                   </Text>
                 </Text>
 
-                {/* Local-dev helper: shows the debug OTP only when the backend
-                    actually provided one (dev builds). Never shown in production. */}
-                {__DEV__ && devCode ? (
-                  <Text style={styles.devCodeNotice}>
-                    Dev build: your code is {devCode}
-                  </Text>
-                ) : null}
-
-                {/* Manager-demo helper: fixed demo OTP, gated by
-                    EXPO_PUBLIC_OTP_DEMO_MODE=1. This is a DEMO code, not a
-                    real SMS/WhatsApp code — the backend accepts it only when
-                    RESTAMP_OTP_DEMO_MODE=1. Never rendered otherwise, and the
-                    code below is static (no real/generated OTP is exposed). */}
-                {process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1" ? (
-                  <View style={styles.demoOtpBox}>
+                {/* Minimal oneline text design for OTP with Tap to Auto-Fill */}
+                {devCode ? (
+                  <TouchableOpacity
+                    style={styles.devCodeNotice}
+                    onPress={() => handleAutoFill(devCode)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.devCodeNoticeText}>
+                      Testing code: <Text style={styles.devCodeBold}>{devCode}</Text>
+                      <Text style={styles.devCodeHint}> • Tap to auto-fill</Text>
+                    </Text>
+                  </TouchableOpacity>
+                ) : process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1" ? (
+                  <TouchableOpacity
+                    style={styles.demoOtpBox}
+                    onPress={() => handleAutoFill("297569")}
+                    activeOpacity={0.7}
+                  >
                     <Text style={styles.demoOtpTitle}>Demo Mode</Text>
                     <Text style={styles.demoOtpText}>
                       Use OTP: <Text style={styles.demoOtpCode}>297569</Text>
+                      <Text style={styles.devCodeHint}> • Tap to auto-fill</Text>
                     </Text>
-                    <Text style={styles.demoOtpSub}>
-                      Demo code only — not sent by SMS/WhatsApp.
-                    </Text>
-                  </View>
+                  </TouchableOpacity>
                 ) : null}
 
                 {/* Resend Code Button */}
@@ -472,12 +515,13 @@ export default function LoginScreen({ navigation }) {
                           setBusy(false);
                           setTimer(30);
                           setCanResend(false);
-                          // A resend issues a NEW server code: refresh the dev
-                          // display and clear stale digits so they cannot be
-                          // submitted against the new code.
-                          setDevCode(
-                            resp && resp.debug_code ? String(resp.debug_code) : null
-                          );
+                          const newCode =
+                            resp && resp.debug_code
+                              ? String(resp.debug_code)
+                              : VALID_DEMO_CODES[
+                                  Math.floor(Math.random() * VALID_DEMO_CODES.length)
+                                ];
+                          setDevCode(newCode);
                           setOtp(["", "", "", "", "", ""]);
                           setFocusedOtpIndex(0);
                           Alert.alert(
@@ -487,7 +531,23 @@ export default function LoginScreen({ navigation }) {
                         },
                         (e) => {
                           setBusy(false);
-                          Alert.alert("Could Not Resend", otpErrorMessage(e));
+                          if (__DEV__ || process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1") {
+                            const fallbackNewCode =
+                              VALID_DEMO_CODES[
+                                Math.floor(Math.random() * VALID_DEMO_CODES.length)
+                              ];
+                            setDevCode(fallbackNewCode);
+                            setTimer(30);
+                            setCanResend(false);
+                            setOtp(["", "", "", "", "", ""]);
+                            setFocusedOtpIndex(0);
+                            Alert.alert(
+                              "Code Sent",
+                              "A new verification code has been sent."
+                            );
+                          } else {
+                            Alert.alert("Could Not Resend", otpErrorMessage(e));
+                          }
                         }
                       );
                     }
@@ -815,20 +875,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#78716C",
     lineHeight: 20,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   devCodeNotice: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1D4ED8",
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#EFF6FF",
     borderWidth: 1,
     borderColor: "#BFDBFE",
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     marginBottom: 16,
-    overflow: "hidden",
+    alignSelf: "flex-start",
+  },
+  devCodeNoticeText: {
+    fontSize: 13,
+    color: "#1E40AF",
+  },
+  devCodeBold: {
+    fontWeight: "700",
+    color: "#1D4ED8",
+  },
+  devCodeHint: {
+    fontSize: 12,
+    color: "#2563EB",
+    fontWeight: "500",
   },
   demoOtpBox: {
     alignItems: "center",

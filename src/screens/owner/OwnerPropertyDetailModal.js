@@ -35,6 +35,23 @@ import StatusBadge from "../../components/owner/StatusBadge";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const HERO_HEIGHT = 340;
 
+const formatCurrency = (val) => {
+  if (val == null) return null;
+  if (typeof val === "number") return `₹${val.toLocaleString("en-IN")}`;
+  if (typeof val === "string") {
+    if (val.startsWith("₹")) return val;
+    const num = Number(val.replace(/[^0-9.-]+/g, ""));
+    return isNaN(num) ? val : `₹${num.toLocaleString("en-IN")}`;
+  }
+  return String(val);
+};
+
+const formatCount = (val) => {
+  if (val == null) return "0";
+  if (typeof val === "number") return val.toLocaleString("en-IN");
+  return String(val);
+};
+
 export default function OwnerPropertyDetailModal({
   visible,
   property,
@@ -93,9 +110,9 @@ export default function OwnerPropertyDetailModal({
 
   return (
     <Modal
-      visible={visible}
+      visible={Boolean(visible && property)}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
       <View style={styles.root}>
@@ -108,23 +125,22 @@ export default function OwnerPropertyDetailModal({
         </Animated.View>
 
         {/* Close button – always visible */}
-        <SafeAreaView style={styles.closeLayer} pointerEvents="box-none">
-          <View style={styles.topControls} pointerEvents="box-none">
-            <TouchableOpacity
-              style={styles.closeBtn}
-              onPress={onClose}
-              activeOpacity={0.7}
-            >
-              <ChevronLeft size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-            <View style={styles.topRight}>
-              <StatusBadge
-                status={property.status}
-                style={styles.floatingBadge}
-              />
-            </View>
+        <View style={styles.topControls}>
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={onClose}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <ChevronLeft size={24} color="#FFFFFF" strokeWidth={2.5} />
+          </TouchableOpacity>
+          <View style={styles.topRight}>
+            <StatusBadge
+              status={property.status}
+              style={styles.floatingBadge}
+            />
           </View>
-        </SafeAreaView>
+        </View>
 
         {/* Scrollable content */}
         <Animated.ScrollView
@@ -222,7 +238,7 @@ export default function OwnerPropertyDetailModal({
               {property.views != null && (
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>
-                    {property.views.toLocaleString("en-IN")}
+                    {formatCount(property.views)}
                   </Text>
                   <Text style={styles.statLabel}>Views</Text>
                 </View>
@@ -303,14 +319,14 @@ export default function OwnerPropertyDetailModal({
                 <FinanceRow
                   icon={Wallet}
                   label="Security Deposit"
-                  value={`₹${property.deposit.toLocaleString("en-IN")}`}
+                  value={formatCurrency(property.deposit)}
                 />
               )}
               {property.maintenance && (
                 <FinanceRow
                   icon={Wrench}
                   label="Maintenance"
-                  value={`₹${property.maintenance.toLocaleString("en-IN")}/mo`}
+                  value={`${formatCurrency(property.maintenance)}/mo`}
                 />
               )}
               {property.availableFrom && (
@@ -414,28 +430,28 @@ const styles = StyleSheet.create({
   },
 
   /* ── Top controls ── */
-  closeLayer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 20,
-  },
   topControls: {
+    position: "absolute",
+    top: 40,
+    left: 16,
+    right: 16,
+    zIndex: 99,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
   },
   closeBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   topRight: {
     flexDirection: "row",

@@ -25,6 +25,8 @@ import {
   MoreVertical,
   Clock,
   ExternalLink,
+  Star,
+  MessageCircle,
 } from "lucide-react-native";
 
 import COLORS from "../../constants/colors";
@@ -68,6 +70,21 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
   const [selectedLeadForClose, setSelectedLeadForClose] = useState(null);
   const [showPropertyModal, setShowPropertyModal] = useState(false);
 
+  const formattedPrice = useMemo(() => {
+    if (!property) return "₹25,000 / month";
+    if (property.priceFormatted) return property.priceFormatted;
+    if (property.price) {
+      const priceNum =
+        typeof property.price === "number"
+          ? property.price
+          : Number(String(property.price).replace(/[^0-9.-]+/g, ""));
+      return !isNaN(priceNum)
+        ? `₹${priceNum.toLocaleString("en-IN")}${property.priceUnit || ""}`
+        : String(property.price);
+    }
+    return "₹25,000 / month";
+  }, [property]);
+
   // Filter leads specifically for this property
   const projectLeads = useMemo(() => {
     if (!property) return leads;
@@ -84,38 +101,13 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
     if (matched.length > 0) return matched;
 
     // Fallback contextual mock leads for this specific property
-    const formattedPrice =
-      property.priceFormatted ||
-      (property.price
-        ? `₹${property.price.toLocaleString("en-IN")}${property.priceUnit || ""}`
-        : "₹25,000 / month");
 
     return [
       {
         id: `gen-lead-${property.id}-1`,
-        customerName: "Arun Kumar",
+        customerName: "Harrison Ledley",
         phone: "+91 98840 12345",
-        email: "arun.kumar@gmail.com",
-        avatar:
-          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
-        propertyId: property.id,
-        propertyTitle: property.title,
-        propertyLocality: `${property.locality || "Anna Nagar"}, Chennai`,
-        propertyPrice: formattedPrice,
-        propertyImage: property.coverPhoto || property.images?.[0],
-        requirement: property.purpose || "Rent",
-        budget: formattedPrice,
-        status: "new",
-        timestamp: "Today • 10:35 AM",
-        preferredVisitDate: "Tomorrow, 11:00 AM",
-        message: `Hi, I am looking for a 2 BHK apartment for my family. Move-in needed within 10 days. Is covered 4-wheeler parking included in the rent?`,
-        visitData: null,
-      },
-      {
-        id: `gen-lead-${property.id}-2`,
-        customerName: "Deepak Verma",
-        phone: "+91 97910 88231",
-        email: "deepak.v@techcorp.in",
+        email: "harrison.ledley@gmail.com",
         avatar:
           "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
         propertyId: property.id,
@@ -125,6 +117,28 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
         propertyImage: property.coverPhoto || property.images?.[0],
         requirement: property.purpose || "Rent",
         budget: formattedPrice,
+        rating: 5,
+        status: "new",
+        timestamp: "Today • 10:35 AM",
+        preferredVisitDate: "Tomorrow, 11:00 AM",
+        message: "Great place with a lovely garden. Conveniently located near the city",
+        visitData: null,
+      },
+      {
+        id: `gen-lead-${property.id}-2`,
+        customerName: "Deepak Verma",
+        phone: "+91 97910 88231",
+        email: "deepak.v@techcorp.in",
+        avatar:
+          "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=200&q=80",
+        propertyId: property.id,
+        propertyTitle: property.title,
+        propertyLocality: `${property.locality || "Anna Nagar"}, Chennai`,
+        propertyPrice: formattedPrice,
+        propertyImage: property.coverPhoto || property.images?.[0],
+        requirement: property.purpose || "Rent",
+        budget: formattedPrice,
+        rating: 5,
         status: "negotiating",
         timestamp: "Yesterday • 4:15 PM",
         preferredVisitDate: "Saturday, 4:00 PM",
@@ -222,13 +236,6 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
       ]
     );
   };
-
-  const formattedPrice = property
-    ? property.priceFormatted ||
-      (property.price
-        ? `₹${property.price.toLocaleString("en-IN")}${property.priceUnit || ""}`
-        : "Price On Request")
-    : "";
 
   const tabCounts = useMemo(() => {
     const counts = {};
@@ -402,17 +409,17 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
         ) : (
           <View style={styles.leadsList}>
             {filteredLeads.map((lead) => {
-              const isNew = lead.status === "new";
+              const rating = lead.rating || 5;
               const isVisitScheduled = lead.status === "visit_scheduled";
 
               return (
                 <TouchableOpacity
                   key={lead.id}
                   style={styles.leadCard}
-                  activeOpacity={0.92}
+                  activeOpacity={0.94}
                   onPress={() => navigation.navigate("OwnerLeadDetail", { lead })}
                 >
-                  {/* Top Header: Avatar, Author/Name, Role & Timestamp, Menu */}
+                  {/* Top Header: Avatar, Name & 5 Stars, Right Actions */}
                   <View style={styles.leadHeaderRow}>
                     <Image
                       source={{
@@ -427,20 +434,49 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
                       <Text style={styles.leadCustomerName} numberOfLines={1}>
                         {lead.customerName}
                       </Text>
-                      <Text style={styles.leadSubMeta} numberOfLines={1}>
-                        {isNew ? "New Enquiry" : "Verified Customer"} • {lead.budget || formattedPrice} • {lead.timestamp || "Today"}
-                      </Text>
+
+                      {/* 5 Gold Stars Rating */}
+                      <View style={styles.ratingStarsRow}>
+                        {[1, 2, 3, 4, 5].map((starIdx) => (
+                          <Star
+                            key={starIdx}
+                            size={14}
+                            color="#F59E0B"
+                            fill={starIdx <= Math.round(rating) ? "#F59E0B" : "transparent"}
+                            style={{ marginRight: 2.5 }}
+                          />
+                        ))}
+                      </View>
                     </View>
 
                     <View style={styles.headerRightActions}>
+                      <TouchableOpacity
+                        style={styles.headerCircleBtn}
+                        onPress={() => handleCall(lead)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                      >
+                        <Phone size={13.5} color="#16A34A" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.headerCircleBtn, { backgroundColor: "#EFF6FF", borderColor: "#DBEAFE" }]}
+                        onPress={() => handleChat(lead)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                      >
+                        <MessageCircle size={14} color="#2563EB" />
+                      </TouchableOpacity>
+
                       <StatusBadge status={lead.status} />
+
                       <TouchableOpacity
                         style={styles.moreOptionsBtn}
                         onPress={() => handleMoreOptions(lead)}
                         activeOpacity={0.7}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
-                        <MoreVertical size={18} color="#94A3B8" />
+                        <MoreVertical size={16} color="#94A3B8" />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -448,7 +484,7 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
                   {/* Body Text: Lead Message Quote / Enquiry Paragraph */}
                   <Text style={styles.leadMessageText} numberOfLines={3}>
                     {lead.message ||
-                      `Hi, I am interested in your property. Looking for quick move-in. Please share full details.`}
+                      "Great place with a lovely garden. Conveniently located near the city"}
                   </Text>
 
                   {/* Visit Scheduled Alert Chip (Preserving visit details) */}
@@ -461,17 +497,16 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
                     </View>
                   )}
 
-                  {/* Bottom Action: View Details Button */}
-                  <View style={styles.leadFooterRow}>
-                    <TouchableOpacity
-                      style={styles.viewDetailFullBtn}
-                      onPress={() => navigation.navigate("OwnerLeadDetail", { lead })}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.viewDetailFullBtnText}>View Details</Text>
-                      <ChevronRight size={15} color={COLORS.primary} />
-                    </TouchableOpacity>
-                  </View>
+                  {/* Dedicated "Schedule a Visit" Button matching user's design */}
+                  <TouchableOpacity
+                    style={styles.scheduleVisitBtn}
+                    onPress={() => setSelectedLeadForVisit(lead)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.scheduleVisitBtnText}>
+                      {lead.status === "visit_scheduled" ? "Reschedule Visit" : "Schedule a Visit"}
+                    </Text>
+                  </TouchableOpacity>
                 </TouchableOpacity>
               );
             })}
@@ -747,31 +782,40 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   leadCustomerName: {
-    fontSize: 15.5,
+    fontSize: 16,
     fontWeight: "700",
     color: "#0F172A",
     letterSpacing: -0.2,
-    marginBottom: 2,
+    marginBottom: 3,
   },
-  leadSubMeta: {
-    fontSize: 12.5,
-    color: "#64748B",
-    fontWeight: "400",
+  ratingStarsRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   headerRightActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
+  headerCircleBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   moreOptionsBtn: {
     padding: 4,
     borderRadius: 8,
   },
   leadMessageText: {
-    fontSize: 14,
+    fontSize: 14.5,
     color: "#334155",
     lineHeight: 21,
-    marginTop: 13,
+    marginTop: 12,
     fontWeight: "400",
   },
   visitChipRow: {
@@ -791,27 +835,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#B45309",
   },
-  leadFooterRow: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-  },
-  viewDetailFullBtn: {
-    flexDirection: "row",
+  scheduleVisitBtn: {
+    backgroundColor: "#E2E8F0",
+    borderRadius: 18,
+    paddingVertical: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EFF6FF",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
-    gap: 6,
+    marginTop: 14,
   },
-  viewDetailFullBtnText: {
-    fontSize: 13.5,
-    fontWeight: "700",
-    color: COLORS.primary,
+  scheduleVisitBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#0F172A",
+    letterSpacing: -0.1,
   },
 });

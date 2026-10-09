@@ -29,6 +29,7 @@ import {
   MessageCircle,
   MoreVertical,
   Zap,
+  Star,
 } from "lucide-react-native";
 
 import COLORS from "../../constants/colors";
@@ -37,6 +38,7 @@ import StatusBadge from "../../components/owner/StatusBadge";
 import EmptyState from "../../components/owner/EmptyState";
 import OwnerSiteVisitModal from "./OwnerSiteVisitModal";
 import OwnerCloseLeadModal from "./OwnerCloseLeadModal";
+import OwnerPropertyDetailModal from "./OwnerPropertyDetailModal";
 import AppBrandHeader from "../../components/AppBrandHeader";
 
 const LEAD_FILTERS = [
@@ -57,6 +59,7 @@ export default function OwnerLeadsScreen({ navigation }) {
   );
   const [activeFilter, setActiveFilter] = useState("All");
   const [showPropertyPicker, setShowPropertyPicker] = useState(false);
+  const [showPropertyDetailModal, setShowPropertyDetailModal] = useState(false);
   const [selectedLeadForVisit, setSelectedLeadForVisit] = useState(null);
   const [selectedLeadForClose, setSelectedLeadForClose] = useState(null);
 
@@ -342,8 +345,8 @@ export default function OwnerLeadsScreen({ navigation }) {
         {selectedProperty ? (
           <TouchableOpacity
             style={styles.propertyCard}
-            onPress={() => setShowPropertyPicker(true)}
-            activeOpacity={0.85}
+            onPress={() => setShowPropertyDetailModal(true)}
+            activeOpacity={0.88}
           >
             <Image
               source={{
@@ -360,11 +363,17 @@ export default function OwnerLeadsScreen({ navigation }) {
                 <Text style={styles.propertyTitle} numberOfLines={1}>
                   {selectedProperty.title}
                 </Text>
-                <View style={styles.statusBadgeGreen}>
-                  <Text style={styles.statusBadgeGreenText}>
-                    {(selectedProperty.status || "Active").toUpperCase()}
-                  </Text>
-                </View>
+                <TouchableOpacity
+                  style={styles.switchPropertyPill}
+                  onPress={(e) => {
+                    e?.stopPropagation?.();
+                    setShowPropertyPicker(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.switchPropertyPillText}>Switch</Text>
+                  <ChevronDown size={12} color="#2563EB" />
+                </TouchableOpacity>
               </View>
 
               <View style={styles.propertyLocRow}>
@@ -458,15 +467,16 @@ export default function OwnerLeadsScreen({ navigation }) {
         ) : (
           <View style={styles.leadsList}>
             {filteredLeads.map((lead) => {
-              const subMetaText =
-                lead.subMeta ||
-                (lead.status === "new"
-                  ? `New Enquiry • ${lead.budget || lead.propertyPrice || "₹20K – ₹30K"}`
-                  : `Verified Customer • ${lead.budget || lead.propertyPrice || "₹24,500/month"}`);
+              const rating = lead.rating || 5;
 
               return (
-                <View key={lead.id} style={styles.leadCard}>
-                  {/* Card Header: Avatar + (Name & Badge + 3-dots) + SubMeta */}
+                <TouchableOpacity
+                  key={lead.id}
+                  style={styles.leadCard}
+                  activeOpacity={0.94}
+                  onPress={() => handleViewDetails(lead)}
+                >
+                  {/* Card Header: Avatar + (Name & 5 Stars) + Header Actions */}
                   <View style={styles.leadHeaderRow}>
                     {lead.avatar ? (
                       <Image source={{ uri: lead.avatar }} style={styles.leadAvatar} />
@@ -479,88 +489,88 @@ export default function OwnerLeadsScreen({ navigation }) {
                     )}
 
                     <View style={styles.leadInfoCol}>
-                      <View style={styles.leadTopLine}>
-                        <View style={styles.leadNameAndBadge}>
-                          <Text style={styles.leadCustomerName} numberOfLines={1}>
-                            {lead.customerName}
-                          </Text>
-                          <StatusBadge
-                            status={lead.status}
-                            style={styles.leadStatusBadge}
-                            textStyle={styles.leadStatusBadgeText}
-                          />
-                        </View>
-
-                        <TouchableOpacity
-                          style={styles.moreOptionsBtn}
-                          onPress={() => handleMoreOptions(lead)}
-                          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                          activeOpacity={0.7}
-                        >
-                          <MoreVertical size={18} color="#94A3B8" />
-                        </TouchableOpacity>
-                      </View>
-
-                      <Text style={styles.leadSubMeta} numberOfLines={1}>
-                        {subMetaText}
+                      <Text style={styles.leadCustomerName} numberOfLines={1}>
+                        {lead.customerName}
                       </Text>
+
+                      {/* 5 Gold Stars Rating */}
+                      <View style={styles.ratingStarsRow}>
+                        {[1, 2, 3, 4, 5].map((starIdx) => (
+                          <Star
+                            key={starIdx}
+                            size={14}
+                            color="#F59E0B"
+                            fill={starIdx <= Math.round(rating) ? "#F59E0B" : "transparent"}
+                            style={{ marginRight: 2.5 }}
+                          />
+                        ))}
+                      </View>
+                    </View>
+
+                    {/* Right side actions: Call, WhatsApp, StatusBadge, 3-dots */}
+                    <View style={styles.headerRightActions}>
+                      <TouchableOpacity
+                        style={styles.headerCircleBtn}
+                        onPress={() => handleCall(lead)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                      >
+                        <Phone size={13.5} color="#16A34A" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.headerCircleBtn, { backgroundColor: "#EFF6FF", borderColor: "#DBEAFE" }]}
+                        onPress={() => handleMessage(lead)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                      >
+                        <MessageCircle size={14} color="#2563EB" />
+                      </TouchableOpacity>
+
+                      <StatusBadge
+                        status={lead.status}
+                        style={styles.leadStatusBadge}
+                        textStyle={styles.leadStatusBadgeText}
+                      />
+
+                      <TouchableOpacity
+                        style={styles.moreOptionsBtn}
+                        onPress={() => handleMoreOptions(lead)}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        activeOpacity={0.7}
+                      >
+                        <MoreVertical size={16} color="#94A3B8" />
+                      </TouchableOpacity>
                     </View>
                   </View>
 
-                  {/* Lead Message Paragraph */}
-                  {lead.message ? (
-                    <Text style={styles.leadMessageText} numberOfLines={3}>
-                      {lead.message}
-                    </Text>
-                  ) : null}
+                  {/* Enquiry Review / Feedback Text */}
+                  <Text style={styles.leadMessageText} numberOfLines={3}>
+                    {lead.message ||
+                      "Great place with a lovely garden. Conveniently located near the city"}
+                  </Text>
 
                   {/* Visit Alert Tag (if scheduled) */}
                   {lead.visitData ? (
                     <View style={styles.visitAlertTag}>
                       <Calendar size={12} color="#D97706" style={{ marginRight: 5 }} />
                       <Text style={styles.visitAlertText}>
-                        Visit: {lead.visitData.date}, {lead.visitData.time}
+                        Visit Booked: {lead.visitData.date}, {lead.visitData.time}
                       </Text>
                     </View>
                   ) : null}
 
-                  {/* Card Actions Footer: Call (icon only), Message (icon only), and View Details (solid fill) */}
-                  <View style={styles.cardActionsRow}>
-                    <View style={styles.leftActionsGroup}>
-                      <TouchableOpacity
-                        style={styles.callIconBtn}
-                        onPress={() => handleCall(lead)}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Phone size={17} color="#16A34A" />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.messageIconBtn}
-                        onPress={() => handleMessage(lead)}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <MessageCircle size={18} color="#2563EB" />
-                      </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.viewDetailsFillBtn}
-                      onPress={() => handleViewDetails(lead)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.viewDetailsFillText}>View Details</Text>
-                      <ChevronRight
-                        size={15}
-                        color="#FFFFFF"
-                        strokeWidth={2.4}
-                        style={{ marginLeft: 4 }}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                  {/* Dedicated "Schedule a Visit" Button matching user's design */}
+                  <TouchableOpacity
+                    style={styles.scheduleVisitBtn}
+                    onPress={() => setSelectedLeadForVisit(lead)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.scheduleVisitBtnText}>
+                      {lead.status === "visit_scheduled" ? "Reschedule Visit" : "Schedule a Visit"}
+                    </Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -703,6 +713,19 @@ export default function OwnerLeadsScreen({ navigation }) {
           onCloseLeadWithOutcome={(leadId, outcome, closeProp, propId) => {
             closeLead(leadId, outcome, closeProp, propId);
             setSelectedLeadForClose(null);
+          }}
+        />
+      )}
+
+      {/* Property Details Modal */}
+      {selectedProperty && (
+        <OwnerPropertyDetailModal
+          visible={showPropertyDetailModal}
+          property={selectedProperty}
+          onClose={() => setShowPropertyDetailModal(false)}
+          onEdit={() => {
+            setShowPropertyDetailModal(false);
+            navigation.navigate("Add", { editingProperty: selectedProperty });
           }}
         />
       )}
@@ -882,6 +905,22 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 6,
   },
+  switchPropertyPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 3,
+  },
+  switchPropertyPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
   statusBadgeGreen: {
     backgroundColor: "#F0FDF4",
     paddingHorizontal: 6,
@@ -994,8 +1033,8 @@ const styles = StyleSheet.create({
   },
   leadCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 18,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
     borderColor: "#EEF2F6",
     shadowColor: "#0F172A",
@@ -1009,15 +1048,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   leadAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: "#E2E8F0",
   },
   leadAvatarFallback: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: "#EFF6FF",
     alignItems: "center",
     justifyContent: "center",
@@ -1030,52 +1069,54 @@ const styles = StyleSheet.create({
   leadInfoCol: {
     flex: 1,
     marginLeft: 12,
-  },
-  leadTopLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  leadNameAndBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    marginRight: 6,
-    gap: 8,
+    justifyContent: "center",
   },
   leadCustomerName: {
-    fontSize: 16.5,
+    fontSize: 16,
     fontWeight: "700",
     color: "#0F172A",
     letterSpacing: -0.2,
-    flexShrink: 1,
+    marginBottom: 3,
+  },
+  ratingStarsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerRightActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  headerCircleBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    justifyContent: "center",
+    alignItems: "center",
   },
   leadStatusBadge: {
-    borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
+    borderRadius: 12,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
   leadStatusBadgeText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "700",
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   moreOptionsBtn: {
     padding: 4,
     justifyContent: "center",
     alignItems: "center",
   },
-  leadSubMeta: {
-    fontSize: 13,
-    color: "#64748B",
-    fontWeight: "500",
-    marginTop: 3,
-  },
   leadMessageText: {
-    fontSize: 14,
+    fontSize: 14.5,
     color: "#334155",
     lineHeight: 21,
-    marginTop: 14,
+    marginTop: 12,
   },
   visitAlertTag: {
     flexDirection: "row",
@@ -1094,60 +1135,18 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#B45309",
   },
-  cardActionsRow: {
-    flexDirection: "row",
+  scheduleVisitBtn: {
+    backgroundColor: "#E2E8F0",
+    borderRadius: 18,
+    paddingVertical: 13,
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "center",
     marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
   },
-  leftActionsGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  callIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#DCFCE7",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  messageIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  viewDetailsFillBtn: {
-    flex: 1,
-    marginLeft: 10,
-    height: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2563EB",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  viewDetailsFillText: {
-    fontSize: 13.5,
-    fontWeight: "700",
-    color: "#FFFFFF",
+  scheduleVisitBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#0F172A",
     letterSpacing: -0.1,
   },
 

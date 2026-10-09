@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -37,15 +37,41 @@ import PrimaryButton from "../../components/owner/PrimaryButton";
 import SecondaryButton from "../../components/owner/SecondaryButton";
 import OwnerSiteVisitModal from "./OwnerSiteVisitModal";
 import OwnerCloseLeadModal from "./OwnerCloseLeadModal";
+import OwnerPropertyDetailModal from "./OwnerPropertyDetailModal";
 
 export default function OwnerLeadDetailScreen({ route, navigation }) {
-  const { updateLeadStatus, scheduleVisit, closeLead, addLeadNote } = useOwner();
+  const { properties, updateLeadStatus, scheduleVisit, closeLead, addLeadNote } = useOwner();
   const initialLead = route?.params?.lead;
 
   const [lead, setLead] = useState(initialLead);
   const [showVisitModal, setShowVisitModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [showPropertyModal, setShowPropertyModal] = useState(false);
   const [newNoteText, setNewNoteText] = useState("");
+
+  const matchedProperty = useMemo(() => {
+    if (!lead) return null;
+    return (
+      properties.find(
+        (p) =>
+          p.id === lead.propertyId ||
+          (p.title &&
+            lead.propertyTitle &&
+            p.title.toLowerCase().trim() === lead.propertyTitle.toLowerCase().trim())
+      ) || {
+        id: lead.propertyId || "prop-lead",
+        title: lead.propertyTitle || "2 BHK Luxury Apartment",
+        coverPhoto: lead.propertyImage,
+        images: lead.propertyImage ? [lead.propertyImage] : [],
+        priceFormatted: lead.propertyPrice || "₹25,000 / month",
+        locality: lead.propertyLocality || "Anna Nagar, Chennai",
+        city: "Chennai",
+        purpose: lead.requirement || "Rent",
+        category: "Residential",
+        status: "active",
+      }
+    );
+  }, [properties, lead]);
 
   if (!lead) {
     return (
@@ -207,7 +233,11 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Interested Property</Text>
 
-          <View style={styles.propertyRow}>
+          <TouchableOpacity
+            style={styles.propertyRow}
+            activeOpacity={0.85}
+            onPress={() => setShowPropertyModal(true)}
+          >
             <Image
               source={{
                 uri:
@@ -239,7 +269,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
                 {lead.propertyPrice || "₹25,000 / month"}
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.sectionDivider} />
@@ -446,6 +476,19 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
           }));
         }}
       />
+
+      {/* Property Details Modal */}
+      {matchedProperty && (
+        <OwnerPropertyDetailModal
+          visible={showPropertyModal}
+          property={matchedProperty}
+          onClose={() => setShowPropertyModal(false)}
+          onEdit={() => {
+            setShowPropertyModal(false);
+            navigation.navigate("Add", { editingProperty: matchedProperty });
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
