@@ -5,10 +5,24 @@ import COLORS from "../../constants/colors";
 import EmptyState from "./EmptyState";
 import PrimaryButton from "./PrimaryButton";
 
-import { SkeletonPropertyCard } from "../common/Skeleton";
-
 export function SkeletonLoader({ count = 3, type = "card" }) {
-  return <SkeletonPropertyCard count={count} />;
+  return (
+    <View style={styles.skeletonContainer}>
+      {Array.from({ length: count }).map((_, index) => (
+        <View key={index} style={styles.skeletonCard}>
+          <View style={styles.skeletonImage} />
+          <View style={styles.skeletonContent}>
+            <View style={styles.skeletonTitle} />
+            <View style={styles.skeletonSubtitle} />
+            <View style={styles.skeletonMetaRow}>
+              <View style={styles.skeletonPill} />
+              <View style={styles.skeletonPill} />
+            </View>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 export function ErrorState({

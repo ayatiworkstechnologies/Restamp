@@ -8,9 +8,9 @@ const RAW_BASE_URL =
   (typeof process !== "undefined" &&
     process.env &&
     process.env.EXPO_PUBLIC_API_URL) ||
-  "https://restamp-backend.onrender.com";
+  "https://restamp-backend-h3x8.onrender.com";
 
-export const API_BASE_URL = (RAW_BASE_URL || "https://restamp-backend.onrender.com").replace(
+export const API_BASE_URL = (RAW_BASE_URL || "http://127.0.0.1:8000").replace(
   /\/+$/,
   "",
 );
@@ -147,6 +147,13 @@ export async function apiPost(path, body) {
 
 export async function apiDelete(path) {
   return authedFetch(`${API_BASE_URL}${path}`, { method: "DELETE" });
+}
+
+export async function apiPutAuth(path, body) {
+  return authedFetch(`${API_BASE_URL}${path}`, {
+    method: "PUT",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
 }
 
 export async function apiPatchAuth(path, body) {

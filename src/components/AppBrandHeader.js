@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import { useNavigation } from "@react-navigation/native";
 import { Building2, Search, Bell } from "lucide-react-native";
 import RestampLogo from "./RestampLogo";
 import COLORS from "../constants/colors";
+import { useAuth } from "../context/AuthContext";
+import { enterBuyerFlow, enterOwnerFlow } from "../api/users";
 
 export default function AppBrandHeader({
   currentRole = "buyer",
@@ -19,16 +21,25 @@ export default function AppBrandHeader({
   style,
 }) {
   const navigation = useNavigation();
+  const auth = useAuth();
+  const [switchingRole, setSwitchingRole] = useState(false);
 
-  const handleSwitchPress = () => {
-    if (currentRole === "buyer") {
-      navigation.navigate("OwnerNavigator", { screen: "Dashboard" });
-    } else {
-      // Owner or Agent switching back to Buyer
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "MainTabs" }],
-      });
+  const handleSwitchPress = async () => {
+    // Roles are mutually exclusive server-side: switching direction always
+    // POSTs first (token preserved), then navigates. Never logs out.
+    if (switchingRole) return;
+    setSwitchingRole(true);
+    try {
+      if (currentRole === "buyer") {
+        // Backend requires the OWNER role for /owner/* endpoints.
+        await enterOwnerFlow(navigation, auth, "Dashboard");
+      } else {
+        // Owner or Agent switching back to Buyer: restore BUYER first —
+        // buyer endpoints 403 while the account holds OWNER.
+        await enterBuyerFlow(navigation, auth);
+      }
+    } finally {
+      setSwitchingRole(false);
     }
   };
 
@@ -55,6 +66,7 @@ export default function AppBrandHeader({
             style={styles.switchRolePill}
             activeOpacity={0.8}
             onPress={handleSwitchPress}
+            disabled={switchingRole}
           >
             {isBuyer ? (
               <Building2 size={13} color="#2563EB" style={{ marginRight: 4 }} />

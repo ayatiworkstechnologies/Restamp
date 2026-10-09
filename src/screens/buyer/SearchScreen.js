@@ -44,10 +44,6 @@ import { useWishlist } from "../../context/WishlistContext";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import SearchPropertyModal from "../../components/SearchPropertyModal";
 import SafeImage from "../../components/common/SafeImage";
-import {
-  SkeletonPropertyCard,
-  NoNetworkState,
-} from "../../components/common/Skeleton";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -577,9 +573,21 @@ export default function SearchScreen({ navigation, route }) {
         showsVerticalScrollIndicator={false}
       >
         {listingsLoading ? (
-          <SkeletonPropertyCard count={3} />
+          <View style={styles.emptyResultsBox}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.emptyTitle}>Loading properties…</Text>
+          </View>
         ) : listingsError ? (
-          <NoNetworkState onRetry={refreshListings} />
+          <View style={styles.emptyResultsBox}>
+            <MapPin size={42} color="#CBD5E1" />
+            <Text style={styles.emptyTitle}>Couldn&apos;t load properties</Text>
+            <Text style={styles.emptySubtitle}>
+              Check that the backend is reachable and try again.
+            </Text>
+            <TouchableOpacity style={styles.clearFiltersBtn} onPress={refreshListings}>
+              <Text style={styles.clearFiltersBtnText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         ) : filteredProperties.length === 0 ? (
           <View style={styles.emptyResultsBox}>
             <MapPin size={42} color="#CBD5E1" />

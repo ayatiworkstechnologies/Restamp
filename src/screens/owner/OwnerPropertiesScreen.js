@@ -22,7 +22,7 @@ import {
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
-import { fetchOwnerListings, toOwnerProperty } from "../../api/owner";
+import { fetchOwnerListings, toOwnerProperty, fetchDrafts, deleteDraft } from "../../api/owner";
 import RestampLogo from "../../components/RestampLogo";
 import AppBrandHeader from "../../components/AppBrandHeader";
 import OwnerHeader from "../../components/owner/OwnerHeader";
@@ -53,14 +53,20 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [liveProperties, setLiveProperties] = useState(null);
+  // Server-backed drafts (listing_drafts): the ONLY draft source for the
+  // Draft tab. Local mock drafts are excluded below.
+  const [serverDrafts, setServerDrafts] = useState([]);
 
-  // Merge: live API listings take precedence; fall back to local OwnerContext
+  // Merge: live API listings take precedence; fall back to local OwnerContext.
+  // Local mock drafts (status draft) are excluded — real drafts come from
+  // the server and render in the Draft tab.
   const properties = useMemo(() => {
-    if (!liveProperties) return localProperties;
+    const withoutMockDrafts = (list) => (list || []).filter((p) => p.status !== "draft");
+    if (!liveProperties) return withoutMockDrafts(localProperties);
     // Deduplicate by id string
     const liveIds = new Set(liveProperties.map((p) => p.id));
     const localOnly = localProperties.filter((p) => !liveIds.has(p.id));
-    return [...liveProperties, ...localOnly];
+    return [...withoutMockDrafts(liveProperties), ...withoutMockDrafts(localOnly)];
   }, [liveProperties, localProperties]);
 
   const loadLiveListings = useCallback(() => {
@@ -69,12 +75,73 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
       .catch(() => {}); // silently fall back to local data
   }, []);
 
+  const loadDrafts = useCallback(() => {
+    fetchDrafts().then(setServerDrafts, () => {});
+  }, []);
+
   // Load on mount and re-focus
   useEffect(() => {
     loadLiveListings();
-    const unsubscribe = navigation.addListener("focus", loadLiveListings);
-    return unsubscribe;
-  }, [navigation, loadLiveListings]);
+    loadDrafts();
+    const unsubListings = navigation.addListener("focus", loadLiveListings);
+    const unsubDrafts = navigation.addListener("focus", loadDrafts);
+    return () => {
+      unsubListings();
+      unsubDrafts();
+    };
+  }, [navigation, loadLiveListings, loadDrafts]);
+
+  // Honor late navigation params (e.g. Save & Exit → Draft tab).
+  useEffect(() => {
+    if (route?.params?.initialTab) {
+      setActiveTab(route.params.initialTab);
+    }
+  }, [route?.params?.initialTab]);
+
+  // Map one server draft to the OwnerPropertyCard shape (status draft).
+  const draftToCard = (draft) => {
+    const form = (draft && draft.form_data) || {};
+    const photos = Array.isArray(form.photosList) ? form.photosList : [];
+    const remotePhotos = photos.filter(
+      (p) => p && typeof p.url === "string" && p.url
+    );
+    const cover =
+      remotePhotos.find((p) => p.isCover) || remotePhotos[0] || null;
+    const tx = (draft.transaction_type || "RENT").toUpperCase();
+    const purpose =
+      tx === "RENT" ? "Rent" : tx === "LEASE" ? "Lease" : tx === "RESALE" ? "Resale" : "Buy";
+    const rent = Number(form.monthlyRent);
+    return {
+      id: `draft-${draft.id}`,
+      draftId: draft.id,
+      title: draft.title || "Untitled Draft",
+      purpose,
+      status: "draft",
+      city: form.city || "",
+      locality: form.locality || "",
+      price: Number.isFinite(rent) && rent > 0 ? rent : null,
+      priceUnit: tx === "RENT" || tx === "LEASE" ? "/ month" : "",
+      bhk: form.bhk && form.bhk !== "N/A" ? form.bhk : "",
+      builtUpArea: form.carpetArea ? `${form.carpetArea} sq.ft` : "",
+      furnishing: form.furnishing || "",
+      images: remotePhotos.map((p) => p.url),
+      coverPhoto: cover ? cover.url : null,
+      description: form.description || "",
+      updatedAt: draft.updated_at || null,
+    };
+  };
+
+  const draftCards = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return serverDrafts
+      .map(draftToCard)
+      .filter(
+        (card) =>
+          !query ||
+          card.title.toLowerCase().includes(query) ||
+          (card.locality || "").toLowerCase().includes(query)
+      );
+  }, [serverDrafts, searchQuery]);
 
   // Modals state
   const [selectedPropertyForPreview, setSelectedPropertyForPreview] = useState(null);
@@ -86,8 +153,9 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
     variant: "primary",
   });
 
-  // Filtered properties
+  // Filtered properties (Draft tab reads server drafts, not listings)
   const filteredProperties = useMemo(() => {
+    if (activeTab === "Draft") return draftCards;
     return properties.filter((prop) => {
       // Tab filter
       if (activeTab !== "All") {
@@ -110,7 +178,7 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
 
       return true;
     });
-  }, [properties, activeTab, searchQuery]);
+  }, [properties, activeTab, searchQuery, draftCards]);
 
   // Handlers for property card actions
   const handleViewLeads = (property) => {
@@ -154,16 +222,49 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
   };
 
   const handleDeleteDraft = (property) => {
+    // Server drafts delete via API (confirm first); anything else falls back
+    // to the legacy local removal.
+    if (!property.draftId) {
+      setConfirmModal({
+        visible: true,
+        title: "Delete Draft?",
+        message: "Are you sure you want to delete this listing draft? This cannot be undone.",
+        variant: "danger",
+        confirmText: "Delete Draft",
+        onConfirm: () => {
+          deleteProperty(property.id);
+          setConfirmModal((prev) => ({ ...prev, visible: false }));
+        },
+      });
+      return;
+    }
     setConfirmModal({
       visible: true,
       title: "Delete Draft?",
-      message: "Are you sure you want to delete this listing draft? This cannot be undone.",
+      message: `Delete "${property.title}"? Your saved progress will be permanently removed. Published properties are not affected.`,
       variant: "danger",
       confirmText: "Delete Draft",
-      onConfirm: () => {
-        deleteProperty(property.id);
-        setConfirmModal((prev) => ({ ...prev, visible: false }));
+      onConfirm: async () => {
+        try {
+          await deleteDraft(property.draftId);
+          setServerDrafts((prev) => prev.filter((d) => d.id !== property.draftId));
+        } catch {
+          Alert.alert(
+            "Could Not Delete Draft",
+            "Please check your connection and try again."
+          );
+        } finally {
+          setConfirmModal((prev) => ({ ...prev, visible: false }));
+        }
       },
+    });
+  };
+
+  const handleContinueDraft = (property) => {
+    const draft = serverDrafts.find((d) => d.id === property.draftId);
+    navigation.navigate("Add", {
+      draftId: property.draftId,
+      ...(draft ? { draft } : {}),
     });
   };
 
@@ -262,7 +363,9 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
               const count =
                 tab === "All"
                   ? properties.length
-                  : properties.filter((p) => p.status.toLowerCase() === tab.toLowerCase()).length;
+                  : tab === "Draft"
+                    ? draftCards.length
+                    : properties.filter((p) => p.status.toLowerCase() === tab.toLowerCase()).length;
               const isActive = activeTab === tab;
 
               return (
@@ -288,11 +391,19 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
         {filteredProperties.length === 0 ? (
           <EmptyState
             icon={Building2}
-            title={activeTab === "All" ? "No Properties Yet" : `No ${activeTab} Properties`}
+            title={
+              activeTab === "All"
+                ? "No Properties Yet"
+                : activeTab === "Draft"
+                  ? "No Saved Drafts Yet"
+                  : `No ${activeTab} Properties`
+            }
             description={
               activeTab === "All"
                 ? "Start by adding your first property to receive verified buyer enquiries."
-                : `You currently have zero properties under the ${activeTab} category.`
+                : activeTab === "Draft"
+                  ? "Start a listing and tap Save Draft to resume it here later."
+                  : `You currently have zero properties under the ${activeTab} category.`
             }
             buttonTitle="+ Add Property"
             onButtonPress={() => navigation.navigate("Add")}
@@ -304,7 +415,11 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
               property={prop}
               onViewLeads={handleViewLeads}
               onViewProperty={handleViewProperty}
-              onEditProperty={handleEditProperty}
+              onEditProperty={
+                prop.status === "draft" && prop.draftId
+                  ? handleContinueDraft
+                  : handleEditProperty
+              }
               onPauseListing={handlePauseListing}
               onCloseListing={handleCloseListing}
               onDeleteDraft={handleDeleteDraft}

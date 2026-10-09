@@ -31,6 +31,7 @@ import {
 import COLORS from "../../constants/colors";
 import ALL_PROPERTIES from "../../data/properties";
 import { useWishlist } from "../../context/WishlistContext";
+import { useAuth } from "../../context/AuthContext";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import { fetchMyEnquiries } from "../../api/enquiries";
 import { getAuthTokenSync } from "../../api/client";
@@ -149,6 +150,10 @@ const FILTER_TABS = ["All", "Site Visits", "Negotiating", "Closed"];
 
 export default function EnquiriesScreen({ navigation, route }) {
   const { wishlist, isWishlisted, toggleWishlist } = useWishlist();
+  const { user: authUser } = useAuth();
+  // Buyer endpoints 403 for non-BUYER roles: only fetch while the account
+  // holds BUYER, otherwise keep the existing local mock list untouched.
+  const isBuyerRole = authUser?.role === "BUYER";
   // null = not loaded from server (logged out or not yet fetched) -> existing mock list.
   const [serverEnquiries, setServerEnquiries] = useState(null);
   const [listLoading, setListLoading] = useState(false);
@@ -163,11 +168,12 @@ export default function EnquiriesScreen({ navigation, route }) {
   }, [route?.params?.initialTab]);
 
   // Pull the authenticated buyer's real enquiries whenever the screen gains
-  // focus. Logged-out users keep the existing local mock behavior untouched.
+  // focus. Logged-out or non-buyer users keep the existing local mock
+  // behavior untouched (their buyer reads would 403).
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      if (!getAuthTokenSync()) {
+      if (!getAuthTokenSync() || !isBuyerRole) {
         return undefined;
       }
       setListLoading(true);
@@ -187,7 +193,7 @@ export default function EnquiriesScreen({ navigation, route }) {
       return () => {
         cancelled = true;
       };
-    }, [])
+    }, [isBuyerRole])
   );
 
   // Modals

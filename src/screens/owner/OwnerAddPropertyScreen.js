@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import * as ImagePicker from "expo-image-picker";
 import {
   View,
   Text,
@@ -50,7 +51,7 @@ import {
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
-import { createOwnerListing } from "../../api/owner";
+import { createOwnerListing, fetchOwnerListing, isLocalPhotoUri, uploadListingPhoto, createDraft, updateDraft, fetchDraft, deleteDraft, syncIdSetWithPhotos, pendingLocalPhotos } from "../../api/owner";
 import RestampLogo from "../../components/RestampLogo";
 import StepIndicator from "../../components/owner/StepIndicator";
 import FormInput from "../../components/owner/FormInput";
@@ -194,51 +195,15 @@ const PHOTO_CATEGORIES = [
   "Floor Plan",
 ];
 
-const DEFAULT_SAMPLE_PHOTOS = [
-  {
-    id: "photo-1",
-    url: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
-    category: "Living Room",
-    isCover: true,
-  },
-  {
-    id: "photo-2",
-    url: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=800&q=80",
-    category: "Bedroom",
-    isCover: false,
-  },
-  {
-    id: "photo-3",
-    url: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80",
-    category: "Kitchen",
-    isCover: false,
-  },
-  {
-    id: "photo-4",
-    url: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80",
-    category: "Bathroom",
-    isCover: false,
-  },
-];
-
-const SAMPLE_PHOTO_LIBRARY = {
-  "Living Room": "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
-  Bedroom: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=800&q=80",
-  Kitchen: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80",
-  Bathroom: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80",
-  Balcony: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80",
-  Exterior: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
-  "Floor Plan": "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=80",
-};
+// New listings start with no photos: the user picks real device images below.
+// (Previously preloaded with remote sample URLs — replaced by real uploads.)
+const DEFAULT_SAMPLE_PHOTOS = [];
 
 export default function OwnerAddPropertyScreen({ route, navigation }) {
   const {
     addProperty,
     subscription,
     ownerProfile,
-    rentDraft,
-    saveRentDraft,
-    clearRentDraft,
   } = useOwner();
 
   // Mode: initial selection modal or direct form step
@@ -256,6 +221,27 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   const [selectedPhotoCategory, setSelectedPhotoCategory] = useState("Living Room");
   const [showDateModal, setShowDateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Server submit failure message shown inline on Review (never navigates away).
+  const [submitError, setSubmitError] = useState(null);
+  // Persistent server drafts (listing_drafts): exactly ONE authoritative
+  // draft store — no in-memory parallel system.
+  const [draftId, setDraftId] = useState(
+    route?.params?.draftId || route?.params?.draft?.id || null
+  );
+  const [savingDraft, setSavingDraft] = useState(false);
+  // JSON snapshot of the last saved (or hydrated) form; null = never saved.
+  const [lastSavedSnapshot, setLastSavedSnapshot] = useState(null);
+  // Upload-after-publish retry, keyed by stable photo `id` (never indexes):
+  // - pendingListingId: real listing created, uploads still outstanding.
+  // - failedUploadIds: photo ids whose last upload attempt failed.
+  // - uploadedOkIds: photo ids confirmed uploaded (never re-uploaded).
+  // - uploadError: current upload failure message (separate from publish's
+  //   submitError so deleting photos clears only upload errors).
+  // None of these are persisted into drafts (see collectFormSnapshot).
+  const [pendingListingId, setPendingListingId] = useState(null);
+  const [failedUploadIds, setFailedUploadIds] = useState([]);
+  const [uploadedOkIds, setUploadedOkIds] = useState([]);
+  const [uploadError, setUploadError] = useState(null);
 
   // Step 1: Basic Details
   const [lookingTo, setLookingTo] = useState(
@@ -282,6 +268,9 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   const [city, setCity] = useState("Chennai");
   const [district, setDistrict] = useState("Chennai");
   const [locality, setLocality] = useState("Anna Nagar");
+  // Pincode is required (6 numeric digits). Empty by default — never prefilled
+  // with a fake value. Validated on Location step and again before submit.
+  const [pincode, setPincode] = useState("");
   const [subLocality, setSubLocality] = useState("5th Avenue, Shanthi Colony");
   const [apartmentSociety, setApartmentSociety] = useState("Green Acres Residency");
   const [houseNo, setHouseNo] = useState("Flat 402, Block B");
@@ -356,6 +345,14 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     if (route?.params?.resetForm) {
       setCurrentStep(1);
       setErrors({});
+      // Fresh form: forget any previous draft tracking and transient
+      // upload state.
+      setDraftId(null);
+      setLastSavedSnapshot(null);
+      setPendingListingId(null);
+      setFailedUploadIds([]);
+      setUploadedOkIds([]);
+      setUploadError(null);
       if (route?.params?.purpose) {
         setLookingTo(
           route.params.purpose === "Sell" || route.params.purpose === "Resale"
@@ -378,6 +375,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       if (p.city) setCity(p.city);
       if (p.district) setDistrict(p.district);
       if (p.locality) setLocality(p.locality);
+      if (p.pincode || p.postalCode) setPincode(String(p.pincode ?? p.postalCode));
       if (p.subLocality) setSubLocality(p.subLocality);
       if (p.carpetArea) setCarpetArea(String(p.carpetArea).replace(/\D/g, ""));
       if (p.price) setMonthlyRent(String(p.price));
@@ -385,114 +383,227 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       if (p.maintenance) setMaintenanceCharges(String(p.maintenance));
       if (p.availableFrom) setAvailableFrom(p.availableFrom);
       if (p.furnishing) setFurnishing(p.furnishing);
+      // Hydrate previously stored remote photos (URLs) so re-entry/edit
+      // shows the listing's real images instead of an empty grid. Local
+      // device files cannot survive navigation and are intentionally skipped.
+      if (Array.isArray(p.images) && p.images.length > 0) {
+        setPhotosList(
+          p.images
+            .filter((u) => typeof u === "string" && u.startsWith("http"))
+            .map((u, idx) => ({
+              id: `remote-${Date.now()}-${idx}`,
+              url: u,
+              category: "Living Room",
+              isCover: p.coverPhoto ? u === p.coverPhoto : idx === 0,
+            }))
+        );
+      }
+    }
+    // Continue Listing from a server draft: hydrate the exact saved state.
+    // Full object preferred (no refetch); draftId alone triggers a fetch.
+    if (route?.params?.draft && !route?.params?.resetForm) {
+      hydrateFromServerDraft(route.params.draft);
+    } else if (route?.params?.draftId && !route?.params?.resetForm) {
+      const id = route.params.draftId;
+      setDraftId(id);
+      fetchDraft(id).then(
+        (draft) => hydrateFromServerDraft(draft),
+        () => {
+          Alert.alert(
+            "Could Not Load Draft",
+            "This draft is no longer available. Starting a fresh form."
+          );
+        }
+      );
     }
   }, [route?.params]);
 
-  // Load draft if available
-  const handleResumeDraft = () => {
-    if (!rentDraft) return;
-    setLookingTo(rentDraft.lookingTo || "Rent");
-    setCategory(rentDraft.category || "Residential");
-    setPropertyType(rentDraft.propertyType || "Apartment");
-    setBhk(rentDraft.bhk || "2 BHK");
-    setPhoneNumber(rentDraft.phoneNumber || phoneNumber);
-    setEmail(rentDraft.email || email);
-    setCity(rentDraft.city || city);
-    setDistrict(rentDraft.district || district);
-    setLocality(rentDraft.locality || locality);
-    setSubLocality(rentDraft.subLocality || subLocality);
-    setApartmentSociety(rentDraft.apartmentSociety || apartmentSociety);
-    setHouseNo(rentDraft.houseNo || houseNo);
-    setLandmark(rentDraft.landmark || landmark);
-    setBedrooms(rentDraft.bedrooms || bedrooms);
-    setBathrooms(rentDraft.bathrooms || bathrooms);
-    setBalconies(rentDraft.balconies || balconies);
-    setCarpetArea(rentDraft.carpetArea || carpetArea);
-    setBuiltUpArea(rentDraft.builtUpArea || builtUpArea);
-    setTotalFloors(rentDraft.totalFloors || totalFloors);
-    setFloorOn(rentDraft.floorOn || floorOn);
-    setDuplex(rentDraft.duplex || duplex);
-    setAvailabilityStatus(rentDraft.availabilityStatus || availabilityStatus);
-    setPropertyAge(rentDraft.propertyAge || propertyAge);
-    setMonthlyRent(rentDraft.monthlyRent || monthlyRent);
-    setSecurityDeposit(rentDraft.securityDeposit || securityDeposit);
-    setMaintenanceCharges(rentDraft.maintenanceCharges || maintenanceCharges);
-    setMaintenanceFrequency(rentDraft.maintenanceFrequency || maintenanceFrequency);
-    setRentNegotiable(rentDraft.rentNegotiable || rentNegotiable);
-    setAvailableFrom(rentDraft.availableFrom || availableFrom);
-    setTenantPreference(rentDraft.tenantPreference || tenantPreference);
-    setFurnishing(rentDraft.furnishing || furnishing);
-    setCoveredParking(rentDraft.coveredParking ?? coveredParking);
-    setOpenParking(rentDraft.openParking ?? openParking);
-    setDescription(rentDraft.description || description);
-    setOwnership(rentDraft.ownership || ownership);
-    setPropertyFeatures(rentDraft.propertyFeatures || propertyFeatures);
-    setSelectedAmenities(rentDraft.selectedAmenities || selectedAmenities);
-    setOpenSides(rentDraft.openSides || openSides);
-    setOverlooking(rentDraft.overlooking || overlooking);
-    setPowerBackup(rentDraft.powerBackup || powerBackup);
-    setPropertyFacing(rentDraft.propertyFacing || propertyFacing);
-    if (rentDraft.photosList?.length) setPhotosList(rentDraft.photosList);
-    if (rentDraft.currentStep) setCurrentStep(rentDraft.currentStep);
-    Alert.alert("Draft Resumed", "Your saved rental property listing has been restored.");
+  // ---- Persistent server drafts (single authoritative system) ----
+  // Snapshot key order is fixed so JSON comparison is a reliable dirty check.
+  const collectFormSnapshot = () => ({
+    lookingTo, category, propertyType, bhk, phoneNumber, email,
+    city, district, locality, pincode, subLocality, apartmentSociety,
+    houseNo, landmark, bedrooms, bathrooms, balconies, carpetArea,
+    builtUpArea, superBuiltUpArea, totalFloors, floorOn, duplex,
+    availabilityStatus, propertyAge, monthlyRent, securityDeposit,
+    maintenanceCharges, maintenanceFrequency, rentNegotiable, availableFrom,
+    tenantPreference, lockInPeriod, preferredAgreementDuration,
+    photosList: photosList.map((p) => ({
+      id: p.id, url: p.url,
+      fileName: p.fileName || null, mimeType: p.mimeType || null,
+      fileSize: typeof p.fileSize === "number" ? p.fileSize : null,
+      category: p.category || null, isCover: !!p.isCover,
+    })),
+    otherRooms, furnishing, coveredParking, openParking, description,
+    ownership, propertyFeatures, selectedAmenities, openSides, overlooking,
+    powerBackup, propertyFacing, currentStep,
+  });
+
+  const FORM_DEFAULTS = {
+    lookingTo: "Rent", category: "Residential", propertyType: "Apartment",
+    bhk: "2 BHK", phoneNumber: "", email: "", city: "Chennai",
+    district: "Chennai", locality: "Anna Nagar", pincode: "", subLocality: "",
+    apartmentSociety: "", houseNo: "", landmark: "", bedrooms: "2",
+    bathrooms: "2", balconies: "2", carpetArea: "1200", builtUpArea: "1380",
+    superBuiltUpArea: "1550", totalFloors: "8", floorOn: "3", duplex: "No",
+    availabilityStatus: "Ready to Move", propertyAge: "1–5 Years",
+    monthlyRent: "25000", securityDeposit: "100000", maintenanceCharges: "3000",
+    maintenanceFrequency: "Monthly", rentNegotiable: "No",
+    availableFrom: "25 Sep 2026", tenantPreference: "Family",
+    lockInPeriod: "1 Year", preferredAgreementDuration: "11 Months",
+    photosList: [], otherRooms: [], furnishing: "Semi-Furnished",
+    coveredParking: 1, openParking: 1, description: "", ownership: "Freehold",
+    propertyFeatures: [], selectedAmenities: [], openSides: "2",
+    overlooking: "Park", powerBackup: "Full", propertyFacing: "East",
+    currentStep: 1,
   };
 
-  const handleSaveCurrentDraft = (silent = false) => {
-    const draftData = {
-      lookingTo,
-      category,
-      propertyType,
-      bhk,
-      phoneNumber,
-      email,
-      city,
-      district,
-      locality,
-      subLocality,
-      apartmentSociety,
-      houseNo,
-      landmark,
-      bedrooms,
-      bathrooms,
-      balconies,
-      carpetArea,
-      builtUpArea,
-      superBuiltUpArea,
-      totalFloors,
-      floorOn,
-      duplex,
-      availabilityStatus,
-      propertyAge,
-      monthlyRent,
-      securityDeposit,
-      maintenanceCharges,
-      maintenanceFrequency,
-      rentNegotiable,
-      availableFrom,
-      tenantPreference,
-      lockInPeriod,
-      preferredAgreementDuration,
-      photosList,
-      otherRooms,
-      furnishing,
-      coveredParking,
-      openParking,
-      description,
-      ownership,
-      propertyFeatures,
-      selectedAmenities,
-      openSides,
-      overlooking,
-      powerBackup,
-      propertyFacing,
-      currentStep,
-    };
-    saveRentDraft(draftData);
-    if (!silent) {
-      Alert.alert(
-        "Draft Saved",
-        "Your rental property details have been safely stored as a draft."
-      );
+  // Merge a stored snapshot over defaults so hydration is deterministic and
+  // the dirty baseline exactly matches the applied state.
+  const normalizeDraftData = (data) => {
+    const d = data && typeof data === "object" ? data : {};
+    const merged = {};
+    for (const key of Object.keys(FORM_DEFAULTS)) {
+      if (key === "photosList") {
+        merged.photosList = Array.isArray(d.photosList)
+          ? d.photosList.map((p, idx) => ({
+              id: p.id || `draft-photo-${idx}`,
+              url: p.url || "",
+              fileName: p.fileName || null,
+              mimeType: p.mimeType || null,
+              fileSize: typeof p.fileSize === "number" ? p.fileSize : null,
+              category: p.category || null,
+              isCover: !!p.isCover,
+            }))
+          : [];
+      } else {
+        merged[key] = d[key] !== undefined && d[key] !== null ? d[key] : FORM_DEFAULTS[key];
+      }
+    }
+    return merged;
+  };
+
+  const hydrateForm = (snapshot) => {
+    setLookingTo(snapshot.lookingTo);
+    setCategory(snapshot.category);
+    setPropertyType(snapshot.propertyType);
+    setBhk(snapshot.bhk);
+    setPhoneNumber(snapshot.phoneNumber);
+    setEmail(snapshot.email);
+    setCity(snapshot.city);
+    setDistrict(snapshot.district);
+    setLocality(snapshot.locality);
+    setPincode(snapshot.pincode);
+    setSubLocality(snapshot.subLocality);
+    setApartmentSociety(snapshot.apartmentSociety);
+    setHouseNo(snapshot.houseNo);
+    setLandmark(snapshot.landmark);
+    setBedrooms(snapshot.bedrooms);
+    setBathrooms(snapshot.bathrooms);
+    setBalconies(snapshot.balconies);
+    setCarpetArea(snapshot.carpetArea);
+    setBuiltUpArea(snapshot.builtUpArea);
+    setSuperBuiltUpArea(snapshot.superBuiltUpArea);
+    setTotalFloors(snapshot.totalFloors);
+    setFloorOn(snapshot.floorOn);
+    setDuplex(snapshot.duplex);
+    setAvailabilityStatus(snapshot.availabilityStatus);
+    setPropertyAge(snapshot.propertyAge);
+    setMonthlyRent(snapshot.monthlyRent);
+    setSecurityDeposit(snapshot.securityDeposit);
+    setMaintenanceCharges(snapshot.maintenanceCharges);
+    setMaintenanceFrequency(snapshot.maintenanceFrequency);
+    setRentNegotiable(snapshot.rentNegotiable);
+    setAvailableFrom(snapshot.availableFrom);
+    setTenantPreference(snapshot.tenantPreference);
+    setLockInPeriod(snapshot.lockInPeriod);
+    setPreferredAgreementDuration(snapshot.preferredAgreementDuration);
+    setPhotosList(snapshot.photosList);
+    setOtherRooms(snapshot.otherRooms);
+    setFurnishing(snapshot.furnishing);
+    setCoveredParking(snapshot.coveredParking);
+    setOpenParking(snapshot.openParking);
+    setDescription(snapshot.description);
+    setOwnership(snapshot.ownership);
+    setPropertyFeatures(snapshot.propertyFeatures);
+    setSelectedAmenities(snapshot.selectedAmenities);
+    setOpenSides(snapshot.openSides);
+    setOverlooking(snapshot.overlooking);
+    setPowerBackup(snapshot.powerBackup);
+    setPropertyFacing(snapshot.propertyFacing);
+    setCurrentStep(snapshot.currentStep);
+  };
+
+  const buildDraftTitle = () =>
+    category === "Residential" && propertyType !== "Plot / Land"
+      ? `${bhk} ${propertyType}`
+      : `${category} ${propertyType}`;
+
+  const draftTransactionType = () => {
+    if (lookingTo === "Resale") return "RESALE";
+    if (lookingTo === "Lease") return "LEASE";
+    return "RENT";
+  };
+
+  const hydrateFromServerDraft = (draft) => {
+    if (!draft) return;
+    const snapshot = normalizeDraftData(draft.form_data);
+    hydrateForm(snapshot);
+    setDraftId(draft.id || null);
+    setLastSavedSnapshot(JSON.stringify(snapshot));
+    // Fresh upload context: transient retry/uploaded state never persists
+    // into or out of drafts; rebuilt from current photos as needed.
+    setPendingListingId(null);
+    setFailedUploadIds([]);
+    setUploadedOkIds([]);
+    setUploadError(null);
+  };
+
+  // Save Draft button handler: POST on first save, PUT on repeat saves
+  // (same draft_id → no duplicates). Updates button state, never alerts on
+  // success; failures alert and stay put.
+  const handleSaveDraftPress = async ({ exitAfter = false } = {}) => {
+    if (savingDraft) return;
+    setSavingDraft(true);
+    try {
+      const snapshot = collectFormSnapshot();
+      const body = {
+        transaction_type: draftTransactionType(),
+        title: buildDraftTitle(),
+        current_step: currentStep,
+        form_data: snapshot,
+      };
+      const saved = draftId
+        ? await updateDraft(draftId, body).catch(async (e) => {
+            // Draft vanished server-side (deleted elsewhere): fall back to a
+            // fresh create instead of failing the save.
+            if (e?.status === 404) {
+              setDraftId(null);
+              return createDraft(body);
+            }
+            throw e;
+          })
+        : await createDraft(body);
+      setDraftId(saved.id);
+      setLastSavedSnapshot(JSON.stringify(snapshot));
+      if (exitAfter) {
+        navigation.navigate("OwnerNavigator", {
+          screen: "Properties",
+          params: { initialTab: "Draft" },
+        });
+      }
+      return saved;
+    } catch (e) {
+      const message =
+        e?.kind === "offline"
+          ? "No connection. Your progress is kept on this screen — try saving again."
+          : e?.kind === "login" || e?.status === 401
+            ? "Your session has expired. Please log in again, then save."
+            : "Could not save your draft. Your progress is kept — please try again.";
+      Alert.alert("Could Not Save Draft", message);
+      return null;
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -505,16 +616,52 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     }
   };
 
-  // Photo handlers
-  const handleAddSamplePhoto = (cat) => {
-    const newPhoto = {
-      id: `photo-${Date.now()}`,
-      url: SAMPLE_PHOTO_LIBRARY[cat] || SAMPLE_PHOTO_LIBRARY["Living Room"],
-      category: cat,
-      isCover: photosList.length === 0,
-    };
-    setPhotosList([...photosList, newPhoto]);
-    setShowPhotoAddModal(false);
+  // Photo handlers (real device images via expo-image-picker; remote
+  // http(s) entries are legacy — only picked files are uploaded).
+  const handlePickImages = async (cat) => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Photo Access Needed",
+          "Please allow photo library access to add real property photos."
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.length) {
+        return;
+      }
+      const picked = result.assets.map((asset, idx) => ({
+        id: `local-${Date.now()}-${idx}`,
+        url: asset.uri,
+        // Keep raw picker metadata (possibly missing); consistency between
+        // filename and MIME is derived at upload time, never assumed here.
+        fileName: asset.fileName || null,
+        mimeType: asset.mimeType || null,
+        fileSize: typeof asset.fileSize === "number" ? asset.fileSize : null,
+        category: cat,
+        isCover: false,
+      }));
+      const base = photosList.length === 0;
+      setPhotosList((prev) => {
+        const merged = [...prev, ...picked];
+        if (base && merged.length > 0 && !merged.some((p) => p.isCover)) {
+          merged[0] = { ...merged[0], isCover: true };
+        }
+        return merged;
+      });
+      setShowPhotoAddModal(false);
+    } catch (e) {
+      Alert.alert(
+        "Could Not Pick Photos",
+        e?.message || "Please try again."
+      );
+    }
   };
 
   const handleRemovePhoto = (id) => {
@@ -522,6 +669,16 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     if (remaining.length > 0 && !remaining.some((p) => p.isCover)) {
       remaining[0].isCover = true;
     }
+    // Synchronize ALL transient upload state by stable photo id so a deleted
+    // photo never lingers in retry/error queues (ids are unique per pick, so
+    // duplicate filenames stay distinct). Clearing the last failure also
+    // clears the stale upload error message.
+    const syncedFailed = syncIdSetWithPhotos(failedUploadIds, remaining);
+    setFailedUploadIds(syncedFailed);
+    if (failedUploadIds.length > 0 && syncedFailed.length === 0) {
+      setUploadError(null);
+    }
+    setUploadedOkIds(syncIdSetWithPhotos(uploadedOkIds, remaining));
     setPhotosList(remaining);
   };
 
@@ -567,6 +724,12 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       if (!city || !city.trim()) newErrors.city = "City is required";
       if (!district || !district.trim()) newErrors.district = "District is required";
       if (!locality || !locality.trim()) newErrors.locality = "Locality is required";
+      const pin = (pincode || "").trim();
+      if (!pin) {
+        newErrors.pincode = "Pincode is required";
+      } else if (!/^\d{6}$/.test(pin)) {
+        newErrors.pincode = "Enter a valid 6-digit pincode";
+      }
     }
 
     if (step === 3) {
@@ -634,7 +797,139 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   };
 
   // Final Publish Handler
-  const handlePublishProperty = () => {
+  // SUCCESS: POST /owner/listings succeeds with a real listing_id -> add the
+  // server-confirmed listing locally (status pending, never verified) and only
+  // then navigate to OwnerPublishSuccess.
+  // FAILURE: stay on Review, show a useful error, keep all form data, never
+  // show Publish Success and never create fake local "published" state.
+  //
+  // Photo flow (upload-after-publish): remote http(s) photos ride along in
+  // the create payload; user-picked device files are uploaded one by one to
+  // POST /owner/listings/{id}/photos AFTER the listing exists (cover first
+  // so it lands on order_index 0). If any upload fails we stay on Review
+  // with the real listing_id retained for retry — never a duplicate listing,
+  // never fake success.
+  const uploadPickedPhotos = async (listingId, photos) => {
+    const failures = [];
+    for (const photo of photos) {
+      try {
+        // Local validation errors (unsupported format, oversize) surface
+        // here with readable messages and count as upload failures.
+        await uploadListingPhoto(listingId, {
+          uri: photo.url,
+          name: photo.fileName,
+          type: photo.mimeType,
+          size: photo.fileSize,
+          category: photo.category,
+        });
+      } catch (e) {
+        failures.push({ photo, message: e?.message || "Upload failed" });
+      }
+    }
+    return failures;
+  };
+
+  const orderedUploadsFor = (list, cover) => {
+    const locals = list.filter((p) => isLocalPhotoUri(p.url));
+    const coverLocal =
+      cover && isLocalPhotoUri(cover.url) ? cover : null;
+    const rest = locals.filter((p) => p !== coverLocal);
+    return coverLocal ? [coverLocal, ...rest] : rest;
+  };
+
+  const finishPublishSuccess = async (serverId, created, newProperty, pin) => {
+    // Re-read the listing so the local copy carries the real stored gallery
+    // (uploaded file URLs + categories), not just the form state.
+    let serverGallery = null;
+    let serverCover = null;
+    try {
+      const detail = await fetchOwnerListing(serverId);
+      if (detail) {
+        serverGallery = detail.gallery;
+        serverCover = detail.cover_image_url;
+      }
+    } catch {
+      // Fall through to local data below; uploads already server-confirmed.
+    }
+    const publishedProperty = {
+      ...newProperty,
+      id: String(serverId),
+      listing_id: serverId,
+      pincode: created.pincode || pin,
+      verification_status: created.verification_status || "PENDING",
+      listing_status: created.listing_status || "AVAILABLE",
+      status: "pending",
+    };
+    if (Array.isArray(serverGallery) && serverGallery.length > 0) {
+      publishedProperty.images = serverGallery;
+      publishedProperty.coverPhoto = serverCover || serverGallery[0];
+    }
+    addProperty(publishedProperty);
+    // Publishing succeeded: the server draft (if any) is now redundant.
+    // Delete is best-effort AFTER success — a delete failure never fails
+    // the publish, and the draft is never removed before success.
+    if (draftId) {
+      deleteDraft(draftId).catch(() => {});
+      setDraftId(null);
+      setLastSavedSnapshot(null);
+    }
+    setPendingListingId(null);
+    setFailedUploadIds([]);
+    setUploadedOkIds([]);
+    setUploadError(null);
+    navigation.navigate("OwnerPublishSuccess", {
+      property: publishedProperty,
+      serverResponse: created,
+    });
+  };
+
+  // Record an upload failure WITHOUT navigating: stays on Review, keeps the
+  // real listing_id, stores only failed photo ids (never photo objects, never
+  // counts). The pending set is always re-derived from current photosList,
+  // so deleting failed photos shrinks it automatically.
+  const failUploadsStayOnReview = (serverId, failures) => {
+    setPendingListingId(serverId);
+    const failedIds = failures.map((f) => f.photo?.id).filter(Boolean);
+    // Merge with prior failures but drop anything no longer in the form
+    // (e.g. deleted mid-upload) so the queue always reflects current photos.
+    setFailedUploadIds((prev) =>
+      syncIdSetWithPhotos(Array.from(new Set([...prev, ...failedIds])), photosList)
+    );
+    const names = failures
+      .map((f) => f.photo?.fileName || f.photo?.category || "photo")
+      .join(", ");
+    const message =
+      `Listing #${serverId} was created, but ${failures.length} photo(s) failed to upload ` +
+      `(${names}). Your details are saved — press Publish again to retry only the failed photos. ` +
+      `No duplicate listing will be created.`;
+    setUploadError(message);
+    Alert.alert("Some Photos Failed to Upload", message);
+  };
+
+  const handlePublishProperty = async () => {
+    if (isSubmitting) return;
+    setSubmitError(null);
+
+    // Pincode is required before submit. Validate first and remain on Review
+    // (no step jump, no POST) so the user can fix it inline.
+    const pin = (pincode || "").trim();
+    if (!pin) {
+      setErrors((prev) => ({ ...prev, pincode: "Pincode is required" }));
+      Alert.alert(
+        "Pincode Required",
+        "Please enter the 6-digit pincode for this property before publishing."
+      );
+      return;
+    }
+    if (!/^\d{6}$/.test(pin)) {
+      setErrors((prev) => ({ ...prev, pincode: "Enter a valid 6-digit pincode" }));
+      Alert.alert(
+        "Invalid Pincode",
+        "Please enter a valid 6-digit numeric pincode before publishing."
+      );
+      return;
+    }
+
     // Validate all key steps
     for (let s = 1; s <= 5; s++) {
       if (!validateStep(s)) {
@@ -678,6 +973,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       city,
       district,
       locality,
+      pincode: pin,
       subLocality,
       address: `${houseNo ? houseNo + ", " : ""}${apartmentSociety ? apartmentSociety + ", " : ""}${subLocality ? subLocality + ", " : ""}${locality}`,
       apartmentSociety,
@@ -728,35 +1024,102 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       facing: propertyFacing,
       images: photosList.map((p) => p.url),
       coverPhoto: coverPhotoObj?.url || photosList[0]?.url,
+      // Categorized photos for the backend (order = display order, index 0 = cover).
+      photos: photosList.map((p) => ({ url: p.url, category: p.category || null })),
+      // Raw input strings so buildPayload can distinguish "" (omit) from "0" (zero).
+      securityDeposit,
+      maintenanceCharges,
       contact: {
         phone: phoneNumber,
         email,
       },
+      // Local status stays pending until the backend verifies the listing.
+      // Never mark VERIFIED on the client.
       status: "pending",
     };
 
-    // Optimistic local add (keeps Owner dashboard working immediately)
-    addProperty(newProperty);
-    clearRentDraft();
-
-    // Fire real backend API — async so we don't block the UX
     setIsSubmitting(true);
-    createOwnerListing(newProperty)
-      .then((created) => {
-        // Patch the local copy with the real listing_id so subsequent reads align
-        newProperty.listing_id = created.listing_id;
-        newProperty.id = String(created.listing_id);
-        // Navigate to Publish Success screen with the server-confirmed listing
-        navigation.navigate("OwnerPublishSuccess", { property: { ...newProperty, listing_id: created.listing_id } });
-      })
-      .catch((err) => {
-        // Submission failed — navigate anyway (local data already saved)
-        console.warn("[OwnerAddProperty] Backend submit failed:", err?.message);
-        navigation.navigate("OwnerPublishSuccess", { property: newProperty });
-      })
-      .finally(() => {
-        setIsSubmitting(false);
-      });
+    try {
+      // Upload-only path: a previous publish already created the listing, so
+      // POST /owner/listings is NEVER called again here (no duplicates).
+      // The upload set is re-derived from CURRENT photos minus confirmed
+      // uploads: deleted photos are never retried, new photos are included,
+      // already-uploaded photos are never re-uploaded.
+      if (pendingListingId) {
+        const pending = pendingLocalPhotos(photosList, uploadedOkIds);
+        const ordered = orderedUploadsFor(pending, coverPhotoObj);
+        if (ordered.length === 0) {
+          // Nothing left to upload (e.g. all failed photos deleted):
+          // complete the publish with the existing listing.
+          await finishPublishSuccess(
+            pendingListingId, { listing_id: pendingListingId }, newProperty, pin
+          );
+          return;
+        }
+        const retryFailures = await uploadPickedPhotos(pendingListingId, ordered);
+        const retryFailedIds = retryFailures.map((f) => f.photo?.id).filter(Boolean);
+        const succeededIds = ordered
+          .map((p) => p.id)
+          .filter((id) => !retryFailedIds.includes(id));
+        setUploadedOkIds((prev) => Array.from(new Set([...prev, ...succeededIds])));
+        setFailedUploadIds((prev) =>
+          Array.from(new Set([...syncIdSetWithPhotos(prev, photosList), ...retryFailedIds]))
+        );
+        if (retryFailures.length > 0) {
+          failUploadsStayOnReview(pendingListingId, retryFailures);
+          return;
+        }
+        await finishPublishSuccess(
+          pendingListingId, { listing_id: pendingListingId }, newProperty, pin
+        );
+        return;
+      }
+      const created = await createOwnerListing(newProperty);
+      const serverId = created?.listing_id;
+      if (serverId === undefined || serverId === null) {
+        throw new Error("Server did not return a listing_id.");
+      }
+      // Upload user-picked device files now that the real listing exists
+      // (cover first so it lands on order_index 0). Remote URLs already rode
+      // along in the create payload.
+      const uploads = orderedUploadsFor(photosList, coverPhotoObj);
+      if (uploads.length > 0) {
+        const failures = await uploadPickedPhotos(serverId, uploads);
+        const failedIds = failures.map((f) => f.photo?.id).filter(Boolean);
+        const okIds = uploads
+          .map((p) => p.id)
+          .filter((id) => !failedIds.includes(id));
+        setUploadedOkIds((prev) => Array.from(new Set([...prev, ...okIds])));
+        if (failures.length > 0) {
+          failUploadsStayOnReview(serverId, failures);
+          return;
+        }
+      }
+      // Server-confirmed listing: use the real listing_id and the server's
+      // verification/listing status. New listings start PENDING/AVAILABLE.
+      await finishPublishSuccess(serverId, created, newProperty, pin);
+    } catch (err) {
+      // Stay on Review with all form data preserved. No success screen, no
+      // fake local published state.
+      console.warn("[OwnerAddProperty] Backend submit failed:", err?.message);
+      let message = "Could not publish your property. Please check your connection and try again.";
+      if (err?.message === "A valid 6-digit pincode is required before submit.") {
+        message = "Please enter a valid 6-digit pincode before publishing.";
+        setErrors((prev) => ({ ...prev, pincode: "Enter a valid 6-digit pincode" }));
+      } else if (err?.kind === "login" || err?.status === 401) {
+        message = "Your session has expired. Please log in again, then try publishing.";
+      } else if (err?.kind === "denied" || err?.status === 403) {
+        message = "Your account does not have Owner access yet. Please re-enter Owner mode and try again.";
+      } else if (err?.kind === "validation" || err?.status === 400 || err?.status === 422) {
+        message = "Some details were rejected by the server. Please review the highlighted fields and try again.";
+      } else if (err?.kind === "offline") {
+        message = "No connection. Make sure the backend is running and reachable, then try again.";
+      }
+      setSubmitError(message);
+      Alert.alert("Could Not Publish Property", message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const currentStepInfo = RENT_STEPS[currentStep - 1] || RENT_STEPS[0];
@@ -765,6 +1128,21 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       ? "Price & Terms"
       : currentStepInfo.fullLabel;
   const coverPhoto = photosList.find((p) => p.isCover) || photosList[0];
+
+  // Retry/upload button state, re-derived from CURRENT photosList on every
+  // render so the count/action can never go stale (deletes/adds included).
+  const pendingUploadPhotos = pendingListingId
+    ? pendingLocalPhotos(photosList, uploadedOkIds)
+    : [];
+  const failedCurrentCount = syncIdSetWithPhotos(failedUploadIds, photosList).length;
+
+  // Dirty tracking: compare the live snapshot against the last saved (or
+  // hydrated) baseline. Null baseline (never saved) counts as dirty so the
+  // button starts BLUE/enabled; any tracked change flips it back to dirty.
+  const liveDraftSnapshotJson = JSON.stringify(collectFormSnapshot());
+  const isDraftDirty =
+    lastSavedSnapshot === null || liveDraftSnapshotJson !== lastSavedSnapshot;
+  const isDraftDirtyOrSaving = savingDraft || isDraftDirty;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -795,11 +1173,26 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
 
         <View style={styles.headerRight}>
           <TouchableOpacity
-            style={styles.saveDraftBtn}
-            onPress={() => handleSaveCurrentDraft(false)}
+            style={[
+              styles.saveDraftBtn,
+              !savingDraft && !isDraftDirty && styles.saveDraftBtnSaved,
+            ]}
+            onPress={() => handleSaveDraftPress()}
+            disabled={savingDraft || !isDraftDirty}
             activeOpacity={0.7}
           >
-            <Text style={styles.saveDraftText}>Save Draft</Text>
+            <Text
+              style={[
+                styles.saveDraftText,
+                !savingDraft && !isDraftDirty && styles.saveDraftTextSaved,
+              ]}
+            >
+              {savingDraft
+                ? "Saving..."
+                : isDraftDirty
+                  ? "Save Draft"
+                  : "Saved ✓"}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -814,31 +1207,8 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
         }}
       />
 
-      {/* DRAFT NOTIFICATION BANNER (if draft exists and not applied) */}
-      {rentDraft && currentStep === 1 && (
-        <View style={styles.draftBanner}>
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <Text style={styles.draftBannerTitle}>Saved Draft Available</Text>
-            <Text style={styles.draftBannerSub}>
-              {rentDraft.bhk || "2 BHK"} {rentDraft.propertyType || "Apartment"} in {rentDraft.locality || "Anna Nagar"} (Saved {rentDraft.savedDate || "recently"})
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.draftResumeBtn}
-            onPress={handleResumeDraft}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.draftResumeBtnText}>Resume</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.draftDismissBtn}
-            onPress={clearRentDraft}
-            activeOpacity={0.7}
-          >
-            <X size={15} color="#64748B" />
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Drafts now live server-side: resume via My Properties → Draft →
+          Continue Listing. No in-memory banner (single draft system). */}
 
       {/* SCROLLABLE FORM CONTENT */}
       <ScrollView
@@ -996,6 +1366,19 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
               onChangeText={setLocality}
               placeholder="e.g. Anna Nagar"
               error={errors.locality}
+            />
+
+            <FormInput
+              label="Pincode"
+              value={pincode}
+              onChangeText={(text) => {
+                setPincode(text.replace(/[^0-9]/g, "").slice(0, 6));
+                if (submitError) setSubmitError(null);
+              }}
+              placeholder="e.g. 600040"
+              keyboardType="numeric"
+              error={errors.pincode}
+              helperText="6-digit postal pincode. Required before publishing."
             />
 
             <FormInput
@@ -1736,6 +2119,23 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
               </TouchableOpacity>
             </View>
 
+            {/* Submit failure banner: stays on Review, keeps all form data. */}
+            {submitError ? (
+              <View style={styles.submitErrorBanner}>
+                <AlertTriangle size={16} color={COLORS.danger} style={{ marginRight: 8 }} />
+                <Text style={styles.submitErrorText}>{submitError}</Text>
+              </View>
+            ) : null}
+
+            {/* Upload failure banner: names only currently-failed photos;
+                cleared automatically when those photos are deleted. */}
+            {!submitError && uploadError ? (
+              <View style={styles.submitErrorBanner}>
+                <AlertTriangle size={16} color={COLORS.danger} style={{ marginRight: 8 }} />
+                <Text style={styles.submitErrorText}>{uploadError}</Text>
+              </View>
+            ) : null}
+
             {/* HERO IMAGE GALLERY PREVIEW */}
             <View style={styles.heroPreviewBox}>
               <Image
@@ -1884,6 +2284,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
                 {apartmentSociety ? `${apartmentSociety}, ` : ""}
                 {subLocality ? `${subLocality}, ` : ""}
                 {locality}, {district}, {city}
+                {pincode ? ` — ${pincode}` : ""}
               </Text>
               {landmark ? (
                 <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6 }}>
@@ -1891,6 +2292,22 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
                   <Text style={styles.landmarkText}>Landmark: {landmark}</Text>
                 </View>
               ) : null}
+              {/* Pincode is required before submit; editable here so a Review-time
+                  validation error can be fixed without leaving Review. */}
+              <View style={{ marginTop: 12 }}>
+                <FormInput
+                  label="Pincode (Required)"
+                  value={pincode}
+                  onChangeText={(text) => {
+                    setPincode(text.replace(/[^0-9]/g, "").slice(0, 6));
+                    if (submitError) setSubmitError(null);
+                  }}
+                  placeholder="e.g. 600040"
+                  keyboardType="numeric"
+                  error={errors.pincode}
+                  helperText="6-digit postal pincode. Required before publishing."
+                />
+              </View>
             </View>
 
             {/* SECTION 3: ROOM DETAILS */}
@@ -2098,12 +2515,21 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.primaryPillBtn}
+            style={[styles.primaryPillBtn, isSubmitting && { opacity: 0.6 }]}
             onPress={handlePublishProperty}
             activeOpacity={0.88}
+            disabled={isSubmitting}
           >
             <Upload size={17} color="#FFFFFF" strokeWidth={2.4} style={{ marginRight: 6 }} />
-            <Text style={styles.primaryPillBtnText}>Publish Property</Text>
+            <Text style={styles.primaryPillBtnText}>
+              {isSubmitting
+                ? "Publishing..."
+                : pendingListingId && pendingUploadPhotos.length > 0
+                  ? failedCurrentCount > 0
+                    ? `Retry Upload (${pendingUploadPhotos.length})`
+                    : `Upload (${pendingUploadPhotos.length})`
+                  : "Publish Property"}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -2169,11 +2595,11 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
 
             <TouchableOpacity
               style={[styles.primaryPillBtn, { marginTop: 18 }]}
-              onPress={() => handleAddSamplePhoto(selectedPhotoCategory)}
+              onPress={() => handlePickImages(selectedPhotoCategory)}
               activeOpacity={0.88}
             >
               <Plus size={16} color="#FFFFFF" strokeWidth={2.4} style={{ marginRight: 6 }} />
-              <Text style={styles.primaryPillBtnText}>Add {selectedPhotoCategory} Photo</Text>
+              <Text style={styles.primaryPillBtnText}>Choose {selectedPhotoCategory} Photos</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2225,10 +2651,18 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
         icon={Clock}
         confirmText="Save & Exit"
         cancelText="Discard"
-        onConfirm={() => {
-          handleSaveCurrentDraft(true);
+        onConfirm={async () => {
+          // Persist first; navigate only on backend success. On failure we
+          // stay on the form with data preserved. Discard never deletes an
+          // already-saved server draft.
+          const saved = await handleSaveDraftPress();
           setShowExitConfirmModal(false);
-          navigation.navigate("Dashboard");
+          if (saved) {
+            navigation.navigate("OwnerNavigator", {
+              screen: "Properties",
+              params: { initialTab: "Draft" },
+            });
+          }
         }}
         onCancel={() => {
           setShowExitConfirmModal(false);
@@ -2317,48 +2751,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: COLORS.primary,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: COLORS.primary,
   },
   saveDraftText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#334155",
-  },
-  draftBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#EFF6FF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#BFDBFE",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  draftBannerTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#1D4ED8",
-  },
-  draftBannerSub: {
-    fontSize: 11,
-    color: "#3B82F6",
-    marginTop: 2,
-  },
-  draftResumeBtn: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    marginRight: 8,
-  },
-  draftResumeBtnText: {
     color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "600",
   },
-  draftDismissBtn: {
-    padding: 4,
+  // Saved state: grey/disabled (also applied while Saving...).
+  saveDraftBtnSaved: {
+    backgroundColor: "#F1F5F9",
+    borderColor: "#E2E8F0",
+  },
+  saveDraftTextSaved: {
+    color: "#94A3B8",
   },
   container: {
     flex: 1,
@@ -2462,6 +2870,23 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginTop: 2,
     marginBottom: 8,
+  },
+  submitErrorBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  submitErrorText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "500",
+    color: "#B91C1C",
+    lineHeight: 18,
   },
   mapCard: {
     borderRadius: 14,

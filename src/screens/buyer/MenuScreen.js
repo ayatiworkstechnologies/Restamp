@@ -35,6 +35,8 @@ import {
 import COLORS from "../../constants/colors";
 import RestampLogo from "../../components/RestampLogo";
 import { useAgent } from "../../context/AgentContext";
+import { useAuth } from "../../context/AuthContext";
+import { enterOwnerFlow } from "../../api/users";
 
 const VERTICAL_TABS = [
   { id: "owner", label: "Owner Plan", icon: Crown },
@@ -383,6 +385,21 @@ const PROPERTY_TYPE_OPTIONS = [
 export default function MenuScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { hasActivePlan, agentPlan } = useAgent();
+  const auth = useAuth();
+  const [ownerSwitching, setOwnerSwitching] = useState(false);
+
+  // P0 fix: backend requires the OWNER role for /owner/* endpoints.
+  // Switch the backend role first (real POST /users/me/role, token
+  // preserved), and only then navigate. Never logs out, never touches OTP.
+  const handleOpenOwnerDashboard = async () => {
+    if (ownerSwitching) return;
+    setOwnerSwitching(true);
+    try {
+      await enterOwnerFlow(navigation, auth, "Dashboard");
+    } finally {
+      setOwnerSwitching(false);
+    }
+  };
 
   // Vertical Tab state: 'owner' | 'agent' | 'price' | 'insights'
   const [activeVerticalTab, setActiveVerticalTab] = useState(
@@ -472,8 +489,8 @@ export default function MenuScreen({ navigation, route }) {
 
   const handleSelectPlan = (plan, planRole) => {
     if (planRole === "Owner") {
-      // Testing shortcut: Skip all payment steps and directly open Owner Dashboard
-      navigation.navigate("OwnerNavigator", { screen: "Dashboard" });
+      // Switch backend role to OWNER first, then open Owner Dashboard.
+      handleOpenOwnerDashboard();
       return;
     }
 
@@ -546,7 +563,8 @@ export default function MenuScreen({ navigation, route }) {
           <TouchableOpacity
             style={styles.switchOwnerPill}
             activeOpacity={0.8}
-            onPress={() => navigation.navigate("OwnerNavigator", { screen: "Dashboard" })}
+            onPress={handleOpenOwnerDashboard}
+            disabled={ownerSwitching}
           >
             <Building2 size={13} color="#2563EB" style={{ marginRight: 4 }} />
             <Text style={styles.switchOwnerText}>Owner</Text>
@@ -680,7 +698,8 @@ export default function MenuScreen({ navigation, route }) {
                   </View>
                   <TouchableOpacity
                     style={styles.ownerTestBtn}
-                    onPress={() => navigation.navigate("OwnerNavigator", { screen: "Dashboard" })}
+                    onPress={handleOpenOwnerDashboard}
+                    disabled={ownerSwitching}
                     activeOpacity={0.85}
                   >
                     <Text style={styles.ownerTestBtnText}>Open</Text>

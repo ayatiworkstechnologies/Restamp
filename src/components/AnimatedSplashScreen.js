@@ -1,37 +1,48 @@
-
-import React, { useRef, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
+  View,
+  Text,
   StyleSheet,
   Animated,
-  Pressable,
   Dimensions,
+  Pressable,
   Platform,
 } from "react-native";
-import LottieView from "lottie-react-native";
+import { useFonts } from "expo-font";
+import COLORS from "../constants/colors";
 
-const logoAnimation = require("../../assets/animations/restamp-logo.json");
-const { width, height } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
+const FULL_TEXT = "Restamp";
+const FONT_SIZE = Math.min(68, Math.max(48, Math.floor(width * 0.14)));
 
 export default function AnimatedSplashScreen({ onAnimationComplete }) {
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const animationRef = useRef(null);
-  const completedRef = useRef(false);
+  const [fontsLoaded] = useFonts({
+    "DancingScript-Bold": require("../../assets/fonts/DancingScript_700Bold.ttf"),
+  });
 
-  const handleFinish = () => {
-    if (completedRef.current) return;
-    completedRef.current = true;
+  const [displayedText, setDisplayedText] = useState("");
+  const cursorOpacity = useRef(new Animated.Value(1)).current;
+  const penPressure = useRef(new Animated.Value(1)).current;
+  const screenOpacity = useRef(new Animated.Value(1)).current;
+  const screenScale = useRef(new Animated.Value(1)).current;
+  const textScale = useRef(new Animated.Value(0.96)).current;
+
+  const hasExited = useRef(false);
+
+  const triggerExit = () => {
+    if (hasExited.current) return;
+    hasExited.current = true;
 
     Animated.parallel([
-      Animated.timing(fadeAnim, {
+      Animated.timing(screenOpacity, {
         toValue: 0,
-        duration: 350,
-        useNativeDriver: Platform.OS !== "web",
+        duration: 420,
+        useNativeDriver: true,
       }),
-      Animated.timing(scaleAnim, {
+      Animated.timing(screenScale, {
         toValue: 1.05,
-        duration: 350,
-        useNativeDriver: Platform.OS !== "web",
+        duration: 420,
+        useNativeDriver: true,
       }),
     ]).start(() => {
       onAnimationComplete?.();
@@ -39,42 +50,129 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
   };
 
   useEffect(() => {
-    // Safety fallback timeout to ensure splash screen dismisses gracefully
-    const fallbackTimer = setTimeout(() => {
-      handleFinish();
-    }, 2400);
+    // 1. Slow, rhythmic blinking cursor loop
+    const blinkAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(cursorOpacity, {
+          toValue: 0.15,
+          duration: 380,
+          useNativeDriver: true,
+        }),
+        Animated.timing(cursorOpacity, {
+          toValue: 1,
+          duration: 380,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    blinkAnimation.start();
 
-    return () => clearTimeout(fallbackTimer);
+    // 2. Slow, graceful handwriting calligraphy animation
+    let charIndex = 0;
+    const initialDelay = 350; // Pause before writing starts
+    const writeSpeed = 280;   // Slow, deliberate handwriting pace per letter
+
+    let typeInterval = null;
+    let finishTimer = null;
+
+    const startTimer = setTimeout(() => {
+      typeInterval = setInterval(() => {
+        charIndex += 1;
+        setDisplayedText(FULL_TEXT.slice(0, charIndex));
+
+        // Pen pressure stroke effect on each letter
+        penPressure.setValue(1.22);
+        Animated.spring(penPressure, {
+          toValue: 1,
+          friction: 5,
+          tension: 60,
+          useNativeDriver: true,
+        }).start();
+
+        if (charIndex >= FULL_TEXT.length) {
+          clearInterval(typeInterval);
+
+          // Gentle spring bloom when the calligraphy completes
+          Animated.spring(textScale, {
+            toValue: 1,
+            friction: 6,
+            tension: 40,
+            useNativeDriver: true,
+          }).start();
+
+          // Fade cursor out after final letter flourish
+          setTimeout(() => {
+            Animated.timing(cursorOpacity, {
+              toValue: 0,
+              duration: 350,
+              useNativeDriver: true,
+            }).start();
+          }, 600);
+
+          // 3. Savor the finished calligraphy, then dissolve into the app
+          finishTimer = setTimeout(() => {
+            triggerExit();
+          }, 1200);
+        }
+      }, writeSpeed);
+    }, initialDelay);
+
+    return () => {
+      clearTimeout(startTimer);
+      if (typeInterval) clearInterval(typeInterval);
+      if (finishTimer) clearTimeout(finishTimer);
+      blinkAnimation.stop();
+    };
   }, []);
+
+  // Scripted cursive font styling with multiple fallbacks
+  const scriptFontFamily = fontsLoaded
+    ? "DancingScript-Bold"
+    : Platform.select({
+        ios: "Snell Roundhand",
+        web: "'Dancing Script', 'Snell Roundhand', 'Brush Script MT', cursive",
+        default: "cursive",
+      });
 
   return (
     <Animated.View
       style={[
         styles.container,
         {
-          opacity: fadeAnim,
-          transform: [{ scale: scaleAnim }],
+          opacity: screenOpacity,
+          transform: [{ scale: screenScale }],
         },
       ]}
     >
-      <Pressable style={styles.pressable} onPress={handleFinish}>
-        <LottieView
-          ref={animationRef}
-          source={logoAnimation}
-          autoPlay
-          loop={false}
-          speed={1}
-          resizeMode="contain"
-          onAnimationFinish={handleFinish}
-          style={styles.animation}
-          webStyle={{
-            width: "100%",
-            height: "100%",
-            maxWidth: 440,
-            maxHeight: 880,
-            objectFit: "contain",
-          }}
-        />
+      <Pressable style={styles.pressableArea} onPress={triggerExit}>
+        <Animated.View
+          style={[
+            styles.textRow,
+            {
+              transform: [{ scale: textScale }],
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.brandTitle,
+              {
+                fontFamily: scriptFontFamily,
+              },
+            ]}
+          >
+            {displayedText}
+          </Text>
+          <Animated.View
+            style={[
+              styles.cursor,
+              {
+                opacity: cursorOpacity,
+                transform: [{ scaleY: penPressure }],
+              },
+            ]}
+          />
+        </Animated.View>
       </Pressable>
     </Animated.View>
   );
@@ -83,20 +181,39 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#E2840B",
+    zIndex: 999999,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 9999,
-    elevation: 9999,
   },
-  pressable: {
+
+  pressableArea: {
+    flex: 1,
     width: "100%",
-    height: "100%",
     alignItems: "center",
     justifyContent: "center",
   },
-  animation: {
-    width: Math.min(width, 420),
-    height: Math.min(height, 840),
+
+  textRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+
+  brandTitle: {
+    fontSize: FONT_SIZE,
+    color: "#0F172A",
+    letterSpacing: 0.5,
+    includeFontPadding: false,
+  },
+
+  cursor: {
+    width: 3.5,
+    height: FONT_SIZE * 0.74,
+    borderRadius: 2,
+    backgroundColor: COLORS.primary || "#2563EB",
+    marginLeft: 4,
+    marginBottom: 4,
   },
 });

@@ -45,29 +45,25 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
   }
 }
 
-import { NetworkProvider } from "./src/context/NetworkContext";
-
 export default function App() {
   const [isSplashVisible, setIsSplashVisible] = useState(true);
 
   return (
     <SafeAreaProvider style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
-      <NetworkProvider>
-        <AuthProvider>
-          <WishlistProvider>
-            <OwnerProvider>
-              <AgentProvider>
-                <AppNavigator />
-                {isSplashVisible && (
-                  <AnimatedSplashScreen
-                    onAnimationComplete={() => setIsSplashVisible(false)}
-                  />
-                )}
-              </AgentProvider>
-            </OwnerProvider>
-          </WishlistProvider>
-        </AuthProvider>
-      </NetworkProvider>
+      <AuthProvider>
+        <WishlistProvider>
+          <OwnerProvider>
+            <AgentProvider>
+              <AppNavigator />
+              {isSplashVisible && (
+                <AnimatedSplashScreen
+                  onAnimationComplete={() => setIsSplashVisible(false)}
+                />
+              )}
+            </AgentProvider>
+          </OwnerProvider>
+        </WishlistProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }
