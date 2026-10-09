@@ -42,7 +42,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import COLORS from "../constants/colors";
 import TYPOGRAPHY from "../constants/typography";
 import ALL_PROPERTIES, { RECOMMENDED_PROPERTIES } from "../data/properties";
-import { fetchSimilar } from "../api/listings";
+import { fetchListingDetail, fetchSimilar } from "../api/listings";
 import SafeImage from "./common/SafeImage";
 import { createEnquiry } from "../api/enquiries";
 import { getAuthTokenSync } from "../api/client";
@@ -104,8 +104,13 @@ export default function PropertyDetailModal({
   // before any early return, to preserve hook order on every render.
   // Mock-sourced properties (no numeric backendId) skip fetching entirely.
   const [liveSimilar, setLiveSimilar] = useState(undefined);
+  // Real gallery for backend-backed cards opened without one (e.g. from Home
+  // cards, which carry only the cover). Prevents mixing sample Unsplash
+  // photos into a real listing's gallery. Mock flows keep existing fallback.
+  const [liveGallery, setLiveGallery] = useState(undefined);
   useEffect(() => {
     setLiveSimilar(undefined);
+    setLiveGallery(undefined);
     const backendId = property && property.backendId;
     if (typeof backendId !== "number") return;
     let cancelled = false;
@@ -117,6 +122,16 @@ export default function PropertyDetailModal({
         if (!cancelled) setLiveSimilar(null);
       }
     );
+    if (!property.gallery || property.gallery.length === 0) {
+      fetchListingDetail(backendId).then(
+        (detail) => {
+          if (!cancelled) setLiveGallery(detail.gallery || []);
+        },
+        () => {
+          if (!cancelled) setLiveGallery(null);
+        }
+      );
+    }
     return () => {
       cancelled = true;
     };
@@ -177,27 +192,27 @@ export default function PropertyDetailModal({
     tags = ["CMDA Approved", "Corner Property", "2 Side Open", "Clear Title"];
   }
 
-  // Build photo gallery (main image + alternate architectural angles)
-  const images = useMemo(() => {
-    const rawList =
-      property.gallery && property.gallery.length > 0
-        ? property.gallery
-        : [property.image];
-    const cleaned = rawList.filter(
-      (u) => typeof u === "string" && u.startsWith("http") && !u.includes("seed.local")
-    );
-    if (cleaned.length > 0) return cleaned;
-    const baseImg =
-      property.image && !property.image.includes("seed.local") && property.image.startsWith("http")
-        ? property.image
-        : "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80";
-    return [
-      baseImg,
-      "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1000&q=80",
-      "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1000&q=80",
-      "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80",
-    ];
-  }, [property]);
+  // Build photo gallery (main image + alternate architectural angles).
+  // Backend-backed listings show ONLY real stored photos (fetched when the
+  // opening card carries no gallery); sample Unsplash padding applies solely
+  // to mock flows with no backend record.
+  const isBackendBacked = property && typeof property.backendId === "number";
+  const effectiveGallery =
+    property.gallery && property.gallery.length > 0
+      ? property.gallery
+      : Array.isArray(liveGallery) && liveGallery.length > 0
+        ? liveGallery
+        : null;
+  const images =
+    effectiveGallery ||
+    (isBackendBacked
+      ? [property.image]
+      : [
+          property.image,
+          "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80",
+          "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1000&q=80",
+          "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1000&q=80",
+        ]);
 
   // Similar properties: live API result wins once loaded (even when empty);
   // while loading, on error, or for mock flows, the existing mock fallback stays.

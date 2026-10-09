@@ -547,20 +547,10 @@ export function OwnerProvider({ children }) {
   // Pending selected plan during checkout
   const [selectedPlanForCheckout, setSelectedPlanForCheckout] = useState(null);
 
-  // Saved Draft for Rent Property Multi-Step Flow
-  const [rentDraft, setRentDraft] = useState(null);
-
-  const saveRentDraft = (draftData) => {
-    setRentDraft({
-      ...draftData,
-      savedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      savedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
-    });
-  };
-
-  const clearRentDraft = () => {
-    setRentDraft(null);
-  };
+  // NOTE: drafts are server-backed (src/api/owner.js draft helpers +
+  // listing_drafts table). The old in-memory rentDraft system was removed so
+  // there is exactly ONE authoritative draft store. Callers use the draft
+  // APIs directly (Add screen saves, My Properties lists/deletes).
 
   // Methods
   const activateSubscription = (plan) => {
@@ -585,8 +575,12 @@ export function OwnerProvider({ children }) {
   const addProperty = (newProp) => {
     const propertyWithId = {
       ...newProp,
-      id: `own-prop-${Date.now()}`,
-      status: "pending",
+      // Preserve a server-confirmed id when the caller provides one (e.g. the
+      // real listing_id after POST /owner/listings succeeds) so dashboard
+      // dedup against GET /owner/listings keeps working. Local-only drafts
+      // still get a generated id. Status stays pending — never VERIFIED.
+      id: newProp?.id || `own-prop-${Date.now()}`,
+      status: newProp?.status || "pending",
       views: 0,
       enquiries: 0,
       visits: 0,
@@ -692,9 +686,6 @@ export function OwnerProvider({ children }) {
         addLeadNote,
         selectedPlanForCheckout,
         setSelectedPlanForCheckout,
-        rentDraft,
-        saveRentDraft,
-        clearRentDraft,
       }}
     >
       {children}

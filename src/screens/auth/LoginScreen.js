@@ -30,12 +30,11 @@ import {
   Lock,
   Check,
   X,
-  Sparkles,
-  Zap,
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import { useAuth } from "../../context/AuthContext";
-import { requestOtp, verifyOtp } from "../../api/auth";
+import { requestOtp, verifyOtp, googleSignIn } from "../../api/auth";
+import GoogleSignInButton from "../../components/GoogleSignInButton";
 
 const COUNTRY_CODES = [
   { flag: "🇮🇳", code: "+91", name: "India" },
@@ -45,19 +44,6 @@ const COUNTRY_CODES = [
   { flag: "🇸🇬", code: "+65", name: "Singapore" },
   { flag: "🇨🇦", code: "+1", name: "Canada" },
   { flag: "🇦🇺", code: "+61", name: "Australia" },
-];
-
-const VALID_DEMO_CODES = [
-  "297569",
-  "109745",
-  "583214",
-  "741806",
-  "426391",
-  "835027",
-  "614958",
-  "372640",
-  "958163",
-  "205874",
 ];
 
 export default function LoginScreen({ navigation }) {
@@ -79,8 +65,9 @@ export default function LoginScreen({ navigation }) {
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Testing helper: uses verified backend code or accepted demo code
-  const [devCode, setDevCode] = useState("297569");
+  // Local-dev helper: the backend returns debug_code ONLY when its OTP-debug
+  // mode is enabled. Never set in production (the field is absent there).
+  const [devCode, setDevCode] = useState(null);
 
   const fullPhone = () => `${selectedCountry.code}${phoneNumber.replace(/[^0-9]/g, "")}`;
 
@@ -136,38 +123,17 @@ export default function LoginScreen({ navigation }) {
     setBusy(true);
     try {
       const resp = await requestOtp(fullPhone());
-      const codeFromBackend = resp && resp.debug_code ? String(resp.debug_code) : null;
-      setDevCode(codeFromBackend || VALID_DEMO_CODES[0]);
+      setDevCode(resp && resp.debug_code ? String(resp.debug_code) : null);
       setOtp(["", "", "", "", "", ""]);
       setStep(2);
       setTimer(30);
       setCanResend(false);
       setFocusedOtpIndex(0);
     } catch (e) {
-      // Fallback for seamless testing
-      setDevCode(VALID_DEMO_CODES[0]);
-      setOtp(["", "", "", "", "", ""]);
-      setStep(2);
-      setTimer(30);
-      setCanResend(false);
-      setFocusedOtpIndex(0);
+      Alert.alert("Could Not Send Code", otpErrorMessage(e));
     } finally {
       setBusy(false);
     }
-  };
-
-  const handleAutoFill = (codeToFill) => {
-    const targetCode = codeToFill || devCode;
-    if (!targetCode) return;
-    const digits = String(targetCode).replace(/[^0-9]/g, "").slice(0, 6).split("");
-    const newOtp = ["", "", "", "", "", ""];
-    digits.forEach((d, i) => {
-      newOtp[i] = d;
-    });
-    setOtp(newOtp);
-    const nextIdx = Math.min(5, digits.length - 1);
-    setFocusedOtpIndex(nextIdx);
-    otpInputRefs.current[nextIdx]?.focus();
   };
 
   const handleOtpChange = (text, index) => {
@@ -214,21 +180,7 @@ export default function LoginScreen({ navigation }) {
     }
     setBusy(true);
     try {
-      let tokenResp;
-      try {
-        tokenResp = await verifyOtp(fullPhone(), code);
-      } catch (err) {
-        // Testing fallback for demo code or local testing
-        if (code === devCode || code === "123456" || code === "297569") {
-          tokenResp = {
-            access_token: "test-token-" + Date.now(),
-            user_id: 1,
-            role: "BUYER",
-          };
-        } else {
-          throw err;
-        }
-      }
+      const tokenResp = await verifyOtp(fullPhone(), code);
       const userObj = await loginWithToken(tokenResp.access_token, {
         phone: fullPhone(),
         countryCode: selectedCountry.code,
@@ -297,6 +249,46 @@ export default function LoginScreen({ navigation }) {
       });
     } else {
       navigation?.navigate("MainTabs");
+    }
+  };
+
+  // Web-only Google Sign-In: GIS credential -> POST /auth/google ->
+  // existing loginWithToken. Unknown Google identities (backend 404
+  // GOOGLE_UNKNOWN) are NOT auto-created; the user must sign in by phone.
+  const handleGoogleCredential = async (idToken) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const tokenResp = await googleSignIn(idToken);
+      const userObj = await loginWithToken(tokenResp.access_token);
+      if (userObj && userObj.isProfileComplete) {
+        if (navigation?.reset) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "MainTabs" }],
+          });
+        } else {
+          navigation?.navigate("MainTabs");
+        }
+      } else {
+        if (userObj?.firstName) setFirstName(userObj.firstName);
+        if (userObj?.lastName) setLastName(userObj.lastName);
+        setStep(3);
+      }
+    } catch (e) {
+      if (e && (e.status === 404 || e.detail === "GOOGLE_UNKNOWN")) {
+        Alert.alert(
+          "Google Account Not Linked",
+          "Your Google account is not linked to a Restamp account yet. Please sign in with your phone first."
+        );
+      } else {
+        Alert.alert(
+          "Google Sign-In Failed",
+          "Could not sign you in with Google. Please try again or use phone login."
+        );
+      }
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -377,6 +369,19 @@ export default function LoginScreen({ navigation }) {
                   <Text style={styles.boldText}>SMS</Text> messages from RESTAMP
                   for phone verification.
                 </Text>
+
+                {/* Web-only Google Sign-In (phone OTP stays the native flow). */}
+                {Platform.OS === "web" ? (
+                  <GoogleSignInButton
+                    onCredential={handleGoogleCredential}
+                    onError={() =>
+                      Alert.alert(
+                        "Google Sign-In Failed",
+                        "Could not start Google Sign-In. Please try again or use phone login."
+                      )
+                    }
+                  />
+                ) : null}
               </View>
             )}
 
@@ -420,125 +425,89 @@ export default function LoginScreen({ navigation }) {
                   })}
                 </View>
 
-                {/* Phone Notice & Change Link */}
-                <View style={styles.phoneNoticeContainer}>
-                  <Text style={styles.subtextNotice}>
-                    We've sent a <Text style={styles.boldText}>WhatsApp / SMS</Text>{" "}
-                    verification code to{" "}
-                    <Text style={styles.boldText}>
-                      {selectedCountry.code} {phoneNumber}
-                    </Text>
+                <Text style={styles.subtextNotice}>
+                  We've sent a <Text style={styles.boldText}>WhatsApp / SMS</Text>{" "}
+                  verification code to{" "}
+                  <Text style={styles.boldText}>
+                    {selectedCountry.code} {phoneNumber}
                   </Text>
-                  <TouchableOpacity
-                    style={styles.changePhoneBtn}
-                    onPress={() => setStep(1)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.changePhoneText}>Edit phone number</Text>
-                  </TouchableOpacity>
-                </View>
+                </Text>
 
-                {/* Testing Time OTP Preview & Instant Auto-Fill Banner (Always shown right after mobile no) */}
-                <View style={styles.otpPreviewContainer}>
-                  <View style={styles.otpPreviewTopRow}>
-                    <View style={styles.otpPreviewBadge}>
-                      <Sparkles size={13} color="#2563EB" />
-                      <Text style={styles.otpPreviewBadgeText}>Testing OTP Code</Text>
-                    </View>
-                    <View style={styles.liveIndicator}>
-                      <View style={styles.liveDot} />
-                      <Text style={styles.liveIndicatorText}>Ready to use</Text>
-                    </View>
-                  </View>
+                {/* Local-dev helper: shows the debug OTP only when the backend
+                    actually provided one (dev builds). Never shown in production. */}
+                {__DEV__ && devCode ? (
+                  <Text style={styles.devCodeNotice}>
+                    Dev build: your code is {devCode}
+                  </Text>
+                ) : null}
 
-                  <View style={styles.otpPreviewCardBody}>
-                    <TouchableOpacity
-                      style={styles.otpPreviewDigits}
-                      onPress={() => handleAutoFill(devCode || "123456")}
-                      activeOpacity={0.7}
-                    >
-                      {(devCode || "123456").split("").map((digit, i) => (
-                        <View key={i} style={styles.otpPreviewDigitCell}>
-                          <Text style={styles.otpPreviewDigitValue}>{digit}</Text>
-                        </View>
-                      ))}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.autoFillButton}
-                      onPress={() => handleAutoFill(devCode || "123456")}
-                      activeOpacity={0.8}
-                    >
-                      <Zap size={14} color="#FFFFFF" fill="#FFFFFF" />
-                      <Text style={styles.autoFillButtonText}>Auto-Fill</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Resend Code / Update Now Button */}
-                <View style={styles.resendSection}>
-                  <TouchableOpacity
-                    style={[
-                      styles.resendPillBtn,
-                      canResend ? styles.resendPillBtnActive : styles.resendPillBtnDisabled,
-                    ]}
-                    onPress={() => {
-                      if (canResend && !busy) {
-                        setBusy(true);
-                        requestOtp(fullPhone()).then(
-                          (resp) => {
-                            setBusy(false);
-                            setTimer(30);
-                            setCanResend(false);
-                            const newCode =
-                              resp && resp.debug_code
-                                ? String(resp.debug_code)
-                                : VALID_DEMO_CODES[
-                                    Math.floor(Math.random() * VALID_DEMO_CODES.length)
-                                  ];
-                            setDevCode(newCode);
-                            setOtp(["", "", "", "", "", ""]);
-                            setFocusedOtpIndex(0);
-                            Alert.alert(
-                              "Code Updated",
-                              `New testing OTP: ${newCode}. Preview and Auto-fill updated.`
-                            );
-                          },
-                          () => {
-                            setBusy(false);
-                            const fallbackNewCode =
-                              VALID_DEMO_CODES[
-                                Math.floor(Math.random() * VALID_DEMO_CODES.length)
-                              ];
-                            setDevCode(fallbackNewCode);
-                            setTimer(30);
-                            setCanResend(false);
-                            setOtp(["", "", "", "", "", ""]);
-                            setFocusedOtpIndex(0);
-                            Alert.alert(
-                              "Code Updated",
-                              `New testing OTP: ${fallbackNewCode}. Preview and Auto-fill updated.`
-                            );
-                          }
-                        );
-                      }
-                    }}
-                    activeOpacity={canResend ? 0.75 : 1}
-                  >
-                    <RotateCcw
-                      size={14}
-                      color={canResend ? "#FFFFFF" : "#94A3B8"}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
-                      style={[
-                        styles.resendPillText,
-                        canResend ? styles.resendPillTextActive : styles.resendPillTextDisabled,
-                      ]}
-                    >
-                      {canResend ? "Update now (Resend code)" : `Resend code in ${timer}s`}
+                {/* Manager-demo helper: fixed demo OTP, gated by
+                    EXPO_PUBLIC_OTP_DEMO_MODE=1. This is a DEMO code, not a
+                    real SMS/WhatsApp code — the backend accepts it only when
+                    RESTAMP_OTP_DEMO_MODE=1. Never rendered otherwise, and the
+                    code below is static (no real/generated OTP is exposed). */}
+                {process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1" ? (
+                  <View style={styles.demoOtpBox}>
+                    <Text style={styles.demoOtpTitle}>Demo Mode</Text>
+                    <Text style={styles.demoOtpText}>
+                      Use OTP: <Text style={styles.demoOtpCode}>297569</Text>
                     </Text>
-                  </TouchableOpacity>
-                </View>
+                    <Text style={styles.demoOtpSub}>
+                      Demo code only — not sent by SMS/WhatsApp.
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* Resend Code Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.resendPillBtn,
+                    !canResend && styles.resendPillBtnDisabled,
+                  ]}
+                  onPress={() => {
+                    if (canResend && !busy) {
+                      setBusy(true);
+                      requestOtp(fullPhone()).then(
+                        (resp) => {
+                          setBusy(false);
+                          setTimer(30);
+                          setCanResend(false);
+                          // A resend issues a NEW server code: refresh the dev
+                          // display and clear stale digits so they cannot be
+                          // submitted against the new code.
+                          setDevCode(
+                            resp && resp.debug_code ? String(resp.debug_code) : null
+                          );
+                          setOtp(["", "", "", "", "", ""]);
+                          setFocusedOtpIndex(0);
+                          Alert.alert(
+                            "Code Sent",
+                            "A new verification code has been sent."
+                          );
+                        },
+                        (e) => {
+                          setBusy(false);
+                          Alert.alert("Could Not Resend", otpErrorMessage(e));
+                        }
+                      );
+                    }
+                  }}
+                  activeOpacity={canResend ? 0.75 : 1}
+                >
+                  <RotateCcw
+                    size={14}
+                    color={canResend ? "#2563EB" : "#94A3B8"}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      styles.resendPillText,
+                      !canResend && styles.resendPillTextDisabled,
+                    ]}
+                  >
+                    {canResend ? "Resend code" : `Resend code in ${timer}s`}
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -842,154 +811,80 @@ const styles = StyleSheet.create({
     borderColor: "#2563EB",
     backgroundColor: "#FFFFFF",
   },
-  phoneNoticeContainer: {
-    marginBottom: 16,
-  },
   subtextNotice: {
     fontSize: 13,
     color: "#78716C",
     lineHeight: 20,
-  },
-  changePhoneBtn: {
-    marginTop: 4,
-    alignSelf: "flex-start",
-  },
-  changePhoneText: {
-    fontSize: 12.5,
-    fontWeight: "600",
-    color: "#2563EB",
-    textDecorationLine: "underline",
-  },
-  otpPreviewContainer: {
-    backgroundColor: "#F0F7FF",
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#BFDBFE",
-    padding: 12,
     marginBottom: 16,
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 1,
   },
-  otpPreviewTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  otpPreviewBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#DBEAFE",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    gap: 4,
-  },
-  otpPreviewBadgeText: {
-    fontSize: 11.5,
+  devCodeNotice: {
+    fontSize: 13,
     fontWeight: "700",
     color: "#1D4ED8",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  liveIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: "#16A34A",
-  },
-  liveIndicatorText: {
-    fontSize: 11.5,
-    fontWeight: "600",
-    color: "#16A34A",
-  },
-  otpPreviewCardBody: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  otpPreviewDigits: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  otpPreviewDigitCell: {
-    width: 28,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#EFF6FF",
     borderWidth: 1,
-    borderColor: "#93C5FD",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  otpPreviewDigitValue: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#1E3A8A",
-  },
-  autoFillButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "#2563EB",
+    borderColor: "#BFDBFE",
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
+    marginBottom: 16,
+    overflow: "hidden",
   },
-  autoFillButtonText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#FFFFFF",
+  demoOtpBox: {
+    alignItems: "center",
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+    overflow: "hidden",
   },
-  resendSection: {
-    marginTop: 2,
-    marginBottom: 8,
+  demoOtpTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#92400E",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  demoOtpText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#78350F",
+    marginTop: 4,
+  },
+  demoOtpCode: {
+    fontWeight: "800",
+    letterSpacing: 2,
+  },
+  demoOtpSub: {
+    fontSize: 11,
+    color: "#A16207",
+    marginTop: 4,
   },
   resendPillBtn: {
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 22,
+    backgroundColor: "#EFF6FF",
     borderWidth: 1,
-  },
-  resendPillBtnActive: {
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: "#BFDBFE",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
   },
   resendPillBtnDisabled: {
     backgroundColor: "#F8FAFC",
     borderColor: "#E2E8F0",
   },
   resendPillText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: "700",
-  },
-  resendPillTextActive: {
-    color: "#FFFFFF",
+    color: "#2563EB",
   },
   resendPillTextDisabled: {
-    color: "#94A3B8",
+    color: "#A8A29E",
   },
 
   /* STEP 3: NAME */

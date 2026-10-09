@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { fetchMe, updateProfileName } from "../api/auth";
+import { setMyRole } from "../api/users";
 import { getAuthTokenSync, setAuthToken } from "../api/client";
 
 const AuthContext = createContext();
@@ -80,7 +81,19 @@ export function AuthProvider({ children }) {
   const loginWithToken = useCallback(async (access_token, local) => {
     setAuthToken(access_token);
     try {
-      const me = await fetchMe();
+      let me = await fetchMe();
+      if (me.role == null) {
+        // Role-less account: initialize to BUYER (the default for new
+        // users). Existing BUYER/OWNER/BROKER roles are never overwritten
+        // here. Best-effort: if the POST fails, login still succeeds with
+        // the role-less profile and buyer fetches stay gated off.
+        try {
+          await setMyRole("BUYER");
+          me = await fetchMe();
+        } catch {
+          // keep the fetched profile; role-gated UI degrades gracefully
+        }
+      }
       const u = toUser(me, local);
       setUser(u);
       return u;

@@ -19,6 +19,15 @@
       "bundleIdentifier": "com.restamp.app"
     },
 
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Restamp to access your photos so you can add real property pictures to your listing."
+        }
+      ]
+    ],
+
     "web": {
       "bundler": "metro",
       "output": "single"

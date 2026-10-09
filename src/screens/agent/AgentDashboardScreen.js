@@ -32,13 +32,10 @@ import {
   MapPin,
   Check,
   Wallet,
-  WifiOff,
 } from "lucide-react-native";
 
 import COLORS from "../../constants/colors";
 import { useAgent } from "../../context/AgentContext";
-import { useNetwork } from "../../context/NetworkContext";
-import { SkeletonDashboard } from "../../components/common/Skeleton";
 import AppBrandHeader from "../../components/AppBrandHeader";
 import StatusBadge from "../../components/owner/StatusBadge";
 
@@ -60,8 +57,6 @@ export default function AgentDashboardScreen({ navigation }) {
     localityProperties,
     matchPropertyToLead,
   } = useAgent();
-
-  const { isOffline, isChecking, checkConnection } = useNetwork();
 
   const [locationsModalVisible, setLocationsModalVisible] = useState(false);
   const [matchingLead, setMatchingLead] = useState(null);
@@ -140,15 +135,6 @@ export default function AgentDashboardScreen({ navigation }) {
       <View style={[styles.headerWrapper, { paddingTop: topInset }]}>
         <AppBrandHeader currentRole="agent" />
       </View>
-
-      {isOffline && (
-        <View style={styles.offlineNoticeBanner}>
-          <WifiOff size={14} color="#DC2626" style={{ marginRight: 6 }} />
-          <Text style={styles.offlineNoticeText}>
-            Offline Mode • Showing cached dashboard data
-          </Text>
-        </View>
-      )}
 
       <ScrollView
         style={styles.container}
@@ -1357,20 +1343,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#FFFFFF",
-  },
-  offlineNoticeBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FEF2F2",
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#FEE2E2",
-  },
-  offlineNoticeText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#DC2626",
   },
 });

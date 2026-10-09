@@ -50,6 +50,8 @@ import {
 } from "../../data/properties";
 import { useWishlist } from "../../context/WishlistContext";
 import { useOwner } from "../../context/OwnerContext";
+import { useAuth } from "../../context/AuthContext";
+import { enterOwnerFlow } from "../../api/users";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import RestampLogo from "../../components/RestampLogo";
 import SearchPropertyModal from "../../components/SearchPropertyModal";
@@ -166,10 +168,30 @@ export default function HomeScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState("");
   const { isWishlisted, toggleWishlist } = useWishlist();
   const { subscription } = useOwner();
+  const auth = useAuth();
+  const [ownerSwitching, setOwnerSwitching] = useState(false);
 
-  const handlePostProperty = () => {
-    // Testing mode: skip payment steps and go straight to Owner Add Property
-    navigation.navigate("OwnerNavigator", { screen: "Add" });
+  // P0 fix: the backend requires the OWNER role for /owner/* endpoints.
+  // Switch the backend role first (real POST /users/me/role, token
+  // preserved), and only then navigate. Never logs out, never touches OTP.
+  const handlePostProperty = async () => {
+    if (ownerSwitching) return;
+    setOwnerSwitching(true);
+    try {
+      await enterOwnerFlow(navigation, auth, "Add");
+    } finally {
+      setOwnerSwitching(false);
+    }
+  };
+
+  const handleOpenOwnerDashboard = async () => {
+    if (ownerSwitching) return;
+    setOwnerSwitching(true);
+    try {
+      await enterOwnerFlow(navigation, auth, "Dashboard");
+    } finally {
+      setOwnerSwitching(false);
+    }
   };
 
   // Selected Property for Detail Modal
@@ -395,7 +417,8 @@ export default function HomeScreen({ navigation }) {
             <TouchableOpacity
               style={styles.switchOwnerPill}
               activeOpacity={0.8}
-              onPress={() => navigation.navigate("OwnerNavigator", { screen: "Dashboard" })}
+              onPress={handleOpenOwnerDashboard}
+              disabled={ownerSwitching}
             >
               <Building2 size={13} color="#2563EB" style={{ marginRight: 4 }} />
               <Text style={styles.switchOwnerText}>Owner</Text>

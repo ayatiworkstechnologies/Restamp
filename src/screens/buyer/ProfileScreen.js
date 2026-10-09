@@ -31,6 +31,7 @@ import {
   ArrowRight,
   X,
   Pencil,
+  Check,
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -38,7 +39,10 @@ import { useWishlist } from "../../context/WishlistContext";
 import { useOwner } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
 import { getAuthTokenSync } from "../../api/client";
+import { enterOwnerFlow } from "../../api/users";
 import { fetchMyEnquiries } from "../../api/enquiries";
+import { linkGoogleAccount } from "../../api/auth";
+import GoogleSignInButton from "../../components/GoogleSignInButton";
 import ConfirmationModal from "../../components/owner/ConfirmationModal";
 import AppBrandHeader from "../../components/AppBrandHeader";
 
@@ -46,13 +50,18 @@ export default function ProfileScreen({ navigation }) {
   const nav = useNavigation() || navigation;
   const { wishlist, wishlistSynced, refreshWishlist } = useWishlist();
   const { subscription } = useOwner();
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, logout, refreshMe } = useAuth();
+  const authForOwnerEntry = { user: authUser, refreshMe };
+  const [switchingOwner, setSwitchingOwner] = useState(false);
 
-  // Real counts, refreshed whenever Profile gains focus. Logged-out users keep
-  // existing local behavior (no fake server numbers ever shown when logged out,
-  // and "…" — never a fabricated count — while authenticated data loads).
+  // Real counts + live role, refreshed whenever Profile gains focus.
+  // Buyer endpoints (wishlist, enquiries) are only called while the account
+  // holds the BUYER role — otherwise they would 403. Everyone else keeps the
+  // existing local behavior. The role comes from the backend (never the
+  // stale JWT claim) so the badge below always reflects the live role.
   const [authed, setAuthed] = useState(false);
   const [enquiriesTotal, setEnquiriesTotal] = useState(null);
+  const isBuyerRole = authUser?.role === "BUYER";
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -61,17 +70,23 @@ export default function ProfileScreen({ navigation }) {
       if (!token) {
         return undefined;
       }
-      refreshWishlist().catch(() => {});
-      fetchMyEnquiries(1, 1).then(
-        (data) => {
-          if (!cancelled) setEnquiriesTotal(data.total);
-        },
-        () => {}
-      );
+      refreshMe().catch(() => {});
+      if (isBuyerRole) {
+        refreshWishlist().catch(() => {});
+        fetchMyEnquiries(1, 1).then(
+          (data) => {
+            if (!cancelled) setEnquiriesTotal(data.total);
+          },
+          () => {}
+        );
+      } else if (!cancelled) {
+        // Non-buyer role: drop any stale buyer count instead of showing it.
+        setEnquiriesTotal(null);
+      }
       return () => {
         cancelled = true;
       };
-    }, [refreshWishlist])
+    }, [refreshMe, refreshWishlist, isBuyerRole])
   );
 
   const savedCount = authed ? (wishlistSynced ? wishlist.length : "…") : wishlist.length;
@@ -92,6 +107,45 @@ export default function ProfileScreen({ navigation }) {
   const [editPhone, setEditPhone] = useState(userProfile.phone);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
+  // Google account linking (web-only GIS button; phone session JWT is sent
+  // automatically by the API client — the user_id is never chosen client-side).
+  const googleLinked = (authUser?.providers || []).includes("google");
+  const [showGoogleLink, setShowGoogleLink] = useState(false);
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+
+  const handleGoogleLinkCredential = async (idToken) => {
+    if (linkingGoogle) return;
+    setLinkingGoogle(true);
+    try {
+      await linkGoogleAccount(idToken);
+      await refreshMe();
+      setShowGoogleLink(false);
+      Alert.alert(
+        "Google Account Linked",
+        "Google account linked successfully. You can now sign in with Google."
+      );
+    } catch (e) {
+      if (e && e.status === 409) {
+        Alert.alert(
+          "Already Linked Elsewhere",
+          "This Google account is already linked to another Restamp account."
+        );
+      } else if (e && (e.status === 401 || e.kind === "login")) {
+        Alert.alert(
+          "Session Expired",
+          "Your session has expired. Please log in again."
+        );
+      } else {
+        Alert.alert(
+          "Linking Failed",
+          "Could not link your Google account. Please try again."
+        );
+      }
+    } finally {
+      setLinkingGoogle(false);
+    }
+  };
+
   React.useEffect(() => {
     if (authUser) {
       setUserProfile((prev) => ({
@@ -102,8 +156,17 @@ export default function ProfileScreen({ navigation }) {
     }
   }, [authUser]);
 
-  const handleSwitchToOwner = () => {
-    nav.navigate("OwnerNavigator", { screen: "Dashboard" });
+  // P0 fix: backend requires the OWNER role for /owner/* endpoints.
+  // Switch the backend role first (real POST /users/me/role, token
+  // preserved), and only then navigate. Never logs out, never touches OTP.
+  const handleSwitchToOwner = async () => {
+    if (switchingOwner) return;
+    setSwitchingOwner(true);
+    try {
+      await enterOwnerFlow(nav, authForOwnerEntry, "Dashboard");
+    } finally {
+      setSwitchingOwner(false);
+    }
   };
 
   const handleLogout = () => {
@@ -145,12 +208,19 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.phoneText}>{userProfile.phone}</Text>
             <Text style={styles.emailText}>{userProfile.email}</Text>
 
-            {userProfile.verified && (
+            {/* Role badge reflects the LIVE backend role (never hardcoded):
+                BUYER -> Verified Buyer, OWNER -> Owner Mode. */}
+            {authUser?.role === "OWNER" ? (
+              <View style={styles.verifiedBadge}>
+                <ShieldCheck size={12} color="#16A34A" style={{ marginRight: 4 }} />
+                <Text style={styles.verifiedBadgeText}>Owner Mode</Text>
+              </View>
+            ) : authUser?.role === "BUYER" ? (
               <View style={styles.verifiedBadge}>
                 <ShieldCheck size={12} color="#16A34A" style={{ marginRight: 4 }} />
                 <Text style={styles.verifiedBadgeText}>Verified Buyer</Text>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
 
@@ -210,6 +280,58 @@ export default function ProfileScreen({ navigation }) {
             </View>
             <ChevronRight size={16} color="#94A3B8" />
           </TouchableOpacity>
+        </View>
+
+        {/* 1b. LINKED ACCOUNTS */}
+        <View style={styles.menuGroup}>
+          <Text style={styles.groupHeading}>LINKED ACCOUNTS</Text>
+
+          {googleLinked ? (
+            <View style={[styles.menuRow, { borderBottomWidth: 0 }]}>
+              <View style={styles.menuLeft}>
+                <Globe size={18} color="#334155" style={styles.menuIcon} />
+                <Text style={styles.menuLabel}>Google</Text>
+              </View>
+              <View style={styles.badgeRow}>
+                <Check size={15} color="#16A34A" />
+                <Text style={styles.linkedText}>Linked ✓</Text>
+              </View>
+            </View>
+          ) : Platform.OS === "web" ? (
+            <View>
+              <TouchableOpacity
+                style={[{ borderBottomWidth: 0 }, styles.menuRow]}
+                onPress={() => setShowGoogleLink((v) => !v)}
+                activeOpacity={0.7}
+                disabled={linkingGoogle}
+              >
+                <View style={styles.menuLeft}>
+                  <Globe size={18} color="#334155" style={styles.menuIcon} />
+                  <Text style={styles.menuLabel}>Link Google Account</Text>
+                </View>
+                <ChevronRight size={16} color="#94A3B8" />
+              </TouchableOpacity>
+              {showGoogleLink ? (
+                <View style={styles.googleLinkBody}>
+                  <Text style={styles.googleLinkHint}>
+                    {linkingGoogle
+                      ? "Linking your Google account…"
+                      : "Choose the Google account to link. It will be used for future Google sign-ins."}
+                  </Text>
+                  <GoogleSignInButton
+                    compact
+                    onCredential={handleGoogleLinkCredential}
+                    onError={() =>
+                      Alert.alert(
+                        "Google Sign-In Failed",
+                        "Could not start Google Sign-In. Please try again."
+                      )
+                    }
+                  />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {/* 2. MY ACTIVITY */}
@@ -623,6 +745,23 @@ const styles = StyleSheet.create({
   badgeRow: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  linkedText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#16A34A",
+    marginLeft: 4,
+  },
+  googleLinkBody: {
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  googleLinkHint: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    marginBottom: 4,
+    lineHeight: 17,
   },
   kycStatusText: {
     fontSize: 12,

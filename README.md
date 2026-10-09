@@ -15,4 +15,3 @@ RESTAMP is a modern, high-performance real estate & property discovery mobile ap
 npm install
 npx expo start
 ```
-# Restamp

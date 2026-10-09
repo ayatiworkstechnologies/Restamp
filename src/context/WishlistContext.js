@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useState } from "react";
 import ALL_PROPERTIES from "../data/properties";
 import { getAuthTokenSync } from "../api/client";
 import { fetchSavedWishlist, saveListingRemote, unsaveListingRemote } from "../api/saved";
+import { useAuth } from "./AuthContext";
 
 const WishlistContext = createContext();
 
@@ -24,6 +25,11 @@ function backendIdOf(property) {
 export function WishlistProvider({ children }) {
   // Initialize with initial sample properties
   const [wishlist, setWishlist] = useState(ALL_PROPERTIES.slice(0, 2));
+  // Buyer endpoints 403 for non-BUYER roles (single active role per
+  // account), so remote sync only runs for live BUYER accounts. Everyone
+  // else keeps the existing local behavior — no request is ever sent.
+  const { user } = useAuth();
+  const isBuyer = user?.role === "BUYER";
 
   const isWishlisted = (id) => {
     return wishlist.some((item) => String(item.id) === String(id));
@@ -40,9 +46,10 @@ export function WishlistProvider({ children }) {
         return [property, ...prev];
       }
     });
-    // Backend sync only when authenticated AND the card maps to a real listing.
-    // Mock-only cards (no numeric backendId) stay local, as before.
-    if (getAuthTokenSync()) {
+    // Backend sync only when authenticated as BUYER AND the card maps to a
+    // real listing. Mock-only cards (no numeric backendId) stay local, and
+    // OWNER sessions stay local too (buyer writes would 403), as before.
+    if (getAuthTokenSync() && isBuyer) {
       const backendId = backendIdOf(property);
       if (backendId != null) {
         const promise = wasSaved ? unsaveListingRemote(backendId) : saveListingRemote(backendId);
@@ -63,21 +70,23 @@ export function WishlistProvider({ children }) {
 
   const removeFromWishlist = (id) => {
     setWishlist((prev) => prev.filter((item) => String(item.id) !== String(id)));
-    if (getAuthTokenSync() && typeof id === "number") {
+    if (getAuthTokenSync() && isBuyer && typeof id === "number") {
       syncRemote(unsaveListingRemote(id));
     }
   };
 
-  // Replace local list with the server wishlist (no-op while logged out).
+  // Replace local list with the server wishlist (no-op while logged out or
+  // while the account holds a non-BUYER role — buyer reads would 403).
   // Returns true when a refresh happened, false when local state was kept.
   // wishlistSynced tracks whether the list currently reflects the server.
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [wishlistSynced, setWishlistSynced] = useState(false);
   // Stable identity (useCallback): consumers list this in focus-effect deps,
   // so it must not change every render or effects refire in a loop, spamming
-  // the backend. Only stable setState setters + imports are used inside.
+  // the backend. It changes only when the buyer-ness of the account changes
+  // (login/logout/role switch), which is exactly when a refetch is wanted.
   const refreshWishlist = useCallback(async () => {
-    if (!getAuthTokenSync()) return false;
+    if (!getAuthTokenSync() || !isBuyer) return false;
     setWishlistLoading(true);
     try {
       const { items } = await fetchSavedWishlist();
@@ -89,7 +98,7 @@ export function WishlistProvider({ children }) {
     } finally {
       setWishlistLoading(false);
     }
-  }, []);
+  }, [isBuyer]);
 
   const clearWishlist = () => {
     setWishlist([]);
