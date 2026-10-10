@@ -1151,6 +1151,10 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       ? "Price & Terms"
       : currentStepInfo.fullLabel;
   const coverPhoto = photosList.find((p) => p.isCover) || photosList[0];
+  const propertyTitle =
+    category === "Residential" && propertyType !== "Plot / Land"
+      ? `${bhk} ${propertyType}`
+      : `${category} ${propertyType}`;
 
   // Retry/upload button state, re-derived from CURRENT photosList on every
   // render so the count/action can never go stale (deletes/adds included).
