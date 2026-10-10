@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, memo } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import COLORS from "../../constants/colors";
 
@@ -12,7 +12,7 @@ const DEFAULT_RENT_STEPS = [
   { step: 7, label: "Review", fullLabel: "Review Property" },
 ];
 
-export default function StepIndicator({
+function StepIndicator({
   currentStep = 1,
   steps = DEFAULT_RENT_STEPS,
   onStepPress,
@@ -145,3 +145,5 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
 });
+
+export default memo(StepIndicator);

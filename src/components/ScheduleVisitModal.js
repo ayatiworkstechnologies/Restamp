@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, memo } from "react";
 import {
   Modal,
   View,
@@ -85,7 +85,7 @@ function isBeforeToday(date) {
   return check < startOfToday;
 }
 
-export default function ScheduleVisitModal({
+function ScheduleVisitModal({
   visible,
   onClose,
   onConfirm,
@@ -699,3 +699,5 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 });
+
+export default memo(ScheduleVisitModal);

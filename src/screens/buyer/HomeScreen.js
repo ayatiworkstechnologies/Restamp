@@ -262,7 +262,7 @@ export default function HomeScreen({ navigation }) {
   const filterProperties = (list) => {
     return list.filter((item) => {
       // Deal filter
-      if (dealType === "Buy" && item.badgeType !== "sale" && item.badgeType !== "resale") return false;
+      if (dealType === "Buy" && item.badgeType !== "sale" && item.badgeType !== "resale" && item.badgeType !== "new") return false;
       if (dealType === "Resale" && item.badgeType !== "resale" && !item.isResale && item.constructionStatus !== "Ready to move") return false;
       if (dealType === "Rent" && item.badgeType !== "rent") return false;
       if (dealType === "Lease" && item.badgeType !== "lease") return false;
@@ -330,14 +330,25 @@ export default function HomeScreen({ navigation }) {
   const baseRecAddedList = liveListings && liveListings.length > 0 ? [...liveListings].reverse() : RECENTLY_ADDED;
   const baseRecList = liveListings && liveListings.length > 0 ? liveListings : RECOMMENDED_PROPERTIES;
 
-  const recList = filterProperties(baseRecList).length > 0 ? filterProperties(baseRecList) : baseRecList;
-  const verList = filterProperties(baseVerList).length > 0 ? filterProperties(baseVerList) : baseVerList;
-  const recAddedList = filterProperties(baseRecAddedList).length > 0 ? filterProperties(baseRecAddedList) : baseRecAddedList;
+  const recList = useMemo(() => {
+    const filtered = filterProperties(baseRecList);
+    return filtered.length > 0 ? filtered : baseRecList;
+  }, [baseRecList, dealType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus, searchQuery]);
+
+  const verList = useMemo(() => {
+    const filtered = filterProperties(baseVerList);
+    return filtered.length > 0 ? filtered : baseVerList;
+  }, [baseVerList, dealType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus, searchQuery]);
+
+  const recAddedList = useMemo(() => {
+    const filtered = filterProperties(baseRecAddedList);
+    return filtered.length > 0 ? filtered : baseRecAddedList;
+  }, [baseRecAddedList, dealType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus, searchQuery]);
 
   // Filter preview count inside modal
   const modalMatchedCount = useMemo(() => {
     return ALL_PROPERTIES.filter((item) => {
-      if (dealType === "Buy" && item.badgeType !== "sale" && item.badgeType !== "resale") return false;
+      if (dealType === "Buy" && item.badgeType !== "sale" && item.badgeType !== "resale" && item.badgeType !== "new") return false;
       if (dealType === "Resale" && item.badgeType !== "resale" && !item.isResale && item.constructionStatus !== "Ready to move") return false;
       if (dealType === "Rent" && item.badgeType !== "rent") return false;
       if (dealType === "Lease" && item.badgeType !== "lease") return false;

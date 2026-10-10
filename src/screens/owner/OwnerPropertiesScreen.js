@@ -109,7 +109,8 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
       remotePhotos.find((p) => p.isCover) || remotePhotos[0] || null;
     const tx = (draft.transaction_type || "RENT").toUpperCase();
     const purpose =
-      tx === "RENT" ? "Rent" : tx === "LEASE" ? "Lease" : tx === "RESALE" ? "Resale" : "Buy";
+      form.lookingTo ||
+      (tx === "RENT" ? "Rent" : tx === "LEASE" ? "Lease" : tx === "RESALE" ? "Resale" : "New");
     const rent = Number(form.monthlyRent);
     return {
       id: `draft-${draft.id}`,

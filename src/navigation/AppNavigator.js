@@ -65,6 +65,8 @@ const tabConfig = {
 function MainTabs() {
   return (
     <Tab.Navigator
+      detachInactiveScreens={true}
+      freezeOnBlur={true}
       screenOptions={({ route }) => {
         const config = tabConfig[route.name] || tabConfig.Home;
         const IconComponent = config.Icon;
@@ -154,7 +156,16 @@ const navTheme = {
 export default function AppNavigator() {
   return (
     <NavigationContainer theme={navTheme}>
-      <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
+      <Stack.Navigator
+        initialRouteName="Login"
+        screenOptions={{
+          headerShown: false,
+          animation: "fade_from_bottom",
+          animationDuration: 180,
+          freezeOnBlur: true,
+          detachInactiveScreens: true,
+        }}
+      >
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="MainTabs" component={MainTabs} />
         <Stack.Screen name="Profile" component={ProfileScreen} />

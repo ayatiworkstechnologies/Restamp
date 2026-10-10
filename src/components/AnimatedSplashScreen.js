@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,25 +7,20 @@ import {
   Dimensions,
   Pressable,
   Platform,
+  StatusBar,
 } from "react-native";
-import { useFonts } from "expo-font";
+import RestampLogo from "./RestampLogo";
 import COLORS from "../constants/colors";
 
 const { width } = Dimensions.get("window");
-const FULL_TEXT = "Restamp";
-const FONT_SIZE = Math.min(68, Math.max(48, Math.floor(width * 0.14)));
 
 export default function AnimatedSplashScreen({ onAnimationComplete }) {
-  const [fontsLoaded] = useFonts({
-    "DancingScript-Bold": require("../../assets/fonts/DancingScript_700Bold.ttf"),
-  });
-
-  const [displayedText, setDisplayedText] = useState("");
-  const cursorOpacity = useRef(new Animated.Value(1)).current;
-  const penPressure = useRef(new Animated.Value(1)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.72)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
+  const textTranslateY = useRef(new Animated.Value(14)).current;
   const screenOpacity = useRef(new Animated.Value(1)).current;
   const screenScale = useRef(new Animated.Value(1)).current;
-  const textScale = useRef(new Animated.Value(0.96)).current;
 
   const hasExited = useRef(false);
 
@@ -36,12 +31,12 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
     Animated.parallel([
       Animated.timing(screenOpacity, {
         toValue: 0,
-        duration: 420,
+        duration: 380,
         useNativeDriver: true,
       }),
       Animated.timing(screenScale, {
-        toValue: 1.05,
-        duration: 420,
+        toValue: 1.04,
+        duration: 380,
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -50,89 +45,48 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
   };
 
   useEffect(() => {
-    // 1. Slow, rhythmic blinking cursor loop
-    const blinkAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(cursorOpacity, {
-          toValue: 0.15,
-          duration: 380,
+    // 1. Logo entrance (scale + fade-in spring)
+    Animated.parallel([
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 450,
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        friction: 6,
+        tension: 55,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // 2. Text entrance shortly after logo
+    const textTimer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(textOpacity, {
+          toValue: 1,
+          duration: 400,
           useNativeDriver: true,
         }),
-        Animated.timing(cursorOpacity, {
-          toValue: 1,
-          duration: 380,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    blinkAnimation.start();
-
-    // 2. Slow, graceful handwriting calligraphy animation
-    let charIndex = 0;
-    const initialDelay = 350; // Pause before writing starts
-    const writeSpeed = 280;   // Slow, deliberate handwriting pace per letter
-
-    let typeInterval = null;
-    let finishTimer = null;
-
-    const startTimer = setTimeout(() => {
-      typeInterval = setInterval(() => {
-        charIndex += 1;
-        setDisplayedText(FULL_TEXT.slice(0, charIndex));
-
-        // Pen pressure stroke effect on each letter
-        penPressure.setValue(1.22);
-        Animated.spring(penPressure, {
-          toValue: 1,
-          friction: 5,
+        Animated.spring(textTranslateY, {
+          toValue: 0,
+          friction: 7,
           tension: 60,
           useNativeDriver: true,
-        }).start();
+        }),
+      ]).start();
+    }, 250);
 
-        if (charIndex >= FULL_TEXT.length) {
-          clearInterval(typeInterval);
-
-          // Gentle spring bloom when the calligraphy completes
-          Animated.spring(textScale, {
-            toValue: 1,
-            friction: 6,
-            tension: 40,
-            useNativeDriver: true,
-          }).start();
-
-          // Fade cursor out after final letter flourish
-          setTimeout(() => {
-            Animated.timing(cursorOpacity, {
-              toValue: 0,
-              duration: 350,
-              useNativeDriver: true,
-            }).start();
-          }, 600);
-
-          // 3. Savor the finished calligraphy, then dissolve into the app
-          finishTimer = setTimeout(() => {
-            triggerExit();
-          }, 1200);
-        }
-      }, writeSpeed);
-    }, initialDelay);
+    // 3. Smooth exit transition to main app
+    const exitTimer = setTimeout(() => {
+      triggerExit();
+    }, 1800);
 
     return () => {
-      clearTimeout(startTimer);
-      if (typeInterval) clearInterval(typeInterval);
-      if (finishTimer) clearTimeout(finishTimer);
-      blinkAnimation.stop();
+      clearTimeout(textTimer);
+      clearTimeout(exitTimer);
     };
   }, []);
-
-  // Scripted cursive font styling with multiple fallbacks
-  const scriptFontFamily = fontsLoaded
-    ? "DancingScript-Bold"
-    : Platform.select({
-        ios: "Snell Roundhand",
-        web: "'Dancing Script', 'Snell Roundhand', 'Brush Script MT', cursive",
-        default: "cursive",
-      });
 
   return (
     <Animated.View
@@ -144,34 +98,39 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
         },
       ]}
     >
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <Pressable style={styles.pressableArea} onPress={triggerExit}>
+        {/* Animated Restamp Brand Emblem */}
         <Animated.View
           style={[
-            styles.textRow,
+            styles.logoContainer,
             {
-              transform: [{ scale: textScale }],
+              opacity: logoOpacity,
+              transform: [{ scale: logoScale }],
             },
           ]}
         >
-          <Text
-            style={[
-              styles.brandTitle,
-              {
-                fontFamily: scriptFontFamily,
-              },
-            ]}
-          >
-            {displayedText}
+          <View style={styles.logoCard}>
+            <RestampLogo size={88} />
+          </View>
+        </Animated.View>
+
+        {/* Animated Brand Wordmark & Subtitle */}
+        <Animated.View
+          style={[
+            styles.textContainer,
+            {
+              opacity: textOpacity,
+              transform: [{ translateY: textTranslateY }],
+            },
+          ]}
+        >
+          <Text style={styles.brandTitle}>
+            Res<Text style={styles.brandTitleAccent}>tamp</Text>
           </Text>
-          <Animated.View
-            style={[
-              styles.cursor,
-              {
-                opacity: cursorOpacity,
-                transform: [{ scaleY: penPressure }],
-              },
-            ]}
-          />
+          <View style={styles.taglineBadge}>
+            <Text style={styles.brandTagline}>INDIA'S VERIFIED PROPERTY PLATFORM</Text>
+          </View>
         </Animated.View>
       </Pressable>
     </Animated.View>
@@ -186,34 +145,53 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   pressableArea: {
     flex: 1,
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 24,
   },
-
-  textRow: {
-    flexDirection: "row",
+  logoContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 20,
+    marginBottom: 20,
   },
-
+  logoCard: {
+    width: 112,
+    height: 112,
+    borderRadius: 28,
+    backgroundColor: "#F8FAFC",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  textContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
   brandTitle: {
-    fontSize: FONT_SIZE,
+    fontSize: 42,
+    fontWeight: "700",
     color: "#0F172A",
-    letterSpacing: 0.5,
-    includeFontPadding: false,
+    letterSpacing: -0.6,
   },
-
-  cursor: {
-    width: 3.5,
-    height: FONT_SIZE * 0.74,
-    borderRadius: 2,
-    backgroundColor: COLORS.primary || "#2563EB",
-    marginLeft: 4,
-    marginBottom: 4,
+  brandTitleAccent: {
+    color: COLORS.primary || "#2563EB",
+    fontWeight: "800",
+  },
+  taglineBadge: {
+    marginTop: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+  },
+  brandTagline: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#64748B",
+    letterSpacing: 1.2,
   },
 });

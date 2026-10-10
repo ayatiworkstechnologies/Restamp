@@ -153,15 +153,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 8,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.22,
-    shadowRadius: 4,
-    elevation: 2,
   },
   confirmBtnDanger: {
     backgroundColor: COLORS.danger,
-    shadowColor: COLORS.danger,
   },
   confirmBtnText: {
     fontSize: 14,

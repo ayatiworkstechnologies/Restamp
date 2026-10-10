@@ -34,6 +34,7 @@ export function buildPayload(property) {
     RESALE: "RESALE",
     BUY: "BUY",
     SELL: "BUY",
+    NEW: "BUY",
     LEASE: "LEASE",
     "PG/CO-LIVING": "RENT",
     "PAYING GUEST": "RENT",

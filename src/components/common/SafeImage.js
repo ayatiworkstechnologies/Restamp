@@ -1,29 +1,27 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, memo } from "react";
 import { Image } from "react-native";
 
 export const DEFAULT_PROPERTY_FALLBACK =
   "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80";
 
 /**
- * Robust image wrapper that intercepts broken URLs (like seed.local)
+ * Robust, high-performance image wrapper that intercepts broken URLs (like seed.local)
  * and catches network load errors, seamlessly falling back to high-res property images.
+ * Memoized to prevent thousands of unnecessary re-renders in property lists.
  */
-export default function SafeImage({ source, style, fallbackUri, onError, ...props }) {
-  const [hasError, setHasError] = useState(false);
+function SafeImageComponent({ source, style, fallbackUri, onError, ...props }) {
+  const [errorUri, setErrorUri] = useState(null);
 
   const rawUri =
     source && typeof source === "object" && typeof source.uri === "string"
       ? source.uri
       : null;
 
-  // Reset error flag if URI changes
-  useEffect(() => {
-    setHasError(false);
-  }, [rawUri]);
-
   const isInvalid =
     rawUri !== null &&
     (!rawUri || rawUri.includes("seed.local") || !rawUri.startsWith("http"));
+
+  const hasError = Boolean(rawUri && errorUri === rawUri);
 
   let resolvedSource = source;
   if (!source) {
@@ -40,9 +38,11 @@ export default function SafeImage({ source, style, fallbackUri, onError, ...prop
       source={resolvedSource}
       style={style}
       onError={(e) => {
-        setHasError(true);
+        if (rawUri) setErrorUri(rawUri);
         if (onError) onError(e);
       }}
     />
   );
 }
+
+export default memo(SafeImageComponent);

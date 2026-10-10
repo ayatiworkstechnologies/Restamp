@@ -44,6 +44,8 @@ export default function AgentNavigator() {
   return (
     <Tab.Navigator
       initialRouteName="Dashboard"
+      detachInactiveScreens={true}
+      freezeOnBlur={true}
       screenOptions={({ route }) => {
         const config = agentTabConfig[route.name] || agentTabConfig.Dashboard;
         const IconComponent = config.Icon;

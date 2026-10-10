@@ -1,7 +1,10 @@
 import React, { useState } from "react";
 import { Platform } from "react-native";
+import { enableScreens } from "react-native-screens";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import AppNavigator from "./src/navigation/AppNavigator";
+
+enableScreens(true);
 import { WishlistProvider } from "./src/context/WishlistContext";
 import { OwnerProvider } from "./src/context/OwnerContext";
 import { AgentProvider } from "./src/context/AgentContext";
@@ -35,14 +38,6 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
     }
   `;
   document.head.appendChild(style);
-
-  if (!document.getElementById("google-fonts-dancing-script")) {
-    const fontLink = document.createElement("link");
-    fontLink.id = "google-fonts-dancing-script";
-    fontLink.rel = "stylesheet";
-    fontLink.href = "https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap";
-    document.head.appendChild(fontLink);
-  }
 }
 
 export default function App() {

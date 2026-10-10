@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
 } from "react";
 import {
   View,
@@ -111,16 +112,19 @@ export function NetworkProvider({ children }) {
     }).start();
   }, [isOffline, bannerAnim]);
 
+  const contextValue = useMemo(
+    () => ({
+      isConnected,
+      isInternetReachable,
+      isOffline,
+      isChecking,
+      checkConnection,
+    }),
+    [isConnected, isInternetReachable, isOffline, isChecking, checkConnection]
+  );
+
   return (
-    <NetworkContext.Provider
-      value={{
-        isConnected,
-        isInternetReachable,
-        isOffline,
-        isChecking,
-        checkConnection,
-      }}
-    >
+    <NetworkContext.Provider value={contextValue}>
       {children}
       {/* Global Non-intrusive Offline Toast Banner */}
       {isOffline && (

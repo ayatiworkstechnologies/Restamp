@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, memo } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import COLORS from "../constants/colors";
 import { useAuth } from "../context/AuthContext";
 import { enterBuyerFlow, enterOwnerFlow } from "../api/users";
 
-export default function AppBrandHeader({
+function AppBrandHeader({
   currentRole = "buyer",
   showSwitch = true,
   showNotification = true,
@@ -25,18 +25,26 @@ export default function AppBrandHeader({
   const [switchingRole, setSwitchingRole] = useState(false);
 
   const handleSwitchPress = async () => {
-    // Roles are mutually exclusive server-side: switching direction always
-    // POSTs first (token preserved), then navigates. Never logs out.
     if (switchingRole) return;
     setSwitchingRole(true);
     try {
       if (currentRole === "buyer") {
-        // Backend requires the OWNER role for /owner/* endpoints.
         await enterOwnerFlow(navigation, auth, "Dashboard");
       } else {
-        // Owner or Agent switching back to Buyer: restore BUYER first —
-        // buyer endpoints 403 while the account holds OWNER.
         await enterBuyerFlow(navigation, auth);
+      }
+    } catch (e) {
+      console.warn("handleSwitchPress error:", e);
+      if (currentRole !== "buyer") {
+        try {
+          const rootNav = navigation?.getParent?.() || navigation;
+          rootNav.reset({
+            index: 0,
+            routes: [{ name: "MainTabs" }],
+          });
+        } catch {
+          navigation.navigate("MainTabs");
+        }
       }
     } finally {
       setSwitchingRole(false);
@@ -64,9 +72,9 @@ export default function AppBrandHeader({
         {showSwitch && (
           <TouchableOpacity
             style={styles.switchRolePill}
-            activeOpacity={0.8}
+            activeOpacity={0.75}
             onPress={handleSwitchPress}
-            disabled={switchingRole}
+            hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
           >
             {isBuyer ? (
               <Building2 size={13} color="#2563EB" style={{ marginRight: 4 }} />
@@ -171,3 +179,5 @@ const styles = StyleSheet.create({
     borderColor: "#FFFFFF",
   },
 });
+
+export default memo(AppBrandHeader);

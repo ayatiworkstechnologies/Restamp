@@ -31,6 +31,7 @@ import {
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import StatusBadge from "../../components/owner/StatusBadge";
+import PropertyGalleryModal from "../../components/PropertyGalleryModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const HERO_HEIGHT = 340;
@@ -59,6 +60,7 @@ export default function OwnerPropertyDetailModal({
   onEdit,
 }) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
 
   if (!property) return null;
@@ -154,7 +156,11 @@ export default function OwnerPropertyDetailModal({
           scrollEventThrottle={16}
         >
           {/* Hero image */}
-          <View style={styles.heroWrap}>
+          <TouchableOpacity
+            style={styles.heroWrap}
+            activeOpacity={0.92}
+            onPress={() => setShowGalleryModal(true)}
+          >
             <Image
               source={{ uri: allImages[activeImageIndex] }}
               style={styles.heroImage}
@@ -178,7 +184,7 @@ export default function OwnerPropertyDetailModal({
                 For {property.purpose}
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Thumbnail strip */}
           {allImages.length > 1 && (
@@ -386,6 +392,14 @@ export default function OwnerPropertyDetailModal({
           </View>
         </SafeAreaView>
       </View>
+
+      {/* Property Gallery Modal */}
+      <PropertyGalleryModal
+        visible={showGalleryModal}
+        onClose={() => setShowGalleryModal(false)}
+        photos={property.photos || allImages}
+        property={property}
+      />
     </Modal>
   );
 }

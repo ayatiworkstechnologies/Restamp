@@ -44,6 +44,8 @@ export default function OwnerNavigator() {
   return (
     <Tab.Navigator
       initialRouteName="Dashboard"
+      detachInactiveScreens={true}
+      freezeOnBlur={true}
       screenOptions={({ route }) => {
         const config = ownerTabConfig[route.name] || ownerTabConfig.Dashboard;
         const IconComponent = config.Icon;

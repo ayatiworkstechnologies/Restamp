@@ -1,8 +1,8 @@
-import React from "react";
+import React, { memo } from "react";
 import { TouchableOpacity, Text, StyleSheet, View } from "react-native";
 import COLORS from "../../constants/colors";
 
-export default function SelectionChip({
+function SelectionChip({
   label,
   selected = false,
   onPress,
@@ -85,11 +85,6 @@ const styles = StyleSheet.create({
   chipSelected: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.22,
-    shadowRadius: 5,
-    elevation: 2,
   },
   chipText: {
     fontSize: 13,
@@ -118,11 +113,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
   },
   segmentedText: {
     fontSize: 13.5,
@@ -153,11 +143,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderColor: COLORS.primary,
     borderWidth: 1.5,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 5,
-    elevation: 2,
   },
   cardText: {
     fontSize: 13.5,
@@ -170,3 +155,5 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
 });
+
+export default memo(SelectionChip);

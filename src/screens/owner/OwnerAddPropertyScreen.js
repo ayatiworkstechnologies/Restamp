@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import * as ImagePicker from "expo-image-picker";
 import {
   View,
@@ -57,6 +57,7 @@ import StepIndicator from "../../components/owner/StepIndicator";
 import FormInput from "../../components/owner/FormInput";
 import SelectionChip from "../../components/owner/SelectionChip";
 import ConfirmationModal from "../../components/owner/ConfirmationModal";
+import PropertyGalleryModal from "../../components/PropertyGalleryModal";
 
 const RENT_STEPS = [
   { step: 1, label: "Basic", fullLabel: "Add Property" },
@@ -92,7 +93,11 @@ const BEDROOMS_OPTIONS = ["1", "2", "3", "4", "5", "5+"];
 const BATHROOMS_OPTIONS = ["1", "2", "3", "4", "4+"];
 const BALCONIES_OPTIONS = ["0", "1", "2", "3", "3+"];
 
-const AVAILABILITY_STATUS_OPTIONS = ["Ready to Move", "Under Construction"];
+const AVAILABILITY_STATUS_OPTIONS = [
+  "Ready to Move",
+  "Under Construction",
+  "New Launch",
+];
 const PROPERTY_AGE_OPTIONS = [
   "0–1 Year",
   "1–5 Years",
@@ -129,6 +134,8 @@ const INITIAL_PROPERTY_FEATURES = [
   "False Ceiling Lighting",
   "Corner Property",
   "Pet Friendly",
+  "RERA Approved",
+  "Brand New Construction",
 ];
 
 const EXTRA_PROPERTY_FEATURES = [
@@ -220,6 +227,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   const [showPhotoAddModal, setShowPhotoAddModal] = useState(false);
   const [selectedPhotoCategory, setSelectedPhotoCategory] = useState("Living Room");
   const [showDateModal, setShowDateModal] = useState(false);
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Server submit failure message shown inline on Review (never navigates away).
   const [submitError, setSubmitError] = useState(null);
@@ -248,12 +256,16 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     route?.params?.editingProperty?.lookingTo ||
       (route?.params?.editingProperty?.purpose === "Sell" || route?.params?.editingProperty?.purpose === "Resale"
         ? "Resale"
+        : route?.params?.editingProperty?.purpose === "New" || route?.params?.editingProperty?.purpose === "Buy"
+        ? "New"
         : route?.params?.editingProperty?.purpose) ||
       (route?.params?.purpose === "Sell" || route?.params?.purpose === "Resale"
         ? "Resale"
+        : route?.params?.purpose === "New" || route?.params?.purpose === "Buy"
+        ? "New"
         : route?.params?.purpose) ||
       "Rent"
-  ); // Rent | Lease | Resale
+  ); // New | Rent | Resale | Lease
   const [category, setCategory] = useState("Residential"); // Residential | Commercial
   const [propertyType, setPropertyType] = useState("Apartment");
   const [bhk, setBhk] = useState("2 BHK");
@@ -357,6 +369,8 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
         setLookingTo(
           route.params.purpose === "Sell" || route.params.purpose === "Resale"
             ? "Resale"
+            : route.params.purpose === "New" || route.params.purpose === "Buy"
+            ? "New"
             : route.params.purpose
         );
       }
@@ -368,6 +382,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       const p = route.params.editingProperty;
       if (p.lookingTo) setLookingTo(p.lookingTo);
       else if (p.purpose === "Sell" || p.purpose === "Resale") setLookingTo("Resale");
+      else if (p.purpose === "New" || p.purpose === "Buy") setLookingTo("New");
       else if (p.purpose) setLookingTo(p.purpose);
       if (p.category) setCategory(p.category);
       if (p.propertyType) setPropertyType(p.propertyType);
@@ -541,6 +556,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
 
   const draftTransactionType = () => {
     if (lookingTo === "Resale") return "RESALE";
+    if (lookingTo === "New") return "BUY";
     if (lookingTo === "Lease") return "LEASE";
     return "RENT";
   };
@@ -620,13 +636,15 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   // http(s) entries are legacy — only picked files are uploaded).
   const handlePickImages = async (cat) => {
     try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert(
-          "Photo Access Needed",
-          "Please allow photo library access to add real property photos."
-        );
-        return;
+      if (Platform.OS !== "web") {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert(
+            "Photo Access Needed",
+            "Please allow photo library access to add real property photos."
+          );
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -749,10 +767,13 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
         newErrors.monthlyRent =
           lookingTo === "Resale"
             ? "Enter a valid resale price"
+            : lookingTo === "New"
+            ? "Enter a valid expected price"
             : "Enter a valid monthly rent amount";
       }
       if (
         lookingTo !== "Resale" &&
+        lookingTo !== "New" &&
         (!securityDeposit || isNaN(Number(securityDeposit)) || Number(securityDeposit) <= 0)
       ) {
         newErrors.securityDeposit = "Security deposit amount is required";
@@ -961,12 +982,14 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     const rentAmount = parseInt(monthlyRent) || 25000;
     const depositAmount = parseInt(securityDeposit) || 100000;
 
+    const isSaleType = lookingTo === "Resale" || lookingTo === "New";
     const newProperty = {
       title: calculatedTitle,
-      purpose: lookingTo === "Resale" ? "Resale" : lookingTo,
+      purpose: lookingTo === "Resale" ? "Resale" : lookingTo === "New" ? "New" : lookingTo,
       lookingTo,
-      badgeType: lookingTo === "Resale" ? "resale" : lookingTo.toLowerCase(),
+      badgeType: lookingTo === "Resale" ? "resale" : lookingTo === "New" ? "sale" : lookingTo.toLowerCase(),
       isResale: lookingTo === "Resale",
+      isNew: lookingTo === "New",
       category,
       propertyType,
       bhk: category === "Residential" ? bhk : "N/A",
@@ -981,23 +1004,23 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       landmark,
       price: rentAmount,
       priceFormatted:
-        lookingTo === "Resale"
+        isSaleType
           ? rentAmount >= 10000000
             ? `₹${(rentAmount / 10000000).toFixed(2)} Cr`
             : rentAmount >= 100000
             ? `₹${(rentAmount / 100000).toFixed(2)} L`
             : `₹${rentAmount.toLocaleString("en-IN")}`
           : `₹${rentAmount.toLocaleString("en-IN")} / month`,
-      priceUnit: lookingTo === "Resale" ? "" : "/ month",
-      deposit: lookingTo === "Resale" ? (securityDeposit ? parseInt(securityDeposit) : 0) : depositAmount,
+      priceUnit: isSaleType ? "" : "/ month",
+      deposit: isSaleType ? (securityDeposit ? parseInt(securityDeposit) : 0) : depositAmount,
       maintenance: parseInt(maintenanceCharges) || 3000,
       maintenanceFrequency,
       rentNegotiable,
       negotiable: rentNegotiable,
       availableFrom,
-      tenantPreference,
-      lockInPeriod,
-      preferredAgreementDuration,
+      tenantPreference: isSaleType ? null : tenantPreference,
+      lockInPeriod: isSaleType ? null : lockInPeriod,
+      preferredAgreementDuration: isSaleType ? null : preferredAgreementDuration,
       bedrooms,
       bathrooms,
       balconies,
@@ -1124,7 +1147,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
 
   const currentStepInfo = RENT_STEPS[currentStep - 1] || RENT_STEPS[0];
   const stepFullLabel =
-    currentStep === 4 && lookingTo === "Resale"
+    currentStep === 4 && (lookingTo === "Resale" || lookingTo === "New")
       ? "Price & Terms"
       : currentStepInfo.fullLabel;
   const coverPhoto = photosList.find((p) => p.isCover) || photosList[0];
@@ -1139,9 +1162,23 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   // Dirty tracking: compare the live snapshot against the last saved (or
   // hydrated) baseline. Null baseline (never saved) counts as dirty so the
   // button starts BLUE/enabled; any tracked change flips it back to dirty.
-  const liveDraftSnapshotJson = JSON.stringify(collectFormSnapshot());
-  const isDraftDirty =
-    lastSavedSnapshot === null || liveDraftSnapshotJson !== lastSavedSnapshot;
+  const isDraftDirty = useMemo(() => {
+    if (lastSavedSnapshot === null) return true;
+    const liveDraftSnapshotJson = JSON.stringify(collectFormSnapshot());
+    return liveDraftSnapshotJson !== lastSavedSnapshot;
+  }, [
+    lastSavedSnapshot,
+    lookingTo, category, propertyType, bhk, phoneNumber, email,
+    city, district, locality, pincode, subLocality, apartmentSociety,
+    houseNo, landmark, bedrooms, bathrooms, balconies, carpetArea,
+    builtUpArea, superBuiltUpArea, totalFloors, floorOn, duplex,
+    availabilityStatus, propertyAge, monthlyRent, securityDeposit,
+    maintenanceCharges, maintenanceFrequency, rentNegotiable, availableFrom,
+    tenantPreference, lockInPeriod, preferredAgreementDuration,
+    photosList, otherRooms, furnishing, coveredParking, openParking, description,
+    ownership, propertyFeatures, selectedAmenities, openSides, overlooking,
+    powerBackup, propertyFacing, currentStep,
+  ]);
   const isDraftDirtyOrSaving = savingDraft || isDraftDirty;
 
   return (
@@ -1200,7 +1237,11 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       {/* 7-STEP PROGRESS INDICATOR */}
       <StepIndicator
         currentStep={currentStep}
-        steps={RENT_STEPS}
+        steps={RENT_STEPS.map((s) =>
+          s.step === 4 && (lookingTo === "Resale" || lookingTo === "New")
+            ? { ...s, fullLabel: "Price & Terms" }
+            : s
+        )}
         onStepPress={(step) => {
           setErrors({});
           setCurrentStep(step);
@@ -1224,19 +1265,30 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
           <View style={styles.card}>
             <Text style={styles.cardHeaderTitle}>Add Property</Text>
             <Text style={styles.cardHeaderSub}>
-              Select whether you are listing for rent, lease or resale and your property type.
+              Select whether you are listing a new property, rent, resale or lease and your property type.
             </Text>
 
             {/* Section: You're looking to? */}
             <Text style={styles.fieldHeading}>You're looking to?</Text>
             <View style={styles.underlineTabRow}>
-              {["Rent", "Lease", "Resale"].map((opt) => {
+              {["New", "Rent", "Resale", "Lease"].map((opt) => {
                 const isSelected = lookingTo === opt;
                 return (
                   <TouchableOpacity
                     key={opt}
                     style={styles.underlineTabItem}
-                    onPress={() => setLookingTo(opt)}
+                    onPress={() => {
+                      setLookingTo(opt);
+                      if (opt === "New" || opt === "Resale") {
+                        if (monthlyRent === "25000") {
+                          setMonthlyRent("7500000");
+                        }
+                      } else if (opt === "Rent" || opt === "Lease") {
+                        if (monthlyRent === "7500000") {
+                          setMonthlyRent("25000");
+                        }
+                      }
+                    }}
                     activeOpacity={0.7}
                   >
                     <Text
@@ -1341,7 +1393,9 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
           <View style={styles.card}>
             <Text style={styles.cardHeaderTitle}>Property Location</Text>
             <Text style={styles.cardHeaderSub}>
-              Accurate neighborhood details ensure high-intent tenant matches in your area.
+              {lookingTo === "Rent" || lookingTo === "Lease"
+                ? "Accurate neighborhood details ensure high-intent tenant matches in your area."
+                : "Accurate neighborhood details ensure high-intent buyer matches in your area."}
             </Text>
 
             <FormInput
@@ -1389,10 +1443,10 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
             />
 
             <FormInput
-              label="Apartment / Society (Optional)"
+              label={lookingTo === "New" ? "Project / Society Name" : "Apartment / Society (Optional)"}
               value={apartmentSociety}
               onChangeText={setApartmentSociety}
-              placeholder="e.g. Green Acres Residency"
+              placeholder={lookingTo === "New" ? "e.g. Casagrand Primrose" : "e.g. Green Acres Residency"}
             />
 
             <FormInput
@@ -1587,30 +1641,38 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
         )}
 
         {/* =========================================================
-            STEP 4 — PRICING (Rent & Deposit)
+            STEP 4 — PRICING (Rent & Deposit / Price & Terms)
             ========================================================= */}
         {currentStep === 4 && (
           <View style={styles.card}>
             <Text style={styles.cardHeaderTitle}>
-              {lookingTo === "Resale" ? "Price & Terms" : "Rent & Deposit"}
+              {lookingTo === "Resale" || lookingTo === "New" ? "Price & Terms" : "Rent & Deposit"}
             </Text>
             <Text style={styles.cardHeaderSub}>
               {lookingTo === "Resale"
                 ? "Transparent resale pricing attracts serious and qualified buyers faster."
+                : lookingTo === "New"
+                ? "Transparent new property pricing attracts serious buyers and investors faster."
                 : "Transparent rental pricing and deposit terms attract qualified tenants faster."}
             </Text>
 
             <FormInput
-              label={lookingTo === "Resale" ? "Resale Price" : "Monthly Rent"}
+              label={
+                lookingTo === "Resale"
+                  ? "Resale Price"
+                  : lookingTo === "New"
+                  ? "Expected Price"
+                  : "Monthly Rent"
+              }
               value={monthlyRent}
               onChangeText={setMonthlyRent}
-              placeholder={lookingTo === "Resale" ? "e.g. 7500000" : "e.g. 25000"}
+              placeholder={lookingTo === "Resale" || lookingTo === "New" ? "e.g. 7500000" : "e.g. 25000"}
               keyboardType="numeric"
               prefix="₹"
-              suffix={lookingTo === "Resale" ? "" : "/ month"}
+              suffix={lookingTo === "Resale" || lookingTo === "New" ? "" : "/ month"}
               error={errors.monthlyRent}
               helperText={
-                lookingTo === "Resale"
+                lookingTo === "Resale" || lookingTo === "New"
                   ? monthlyRent && !isNaN(Number(monthlyRent))
                     ? Number(monthlyRent) >= 10000000
                       ? `₹${(Number(monthlyRent) / 10000000).toFixed(2)} Cr`
@@ -1622,7 +1684,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
               }
             />
 
-            {lookingTo !== "Resale" ? (
+            {lookingTo !== "Resale" && lookingTo !== "New" ? (
               <FormInput
                 label="Security Deposit"
                 value={securityDeposit}
@@ -1667,7 +1729,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
             </View>
 
             <Text style={styles.fieldHeading}>
-              {lookingTo === "Resale" ? "Price Negotiable?" : "Rent Negotiable?"}
+              {lookingTo === "Resale" || lookingTo === "New" ? "Price Negotiable?" : "Rent Negotiable?"}
             </Text>
             <View style={styles.chipsRow}>
               {["Yes", "No"].map((opt) => (
@@ -1681,7 +1743,9 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
             </View>
 
             {/* Available From Date Picker */}
-            <Text style={styles.fieldHeading}>Available From</Text>
+            <Text style={styles.fieldHeading}>
+              {lookingTo === "New" ? "Possession / Available From" : "Available From"}
+            </Text>
             <TouchableOpacity
               style={styles.datePickerBtn}
               onPress={() => setShowDateModal(true)}
@@ -1707,7 +1771,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
               ))}
             </View>
 
-            {lookingTo !== "Resale" && (
+            {lookingTo !== "Resale" && lookingTo !== "New" && (
               <>
                 <Text style={styles.fieldHeading}>Tenant Preference</Text>
                 <View style={styles.chipsRow}>
@@ -2138,21 +2202,32 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
 
             {/* HERO IMAGE GALLERY PREVIEW */}
             <View style={styles.heroPreviewBox}>
-              <Image
-                source={{ uri: photosList[activePreviewIndex]?.url || coverPhoto?.url }}
-                style={styles.heroMainImage}
-              />
+              <TouchableOpacity
+                activeOpacity={0.92}
+                onPress={() => setShowGalleryModal(true)}
+              >
+                <Image
+                  source={{ uri: photosList[activePreviewIndex]?.url || coverPhoto?.url }}
+                  style={styles.heroMainImage}
+                />
+              </TouchableOpacity>
 
               <View style={styles.heroOverlayPill}>
-                <Text style={styles.heroOverlayText}>FOR {lookingTo.toUpperCase()}</Text>
+                <Text style={styles.heroOverlayText}>
+                  FOR {lookingTo === "New" ? "NEW SALE" : lookingTo.toUpperCase()}
+                </Text>
               </View>
 
-              <View style={styles.heroCounterPill}>
+              <TouchableOpacity
+                style={styles.heroCounterPill}
+                activeOpacity={0.8}
+                onPress={() => setShowGalleryModal(true)}
+              >
                 <Camera size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
                 <Text style={styles.heroCounterText}>
                   {activePreviewIndex + 1} of {photosList.length}
                 </Text>
-              </View>
+              </TouchableOpacity>
 
               {/* Thumbnails strip */}
               <ScrollView
@@ -2192,14 +2267,14 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
 
               <View style={styles.buyerPriceRow}>
                 <Text style={styles.buyerPrice}>
-                  {lookingTo === "Resale"
+                  {lookingTo === "Resale" || lookingTo === "New"
                     ? Number(monthlyRent) >= 10000000
                       ? `₹${(Number(monthlyRent) / 10000000).toFixed(2)} Cr`
                       : Number(monthlyRent) >= 100000
                       ? `₹${(Number(monthlyRent) / 100000).toFixed(2)} L`
                       : `₹${parseInt(monthlyRent || 0).toLocaleString("en-IN")}`
                     : `₹${parseInt(monthlyRent || 0).toLocaleString("en-IN")}`}{" "}
-                  {lookingTo !== "Resale" && (
+                  {lookingTo !== "Resale" && lookingTo !== "New" && (
                     <Text style={styles.buyerPriceUnit}>/ month</Text>
                   )}
                 </Text>
@@ -2231,10 +2306,12 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
             <View style={styles.buyerCard}>
               <Text style={styles.buyerCardTitle}>Overview</Text>
               <View style={styles.keyValueRow}>
-                <Text style={styles.keyText}>Available From</Text>
+                <Text style={styles.keyText}>
+                  {lookingTo === "New" ? "Possession From" : "Available From"}
+                </Text>
                 <Text style={styles.valText}>{availableFrom}</Text>
               </View>
-              {lookingTo !== "Resale" && (
+              {lookingTo !== "Resale" && lookingTo !== "New" && (
                 <>
                   <View style={styles.keyValueRow}>
                     <Text style={styles.keyText}>Tenant Preference</Text>
@@ -2248,7 +2325,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
                   </View>
                 </>
               )}
-              {lookingTo === "Resale" && securityDeposit ? (
+              {(lookingTo === "Resale" || lookingTo === "New") && securityDeposit ? (
                 <View style={styles.keyValueRow}>
                   <Text style={styles.keyText}>Booking Amount</Text>
                   <Text style={styles.valText}>
@@ -2262,7 +2339,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
                   ₹{parseInt(maintenanceCharges || 0).toLocaleString("en-IN")} / {maintenanceFrequency}
                 </Text>
               </View>
-              {lookingTo !== "Resale" && (
+              {lookingTo !== "Resale" && lookingTo !== "New" && (
                 <>
                   <View style={styles.keyValueRow}>
                     <Text style={styles.keyText}>Lock-in Period</Text>
@@ -2535,12 +2612,28 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       </View>
 
       {/* MODAL 1: STEP SELECTOR JUMP MODAL FROM REVIEW */}
-      <Modal visible={showEditStepModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+      <Modal
+        visible={showEditStepModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEditStepModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowEditStepModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.modalSheet}
+            onPress={(e) => e.stopPropagation?.()}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Step to Edit</Text>
-              <TouchableOpacity onPress={() => setShowEditStepModal(false)}>
+              <TouchableOpacity
+                onPress={() => setShowEditStepModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <X size={20} color="#111111" />
               </TouchableOpacity>
             </View>
@@ -2558,22 +2651,38 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
                   <Text style={styles.modalStepBadgeText}>{s.step}</Text>
                 </View>
                 <Text style={styles.modalStepLabel}>
-                  {s.step === 4 && lookingTo === "Resale" ? "Price & Terms" : s.fullLabel}
+                  {s.step === 4 && (lookingTo === "Resale" || lookingTo === "New") ? "Price & Terms" : s.fullLabel}
                 </Text>
                 <ArrowRight size={16} color="#64748B" style={{ marginLeft: "auto" }} />
               </TouchableOpacity>
             ))}
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* MODAL 2: ADD PHOTO CATEGORY PICKER */}
-      <Modal visible={showPhotoAddModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+      <Modal
+        visible={showPhotoAddModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPhotoAddModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowPhotoAddModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.modalSheet}
+            onPress={(e) => e.stopPropagation?.()}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Choose Photo Category</Text>
-              <TouchableOpacity onPress={() => setShowPhotoAddModal(false)}>
+              <TouchableOpacity
+                onPress={() => setShowPhotoAddModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <X size={20} color="#111111" />
               </TouchableOpacity>
             </View>
@@ -2594,24 +2703,42 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
             </View>
 
             <TouchableOpacity
-              style={[styles.primaryPillBtn, { marginTop: 18 }]}
+              style={styles.modalActionBtn}
               onPress={() => handlePickImages(selectedPhotoCategory)}
               activeOpacity={0.88}
             >
-              <Plus size={16} color="#FFFFFF" strokeWidth={2.4} style={{ marginRight: 6 }} />
-              <Text style={styles.primaryPillBtnText}>Choose {selectedPhotoCategory} Photos</Text>
+              <Plus size={18} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 8 }} />
+              <Text style={styles.modalActionBtnText} numberOfLines={1}>
+                Choose {selectedPhotoCategory} Photos
+              </Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* MODAL 3: QUICK DATE PICKER MODAL */}
-      <Modal visible={showDateModal} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+      <Modal
+        visible={showDateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDateModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowDateModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.modalSheet}
+            onPress={(e) => e.stopPropagation?.()}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Available From Date</Text>
-              <TouchableOpacity onPress={() => setShowDateModal(false)}>
+              <TouchableOpacity
+                onPress={() => setShowDateModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <X size={20} color="#111111" />
               </TouchableOpacity>
             </View>
@@ -2639,8 +2766,8 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
                 {availableFrom === d && <Check size={16} color={COLORS.primary} style={{ marginLeft: "auto" }} />}
               </TouchableOpacity>
             ))}
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* EXIT & SAVE DRAFT CONFIRMATION MODAL */}
@@ -2667,6 +2794,17 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
         onCancel={() => {
           setShowExitConfirmModal(false);
           navigation.navigate("Dashboard");
+        }}
+      />
+
+      {/* FULL PROPERTY GALLERY MODAL */}
+      <PropertyGalleryModal
+        visible={showGalleryModal}
+        onClose={() => setShowGalleryModal(false)}
+        photos={photosList}
+        property={{
+          title: propertyTitle || "Property Preview",
+          image: photosList[0]?.url || coverPhoto?.url,
         }}
       />
 
@@ -2961,11 +3099,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
   uploadPrimaryText: {
     fontSize: 14.5,
@@ -3383,11 +3516,6 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === "ios" ? 30 : 16,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
   },
   backBtn: {
     flexDirection: "row",
@@ -3414,17 +3542,35 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingHorizontal: 20,
   },
   primaryPillBtnText: {
     fontSize: 15,
     fontWeight: "700",
     color: "#FFFFFF",
     letterSpacing: 0.2,
+    includeFontPadding: false,
+    lineHeight: 20,
+  },
+  modalActionBtn: {
+    flexDirection: "row",
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    width: "100%",
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  modalActionBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
+    includeFontPadding: false,
+    lineHeight: 20,
   },
   modalBackdrop: {
     flex: 1,
@@ -3436,9 +3582,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: Platform.OS === "ios" ? 36 : 24,
-    maxHeight: "80%",
+    paddingTop: 20,
+    paddingBottom: Platform.OS === "ios" ? 40 : 28,
   },
   modalHeader: {
     flexDirection: "row",

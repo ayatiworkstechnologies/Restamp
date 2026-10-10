@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, memo } from "react";
 import { View, Text, TextInput, StyleSheet } from "react-native";
 import COLORS from "../../constants/colors";
 
-export default function FormInput({
+function FormInput({
   label,
   value,
   onChangeText,
@@ -66,6 +66,8 @@ export default function FormInput({
   );
 }
 
+export default memo(FormInput);
+
 const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
@@ -90,11 +92,6 @@ const styles = StyleSheet.create({
   inputWrapperFocused: {
     borderColor: COLORS.primary,
     backgroundColor: "#FFFFFF",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 1,
   },
   inputWrapperError: {
     borderColor: COLORS.danger,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, memo } from "react";
 import {
   View,
   Text,
@@ -90,7 +90,7 @@ const RENT_MAX_BUDGETS = [
   { label: "₹2 Lakh+", value: 200000 },
 ];
 
-export default function SearchPropertyModal({
+function SearchPropertyModal({
   visible,
   onClose,
   onApply,
@@ -265,6 +265,8 @@ export default function SearchPropertyModal({
       });
     }
   };
+
+  if (!visible) return null;
 
   return (
     <Modal
@@ -868,3 +870,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+
+export default memo(SearchPropertyModal);

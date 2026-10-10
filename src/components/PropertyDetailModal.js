@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, memo } from "react";
 import {
   View,
   Text,
@@ -44,6 +44,7 @@ import TYPOGRAPHY from "../constants/typography";
 import ALL_PROPERTIES, { RECOMMENDED_PROPERTIES } from "../data/properties";
 import { fetchListingDetail, fetchSimilar } from "../api/listings";
 import SafeImage from "./common/SafeImage";
+import PropertyGalleryModal from "./PropertyGalleryModal";
 import { createEnquiry } from "../api/enquiries";
 import { getAuthTokenSync } from "../api/client";
 
@@ -79,7 +80,7 @@ const TABS = [
   { id: "location", label: "Location" },
 ];
 
-export default function PropertyDetailModal({
+function PropertyDetailModal({
   visible,
   property,
   onClose,
@@ -99,6 +100,7 @@ export default function PropertyDetailModal({
   const [customAddress, setCustomAddress] = useState(null);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [customInputAddress, setCustomInputAddress] = useState("");
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
 
   // Live similar-properties state (Phase 4). Declared with the other hooks,
   // before any early return, to preserve hook order on every render.
@@ -139,19 +141,41 @@ export default function PropertyDetailModal({
 
   const mainScrollViewRef = useRef(null);
   const sectionYMap = useRef({});
+  const isProgrammaticScroll = useRef(false);
+  const TAB_BAR_HEIGHT = 50;
 
   const scrollToSection = (tabId) => {
     setActiveTab(tabId);
+    isProgrammaticScroll.current = true;
     const yPos = sectionYMap.current[tabId];
     if (yPos !== undefined && mainScrollViewRef.current) {
       mainScrollViewRef.current.scrollTo({
-        y: Math.max(0, yPos - 12),
+        y: Math.max(0, yPos - TAB_BAR_HEIGHT),
         animated: true,
       });
     }
+    setTimeout(() => {
+      isProgrammaticScroll.current = false;
+    }, 450);
   };
 
-  if (!property) return null;
+  const handleMainScroll = (e) => {
+    if (isProgrammaticScroll.current) return;
+    const scrollY = e.nativeEvent.contentOffset.y;
+    const tabOrder = ["overview", "highlights", "details", "amenities", "location"];
+    let detectedTab = "overview";
+    for (const tabId of tabOrder) {
+      const yPos = sectionYMap.current[tabId];
+      if (yPos !== undefined && scrollY >= yPos - TAB_BAR_HEIGHT - 25) {
+        detectedTab = tabId;
+      }
+    }
+    if (detectedTab !== activeTab) {
+      setActiveTab(detectedTab);
+    }
+  };
+
+  if (!visible || !property) return null;
 
   const saved = isWishlisted ? isWishlisted(property.id) : false;
   const displayAddress = customAddress || property.address || property.location;
@@ -331,13 +355,19 @@ export default function PropertyDetailModal({
           ref={mainScrollViewRef}
           stickyHeaderIndices={[1]}
           showsVerticalScrollIndicator={false}
+          onScroll={handleMainScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={styles.scrollContent}
         >
           {/* CHILD 0: HERO GALLERY & MAIN INFO (MATCHING IMAGE 2 + ADAPTED DETAILS) */}
-          <View style={{ backgroundColor: "#FFFFFF", paddingBottom: 16 }}>
+          <View style={{ backgroundColor: "#FFFFFF", paddingBottom: 8 }}>
             {/* 1. PROPERTY IMAGE GALLERY HERO (Rounded Card matching Image 2) */}
             <View style={styles.heroCardContainer}>
-              <View style={styles.galleryContainer}>
+              <TouchableOpacity
+                style={styles.galleryContainer}
+                activeOpacity={0.92}
+                onPress={() => setIsGalleryOpen(true)}
+              >
                 <SafeImage
                   source={{ uri: images[activeImageIndex] || property.image }}
                   style={styles.heroImage}
@@ -373,7 +403,7 @@ export default function PropertyDetailModal({
                       : "10 photos"}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
 
               {/* Image Thumbnail Selector Strip */}
               <View style={styles.thumbnailStrip}>
@@ -1049,6 +1079,14 @@ export default function PropertyDetailModal({
             </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
+
+        {/* Full Property Gallery Modal with Category Tabs (Living Room, Bedroom, etc.) */}
+        <PropertyGalleryModal
+          visible={isGalleryOpen}
+          onClose={() => setIsGalleryOpen(false)}
+          photos={property.photos || images}
+          property={property}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -1350,7 +1388,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
-    marginTop: 12,
+    marginTop: 0,
+    zIndex: 100,
+    elevation: 3,
   },
   tabBarScroll: {
     paddingHorizontal: 16,
@@ -1872,3 +1912,5 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
+
+export default memo(PropertyDetailModal);

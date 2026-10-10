@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, memo } from "react";
 import {
   View,
   Text,
@@ -26,7 +26,7 @@ import COLORS from "../../constants/colors";
 import StatusBadge from "./StatusBadge";
 import SafeImage from "../common/SafeImage";
 
-export default function OwnerPropertyCard({
+function OwnerPropertyCard({
   property,
   onViewLeads,
   onViewProperty,
@@ -577,3 +577,5 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
   },
 });
+
+export default memo(OwnerPropertyCard);

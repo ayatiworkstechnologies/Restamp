@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useMemo } from "react";
 
 const OwnerContext = createContext();
 
@@ -672,29 +672,35 @@ export function OwnerProvider({ children }) {
     );
   };
 
+  const contextValue = useMemo(() => ({
+    subscription,
+    setSubscription,
+    activateSubscription,
+    ownerProfile,
+    setOwnerProfile,
+    properties,
+    setProperties,
+    addProperty,
+    updatePropertyStatus,
+    deleteProperty,
+    leads,
+    setLeads,
+    updateLeadStatus,
+    scheduleVisit,
+    closeLead,
+    addLeadNote,
+    selectedPlanForCheckout,
+    setSelectedPlanForCheckout,
+  }), [
+    subscription,
+    ownerProfile,
+    properties,
+    leads,
+    selectedPlanForCheckout,
+  ]);
+
   return (
-    <OwnerContext.Provider
-      value={{
-        subscription,
-        setSubscription,
-        activateSubscription,
-        ownerProfile,
-        setOwnerProfile,
-        properties,
-        setProperties,
-        addProperty,
-        updatePropertyStatus,
-        deleteProperty,
-        leads,
-        setLeads,
-        updateLeadStatus,
-        scheduleVisit,
-        closeLead,
-        addLeadNote,
-        selectedPlanForCheckout,
-        setSelectedPlanForCheckout,
-      }}
-    >
+    <OwnerContext.Provider value={contextValue}>
       {children}
     </OwnerContext.Provider>
   );

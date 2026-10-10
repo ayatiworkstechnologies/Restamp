@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState, useMemo } from "react";
 import { fetchMe, updateProfileName } from "../api/auth";
 import { setMyRole } from "../api/users";
 import { getAuthTokenSync, setAuthToken } from "../api/client";
@@ -151,16 +151,19 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
-  const value = {
-    user,
-    isAuthenticated: !!user,
-    isLoading,
-    loginWithToken,
-    saveProfileName,
-    setLocalProfileName,
-    refreshMe,
-    logout,
-  };
+  const value = useMemo(
+    () => ({
+      user,
+      isAuthenticated: !!user,
+      isLoading,
+      loginWithToken,
+      saveProfileName,
+      setLocalProfileName,
+      refreshMe,
+      logout,
+    }),
+    [user, isLoading, loginWithToken, saveProfileName, setLocalProfileName, refreshMe, logout]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -10,7 +10,7 @@
  * token store and never logs the user out.
  */
 import { Alert } from "react-native";
-import { apiGetAuth, apiPost } from "./client";
+import { apiGetAuth, apiPost, getAuthTokenSync } from "./client";
 
 /**
  * Update the authenticated user's role on the backend.
@@ -51,28 +51,30 @@ let _roleSwitchInFlight = false;
  * @returns {Promise<{ already: boolean }>}
  */
 export async function ensureRole(auth, role) {
+  // If not authenticated on the backend, do not attempt to POST unauthenticated
+  if (!getAuthTokenSync()) {
+    return { already: true };
+  }
   if (auth?.user?.role === role) {
     return { already: true };
   }
   if (_roleSwitchInFlight) {
     // A switch is already running (e.g. double tap); wait for it to finish.
-    // Poll briefly rather than firing a second POST.
     const startedAt = Date.now();
-    while (_roleSwitchInFlight && Date.now() - startedAt < 10000) {
+    while (_roleSwitchInFlight && Date.now() - startedAt < 3000) {
       await new Promise((r) => setTimeout(r, 100));
     }
     return { already: auth?.user?.role === role };
   }
   _roleSwitchInFlight = true;
   try {
-    await setMyRole(role);
+    const setRolePromise = setMyRole(role);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Role update timeout")), 3000)
+    );
+    await Promise.race([setRolePromise, timeoutPromise]);
     if (auth && typeof auth.refreshMe === "function") {
-      try {
-        await auth.refreshMe();
-      } catch {
-        // Server role is already updated; a stale local profile must not
-        // block entry into the flow.
-      }
+      auth.refreshMe().catch(() => {});
     }
     return { already: false };
   } finally {
@@ -156,20 +158,29 @@ export async function enterOwnerFlow(navigation, auth, ownerScreen = "Dashboard"
  * @returns {Promise<boolean>} true when navigation happened
  */
 export async function enterBuyerFlow(navigation, auth) {
+  // Sync BUYER role in background without delaying immediate UI navigation
+  ensureRole(auth, "BUYER").catch((e) => {
+    console.warn("Could not sync BUYER role to server:", e?.message);
+  });
   try {
-    await ensureRole(auth, "BUYER");
+    const rootNav = navigation?.getParent?.() || navigation;
+    try {
+      rootNav.reset({
+        index: 0,
+        routes: [{ name: "MainTabs" }],
+      });
+      return true;
+    } catch {
+      navigation.navigate("MainTabs");
+      return true;
+    }
   } catch (e) {
-    Alert.alert("Could not open Buyer mode", roleSwitchErrorMessage(e, "BUYER"));
-    return false;
-  }
-  try {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "MainTabs" }],
-    });
-    return true;
-  } catch (e) {
-    Alert.alert("Could not open Buyer mode", "Navigation failed. Please try again.");
-    return false;
+    try {
+      navigation.navigate("MainTabs");
+      return true;
+    } catch (err) {
+      Alert.alert("Could not open Buyer mode", "Navigation failed. Please try again.");
+      return false;
+    }
   }
 }

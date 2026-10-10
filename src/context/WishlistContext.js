@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useState } from "react";
+import React, { createContext, useCallback, useContext, useState, useMemo } from "react";
 import ALL_PROPERTIES from "../data/properties";
 import { getAuthTokenSync } from "../api/client";
 import { fetchSavedWishlist, saveListingRemote, unsaveListingRemote } from "../api/saved";
@@ -108,20 +108,27 @@ export function WishlistProvider({ children }) {
     setWishlist(ALL_PROPERTIES);
   };
 
+  const contextValue = useMemo(() => ({
+    wishlist,
+    isWishlisted,
+    toggleWishlist,
+    removeFromWishlist,
+    clearWishlist,
+    restoreDefaultWishlist,
+    refreshWishlist,
+    wishlistLoading,
+    wishlistSynced,
+  }), [
+    wishlist,
+    isWishlisted,
+    toggleWishlist,
+    removeFromWishlist,
+    wishlistLoading,
+    wishlistSynced,
+  ]);
+
   return (
-    <WishlistContext.Provider
-      value={{
-        wishlist,
-        isWishlisted,
-        toggleWishlist,
-        removeFromWishlist,
-        clearWishlist,
-        restoreDefaultWishlist,
-        refreshWishlist,
-        wishlistLoading,
-        wishlistSynced,
-      }}
-    >
+    <WishlistContext.Provider value={contextValue}>
       {children}
     </WishlistContext.Provider>
   );

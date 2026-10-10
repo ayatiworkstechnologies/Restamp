@@ -301,7 +301,7 @@ export default function OwnerDashboardScreen({ navigation }) {
             <View style={styles.addBannerTextWrap}>
               <Text style={styles.addBannerTitle}>List a New Property</Text>
               <Text style={styles.addBannerSub}>
-                Add rental, lease, or resale property in minutes
+                Add new property, rental, lease, or resale in minutes
               </Text>
             </View>
           </View>

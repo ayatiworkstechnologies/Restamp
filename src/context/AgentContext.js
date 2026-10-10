@@ -487,31 +487,41 @@ export function AgentProvider({ children }) {
     });
   }, [selectedLocalities]);
 
+  const contextValue = useMemo(() => ({
+    hasActivePlan,
+    agentPlan,
+    selectedLocalities,
+    agentProfile,
+    leads,
+    visits,
+    earningsTransactions,
+    setEarningsTransactions,
+    isPlanExpired,
+    localityProperties,
+    activatePlan,
+    renewPlan,
+    updateLocalities,
+    updateLeadStatus,
+    matchPropertyToLead,
+    scheduleVisit,
+    updateVisitStatus,
+    closeDeal,
+    setIsPlanExpired,
+    setAgentProfile,
+  }), [
+    hasActivePlan,
+    agentPlan,
+    selectedLocalities,
+    agentProfile,
+    leads,
+    visits,
+    earningsTransactions,
+    isPlanExpired,
+    localityProperties,
+  ]);
+
   return (
-    <AgentContext.Provider
-      value={{
-        hasActivePlan,
-        agentPlan,
-        selectedLocalities,
-        agentProfile,
-        leads,
-        visits,
-        earningsTransactions,
-        setEarningsTransactions,
-        isPlanExpired,
-        localityProperties,
-        activatePlan,
-        renewPlan,
-        updateLocalities,
-        updateLeadStatus,
-        matchPropertyToLead,
-        scheduleVisit,
-        updateVisitStatus,
-        closeDeal,
-        setIsPlanExpired,
-        setAgentProfile,
-      }}
-    >
+    <AgentContext.Provider value={contextValue}>
       {children}
     </AgentContext.Provider>
   );
