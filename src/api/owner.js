@@ -50,6 +50,36 @@ export function requireChennaiPincode(value) {
 }
 
 /**
+ * Owner contact email is optional (Add/Edit Step 1). Blank or
+ * whitespace-only means "no email" and maps to null — never a validation
+ * error. A non-blank value must match the backend email shape; otherwise
+ * callers reject it with OWNER_EMAIL_ERROR.
+ */
+export const OWNER_EMAIL_ERROR = "Please enter a valid email address";
+const OWNER_EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+/**
+ * True for blank (omitted) or well-formed emails; false only for non-empty
+ * malformed addresses. Trims surrounding whitespace before checking.
+ */
+export function isValidOwnerEmail(value) {
+  const s = String(value ?? "").trim();
+  if (!s) return true;
+  return OWNER_EMAIL_RE.test(s);
+}
+
+/**
+ * Normalize an optional email: trimmed string, or null when blank.
+ * Throws OWNER_EMAIL_ERROR for a present-but-invalid value.
+ */
+export function normalizeOwnerEmail(value) {
+  const s = String(value ?? "").trim();
+  if (!s) return null;
+  if (!OWNER_EMAIL_RE.test(s)) throw new Error(OWNER_EMAIL_ERROR);
+  return s.slice(0, 255);
+}
+
+/**
  * Map a UI property form object to the backend OwnerListingCreate schema.
  *
  * The OwnerAddPropertyScreen stores values in varied formats; this mapper
@@ -192,9 +222,11 @@ export function buildPayload(property) {
   };
 
   // --- Contact (per-listing overrides; identity stays server-side) ---
+  // Email is optional: blank/whitespace maps to null (never an error);
+  // a present-but-malformed address throws so it can never be POSTed.
   const contact = property.contact || {};
   const contact_phone = cleanStr(contact.phone ?? property.phoneNumber ?? property.phone, 20);
-  const contact_email = cleanStr(contact.email ?? property.email, 255);
+  const contact_email = normalizeOwnerEmail(contact.email ?? property.email);
 
   // --- Location extras (district falls back server-side to city) ---
   const district = cleanStr(property.district, 255);

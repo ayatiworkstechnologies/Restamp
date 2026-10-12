@@ -52,7 +52,7 @@ import {
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
-import { createOwnerListing, updateOwnerListing, buildUpdatePayload, resolveEditingListingId, toEditForm, headerExitAction, isValidChennaiPincode, CHENNAI_PINCODE_ERROR, fetchOwnerListing, isLocalPhotoUri, uploadListingPhoto, createDraft, updateDraft, fetchDraft, deleteDraft, syncIdSetWithPhotos, pendingLocalPhotos } from "../../api/owner";
+import { createOwnerListing, updateOwnerListing, buildUpdatePayload, resolveEditingListingId, toEditForm, headerExitAction, isValidChennaiPincode, CHENNAI_PINCODE_ERROR, isValidOwnerEmail, OWNER_EMAIL_ERROR, fetchOwnerListing, isLocalPhotoUri, uploadListingPhoto, createDraft, updateDraft, fetchDraft, deleteDraft, syncIdSetWithPhotos, pendingLocalPhotos } from "../../api/owner";
 import RestampLogo from "../../components/RestampLogo";
 import StepIndicator from "../../components/owner/StepIndicator";
 import FormInput from "../../components/owner/FormInput";
@@ -221,7 +221,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   const editingListingId = useMemo(
     () => resolveEditingListingId(route?.params),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [route?.params?.editingProperty, route?.params?.listingId, route?.params?.listing_id]
+    [route?.params?.editingProperty, route?.params?.listingId, route?.params?.listing_id, route?.params?.resetForm]
   );
   const isEditing = editingListingId !== null;
   // Baseline snapshot of the loaded listing for Edit-dirty tracking; null
@@ -374,8 +374,21 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   // Handle route params on mount / reset
   useEffect(() => {
     if (route?.params?.resetForm) {
+      // Full fresh-form restore so no previously edited property can leak
+      // into the next Add (photos, contacts, draft-derived fields and step
+      // state included). Reuses the draft normalize/hydrate path with an
+      // empty snapshot for a deterministic defaults restore.
+      const fresh = normalizeDraftData({});
+      // New-listing contact prefill parity with mount (never prior values).
+      fresh.phoneNumber = ((ownerProfile?.phone || authUser?.phone || "")).trim();
+      fresh.email = ((ownerProfile?.email || "")).trim();
+      hydrateForm(fresh);
       setCurrentStep(1);
       setErrors({});
+      setSubmitError(null);
+      setEditBaselineSnapshot(null);
+      setActivePreviewIndex(0);
+      setShowEditStepModal(false);
       // Fresh form: forget any previous draft tracking and transient
       // upload state.
       setDraftId(null);
@@ -704,7 +717,15 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
 
   // Existing listings screen (Edit exit destination; the list refetches on
   // focus so the updated listing appears without appending a duplicate).
+  // Also clears our own edit params first: a later bare Add tab press
+  // supplies no params, so without this the completed/discarded edit would
+  // be resurrected. Fresh Add buttons already send resetForm; on remount the
+  // fresh params initialize a clean form. Only called from edit exits —
+  // never from an in-progress new Add or draft flow — so no live progress
+  // is ever wiped (this is why there is deliberately no blanket tabPress
+  // reset, which could not tell a finished edit from one paused mid-way).
   const exitToProperties = () => {
+    navigation.setParams({ resetForm: Date.now(), initialStep: 1, editingProperty: null });
     navigation.navigate("OwnerNavigator", { screen: "Properties" });
   };
 
@@ -945,8 +966,11 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       if (!phoneNumber || phoneNumber.trim().length < 8) {
         newErrors.phoneNumber = "Please enter a valid phone number (at least 8 digits)";
       }
-      if (!email || !email.includes("@") || !email.includes(".")) {
-        newErrors.email = "Please enter a valid email address";
+      // Email is optional: blank/whitespace-only is valid (maps to null and
+      // never blocks Next/Draft/Publish). A present address must be
+      // well-formed.
+      if (!isValidOwnerEmail(email)) {
+        newErrors.email = OWNER_EMAIL_ERROR;
       }
       if (!propertyType) {
         newErrors.propertyType = "Please select a property type";
@@ -1650,13 +1674,13 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
             />
 
             <FormInput
-              label="Email"
+              label="Email (Optional)"
               value={email}
               onChangeText={setEmail}
               placeholder="e.g. owner@example.com"
               keyboardType="email-address"
               error={errors.email}
-              helperText="Official rental agreement and inspection reports will be emailed."
+              helperText="Optional. Official rental agreement and inspection reports will be emailed."
             />
           </View>
         )}

@@ -295,7 +295,7 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
 
             <TouchableOpacity
               style={styles.addPropertyCircleBtn}
-              onPress={() => navigation.navigate("Add")}
+              onPress={() => navigation.navigate("Add", { resetForm: Date.now(), initialStep: 1, editingProperty: null })}
               activeOpacity={0.8}
             >
               <Plus size={18} color="#FFFFFF" strokeWidth={2.4} />
@@ -407,7 +407,7 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
                   : `You currently have zero properties under the ${activeTab} category.`
             }
             buttonTitle="+ Add Property"
-            onButtonPress={() => navigation.navigate("Add")}
+            onButtonPress={() => navigation.navigate("Add", { resetForm: Date.now(), initialStep: 1, editingProperty: null })}
           />
         ) : (
           filteredProperties.map((prop) => (

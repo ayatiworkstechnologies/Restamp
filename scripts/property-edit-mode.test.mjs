@@ -3,7 +3,12 @@
 // Covers: resolveEditingListingId, buildUpdatePayload (RENT/LEASE keep
 // terms, RESALE/BUY null them), buildPayload sale-terms omission, toEditForm
 // full hydration incl. LEASE/RESALE/BUY/commercial, headerExitAction table,
-// photo id tracking, and blank contact defaults (no demo values).
+// photo id tracking, blank contact defaults (no demo values), optional
+// owner email (blank/whitespace -> null, valid kept, invalid rejected),
+// and Add-after-Edit reset (fresh reset params exit edit mode; a reset
+// empty form carries no photos/emails into the next publish; edit exits
+// clear to fresh params so bare Add tab presses stay safe without a
+// blanket tabPress reset).
 //
 // Same harness as photo-retry-state.test.mjs: src/api/owner.js uses
 // extensionless imports (Metro), so copy to tmp with extensions fixed.
@@ -28,6 +33,7 @@ const {
   headerExitAction, isLocalPhotoUri, syncIdSetWithPhotos,
   isValidChennaiPincode, requireChennaiPincode,
   CHENNAI_PINCODE_MIN, CHENNAI_PINCODE_MAX, CHENNAI_PINCODE_ERROR,
+  isValidOwnerEmail, normalizeOwnerEmail, OWNER_EMAIL_ERROR,
 } = await import(join(tmp, "owner.js"));
 
 let failures = 0;
@@ -250,6 +256,150 @@ for (const pin of ["600000", "600119", "600500", "abcdef", ""]) {
   let msg = null;
   try { buildUpdatePayload(rentForm({ pincode: pin })); } catch (e) { msg = e.message; }
   check(`R7 update payload rejects ${JSON.stringify(pin)}`, msg === CHENNAI_PINCODE_ERROR, msg);
+}
+
+// --- 8. Owner email is optional (blank/whitespace -> null, valid kept,
+//       invalid rejected at both helper and payload layers) ---
+check("M0 email error constant", OWNER_EMAIL_ERROR === "Please enter a valid email address");
+for (const v of ["", "   ", null, undefined]) {
+  check(`M1 blank email valid ${JSON.stringify(v)}`, isValidOwnerEmail(v) === true);
+}
+for (const v of ["owner@example.com", "  owner@example.com  ", "a.b+tag@sub.example.co"]) {
+  check(`M2 valid email ${JSON.stringify(v)}`, isValidOwnerEmail(v) === true);
+}
+for (const v of ["not-an-email", "owner@", "owner@example", "a@b.c", "owner @example.com"]) {
+  check(`M3 invalid email ${JSON.stringify(v)}`, isValidOwnerEmail(v) === false);
+}
+check("M4 normalize blank -> null",
+  normalizeOwnerEmail("") === null && normalizeOwnerEmail("   ") === null
+  && normalizeOwnerEmail(null) === null && normalizeOwnerEmail(undefined) === null);
+check("M5 normalize valid trims",
+  normalizeOwnerEmail("  owner@example.com  ") === "owner@example.com");
+for (const v of ["not-an-email", "owner@", "a@b.c", "  nope  "]) {
+  let msg = null;
+  try { normalizeOwnerEmail(v); } catch (e) { msg = e.message; }
+  check(`M6 normalize rejects ${JSON.stringify(v)}`, msg === OWNER_EMAIL_ERROR, msg);
+}
+check("M7 buildPayload blank email -> null",
+  buildPayload(rentForm({ contact: { phone: "+919840100001", email: "" } })).contact_email === null);
+check("M8 buildPayload whitespace email -> null",
+  buildPayload(rentForm({ contact: { phone: "+919840100001", email: "   " } })).contact_email === null);
+check("M9 buildPayload valid email kept",
+  buildPayload(rentForm({ contact: { phone: "+919840100001", email: "owner@example.com" } })).contact_email === "owner@example.com"
+  && buildPayload(rentForm({ contact: { phone: "+919840100001", email: "  owner@example.com  " } })).contact_email === "owner@example.com");
+for (const v of ["not-an-email", "owner@", "a@b.c"]) {
+  let msg = null;
+  try { buildPayload(rentForm({ contact: { phone: "+919840100001", email: v } })); } catch (e) { msg = e.message; }
+  check(`M10 buildPayload rejects ${JSON.stringify(v)}`, msg === OWNER_EMAIL_ERROR, msg);
+}
+check("M11 buildUpdatePayload blank email -> null",
+  buildUpdatePayload(rentForm({ contact: { phone: "+919840100001", email: "" } })).contact_email === null);
+
+// --- 9. Add-after-Edit reset (stale Add form regression) ---
+// Contract: every Add entry passes fresh params
+// {resetForm: <ts>, initialStep: 1, editingProperty: null}; the Add screen
+// exits edit mode on those params and restores defaults (photos []), so the
+// previously edited property cannot leak into the next create.
+const freshResetParams = (over = {}) => ({
+  resetForm: Date.now(), initialStep: 1, editingProperty: null, ...over,
+});
+check("S1 reset params exit edit mode",
+  resolveEditingListingId(freshResetParams()) === null);
+check("S2 legit edit still detected (no reset)",
+  resolveEditingListingId({ editingProperty: { listing_id: 77 } }) === 77);
+check("S3 plain Add has no edit identity",
+  resolveEditingListingId({}) === null && resolveEditingListingId(undefined) === null);
+check("S4 reset omits stale listing ids",
+  resolveEditingListingId(freshResetParams({ listingId: undefined, listing_id: undefined })) === null);
+const resetPayload = buildPayload(rentForm({
+  photos: [], images: [],
+  contact: { phone: "+919840100001", email: "" },
+}));
+check("S5 reset empty form carries no photos",
+  resetPayload.photos === undefined && Array.isArray(resetPayload.images)
+  && resetPayload.images.length === 0);
+check("S6 reset empty form carries no email",
+  resetPayload.contact_email === null);
+const resetHydrated = toEditForm(rentDetail({
+  contact_phone: null, contact_email: null, photos: [],
+}));
+check("S7 reset hydrated contacts/photos are blank",
+  resetHydrated.phoneNumber === "" && resetHydrated.email === ""
+  && Array.isArray(resetHydrated.photosList) && resetHydrated.photosList.length === 0);
+
+// --- 10. Edit-exit clearing (Add tab-press safety) ---
+// exitToProperties clears the Add route to fresh params on every edit exit
+// (publish success, discard, clean back), so a later bare Add tab press —
+// which supplies no params — cannot resurrect the finished edit. A blanket
+// tabPress reset would be unsafe: a mid-edit tab-away looks identical in
+// params, and wiping it would destroy legitimate resume progress. Hence no
+// listener; these cases pin the contract the exits rely on.
+const exitClearedParams = () => ({
+  resetForm: Date.now(), initialStep: 1, editingProperty: null,
+});
+check("T1 exit-cleared params exit edit mode",
+  resolveEditingListingId(exitClearedParams()) === null);
+check("T2 exit-cleared params carry a freshness marker",
+  !!exitClearedParams().resetForm && exitClearedParams().initialStep === 1);
+check("T3 mid-edit params still resolve (resume preserved, never blanket-reset)",
+  resolveEditingListingId({ editingProperty: { listing_id: 77 } }) === 77);
+check("T4 draft params untouched by edit-exit contract",
+  resolveEditingListingId({ draftId: "d1" }) === null
+  && resolveEditingListingId({ draft: { id: "d1" } }) === null);
+
+// --- 11. Four-purpose matrix (New/Rent/Resale/Lease) ---
+// Fresh Add, purpose-dependent payload (tx/period/terms), edit hydration
+// round-trip, purpose switching, and leak-free fresh forms — per purpose.
+const purposeCases = [
+  { lookingTo: "New", tx: "BUY", period: "TOTAL", termsNull: true },
+  { lookingTo: "Rent", tx: "RENT", period: "MONTHLY", termsNull: false },
+  { lookingTo: "Resale", tx: "RESALE", period: "TOTAL", termsNull: true },
+  { lookingTo: "Lease", tx: "LEASE", period: "MONTHLY", termsNull: false },
+];
+const backToLooking = { BUY: "New", RENT: "Rent", RESALE: "Resale", LEASE: "Lease" };
+for (const pc of purposeCases) {
+  const add = buildPayload(rentForm({ lookingTo: pc.lookingTo }));
+  check(`P1 ${pc.lookingTo} add tx`, add.transaction_type === pc.tx);
+  check(`P2 ${pc.lookingTo} add period`, add.price_period === pc.period);
+  check(`P3 ${pc.lookingTo} add terms`,
+    pc.termsNull ? add.rent_terms === null
+      : (add.rent_terms !== null && add.rent_terms.security_deposit_rupees === 100000));
+  const upd = buildUpdatePayload(rentForm({ lookingTo: pc.lookingTo }));
+  check(`P4 ${pc.lookingTo} update tx/terms`,
+    upd.transaction_type === pc.tx
+    && (pc.termsNull ? upd.rent_terms === null : upd.rent_terms !== null));
+  const back = toEditForm(rentDetail({
+    transaction_type: pc.tx, price_period: pc.period,
+    ...(pc.termsNull ? { rent_terms: null } : {}),
+  }));
+  check(`P5 ${pc.lookingTo} hydration round-trip`, back.lookingTo === backToLooking[pc.tx]);
+}
+// Purpose switching at the data layer: incompatible terms are
+// cleared/normalized while unrelated fields survive.
+const switchedToResale = buildPayload(rentForm({
+  lookingTo: "Resale", title: "Switch House", locality: "Velachery",
+  contact: { phone: "+919840100001", email: "owner@example.com" },
+}));
+check("P6 switch Rent->Resale nulls terms, keeps title/locality/contact",
+  switchedToResale.rent_terms === null && switchedToResale.title === "Switch House"
+  && switchedToResale.locality === "Velachery"
+  && switchedToResale.contact_email === "owner@example.com");
+const switchedToRent = buildPayload(rentForm({
+  lookingTo: "Rent", title: "Switch House", locality: "Velachery",
+  contact: { phone: "+919840100001", email: "owner@example.com" },
+}));
+check("P7 switch target tx with terms restored",
+  switchedToRent.transaction_type === "RENT" && switchedToRent.rent_terms !== null
+  && switchedToRent.title === "Switch House");
+// Fresh-add per purpose carries no photos/email (no leak into next publish).
+for (const pc of purposeCases) {
+  const fresh = buildPayload(rentForm({
+    lookingTo: pc.lookingTo, photos: [], images: [],
+    contact: { phone: "+919840100001", email: "" },
+  }));
+  check(`P8 fresh ${pc.lookingTo} no photos/email leak`,
+    fresh.photos === undefined && Array.isArray(fresh.images)
+    && fresh.images.length === 0 && fresh.contact_email === null);
 }
 
 if (failures > 0) {
