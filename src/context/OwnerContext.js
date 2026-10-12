@@ -534,11 +534,14 @@ export function OwnerProvider({ children }) {
   });
 
   // Owner Profile
+  // NOTE (Edit phase): phone/email default to blank — never demo values.
+  // New listings prefill the authenticated user's phone (see
+  // OwnerAddPropertyScreen); Edit restores the listing's saved contact.
   const [ownerProfile, setOwnerProfile] = useState({
     name: "Arunavo Mukherjee",
     firstName: "Arunavo",
-    phone: "+91 98401 23456",
-    email: "rajesh.kumar@example.com",
+    phone: "",
+    email: "",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80",
     verified: true,
     kycStatus: "Verified",

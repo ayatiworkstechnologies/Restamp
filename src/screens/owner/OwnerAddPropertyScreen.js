@@ -51,7 +51,8 @@ import {
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
-import { createOwnerListing, fetchOwnerListing, isLocalPhotoUri, uploadListingPhoto, createDraft, updateDraft, fetchDraft, deleteDraft, syncIdSetWithPhotos, pendingLocalPhotos } from "../../api/owner";
+import { useAuth } from "../../context/AuthContext";
+import { createOwnerListing, updateOwnerListing, buildUpdatePayload, resolveEditingListingId, toEditForm, headerExitAction, isValidChennaiPincode, CHENNAI_PINCODE_ERROR, fetchOwnerListing, isLocalPhotoUri, uploadListingPhoto, createDraft, updateDraft, fetchDraft, deleteDraft, syncIdSetWithPhotos, pendingLocalPhotos } from "../../api/owner";
 import RestampLogo from "../../components/RestampLogo";
 import StepIndicator from "../../components/owner/StepIndicator";
 import FormInput from "../../components/owner/FormInput";
@@ -212,6 +213,20 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     subscription,
     ownerProfile,
   } = useOwner();
+  const { user: authUser } = useAuth();
+
+  // Explicit Add vs Edit mode. Edit is identified ONLY by the persistent
+  // listing id derived from navigation params — never by the lossy display
+  // object alone (its detail is always refetched as source of truth).
+  const editingListingId = useMemo(
+    () => resolveEditingListingId(route?.params),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [route?.params?.editingProperty, route?.params?.listingId, route?.params?.listing_id]
+  );
+  const isEditing = editingListingId !== null;
+  // Baseline snapshot of the loaded listing for Edit-dirty tracking; null
+  // until the detail fetch hydrates the form (counts as dirty).
+  const [editBaselineSnapshot, setEditBaselineSnapshot] = useState(null);
 
   // Mode: initial selection modal or direct form step
   const [purposeSelected, setPurposeSelected] = useState(
@@ -270,18 +285,22 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   const [propertyType, setPropertyType] = useState("Apartment");
   const [bhk, setBhk] = useState("2 BHK");
   const [phoneNumber, setPhoneNumber] = useState(
-    ownerProfile?.phone || "+91 98401 23456"
+    // New listings prefill the authenticated user's registered phone when
+    // available, else blank. Never a demo/hardcoded number.
+    ((ownerProfile?.phone || authUser?.phone || "")).trim()
   );
   const [email, setEmail] = useState(
-    ownerProfile?.email || "rajesh.kumar@example.com"
+    // New-listing email always starts blank (never a demo address).
+    ((ownerProfile?.email || "")).trim()
   );
 
   // Step 2: Location
   const [city, setCity] = useState("Chennai");
   const [district, setDistrict] = useState("Chennai");
   const [locality, setLocality] = useState("Anna Nagar");
-  // Pincode is required (6 numeric digits). Empty by default — never prefilled
-  // with a fake value. Validated on Location step and again before submit.
+  // Pincode is required (Chennai 600001–600118). Empty by default — never
+  // prefilled with a fake value. Validated on Location step and again
+  // before submit.
   const [pincode, setPincode] = useState("");
   const [subLocality, setSubLocality] = useState("5th Avenue, Shanthi Colony");
   const [apartmentSociety, setApartmentSociety] = useState("Green Acres Residency");
@@ -378,41 +397,52 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     if (route?.params?.initialStep) {
       setCurrentStep(route?.params?.initialStep);
     }
-    if (route?.params?.editingProperty) {
-      const p = route.params.editingProperty;
-      if (p.lookingTo) setLookingTo(p.lookingTo);
-      else if (p.purpose === "Sell" || p.purpose === "Resale") setLookingTo("Resale");
-      else if (p.purpose === "New" || p.purpose === "Buy") setLookingTo("New");
-      else if (p.purpose) setLookingTo(p.purpose);
-      if (p.category) setCategory(p.category);
-      if (p.propertyType) setPropertyType(p.propertyType);
-      if (p.bhk) setBhk(p.bhk);
-      if (p.city) setCity(p.city);
-      if (p.district) setDistrict(p.district);
-      if (p.locality) setLocality(p.locality);
-      if (p.pincode || p.postalCode) setPincode(String(p.pincode ?? p.postalCode));
-      if (p.subLocality) setSubLocality(p.subLocality);
-      if (p.carpetArea) setCarpetArea(String(p.carpetArea).replace(/\D/g, ""));
-      if (p.price) setMonthlyRent(String(p.price));
-      if (p.deposit) setSecurityDeposit(String(p.deposit));
-      if (p.maintenance) setMaintenanceCharges(String(p.maintenance));
-      if (p.availableFrom) setAvailableFrom(p.availableFrom);
-      if (p.furnishing) setFurnishing(p.furnishing);
-      // Hydrate previously stored remote photos (URLs) so re-entry/edit
-      // shows the listing's real images instead of an empty grid. Local
-      // device files cannot survive navigation and are intentionally skipped.
-      if (Array.isArray(p.images) && p.images.length > 0) {
-        setPhotosList(
-          p.images
-            .filter((u) => typeof u === "string" && u.startsWith("http"))
-            .map((u, idx) => ({
-              id: `remote-${Date.now()}-${idx}`,
-              url: u,
-              category: "Living Room",
-              isCover: p.coverPhoto ? u === p.coverPhoto : idx === 0,
-            }))
-        );
-      }
+    if (editingListingId && !route?.params?.resetForm) {
+      // Edit mode: the backend listing detail is the SOLE hydration source.
+      // The passed display object is never trusted for field values.
+      let cancelled = false;
+      setEditBaselineSnapshot(null);
+      setSubmitError(null);
+      fetchOwnerListing(editingListingId).then(
+        (detail) => {
+          if (cancelled) return;
+          const form = toEditForm(detail);
+          if (!form) {
+            Alert.alert(
+              "Could Not Load Listing",
+              "This listing is no longer available."
+            );
+            navigation.goBack();
+            return;
+          }
+          applyEditForm(form);
+          // Baseline mirrors collectFormSnapshot() key order/shape exactly
+          // (mediaId stripped — it is client-only) so dirty tracking works.
+          setEditBaselineSnapshot(JSON.stringify(editSnapshotOf(form, route?.params?.initialStep || 1)));
+        },
+        () => {
+          if (cancelled) return;
+          Alert.alert(
+            "Could Not Load Listing",
+            "Please check your connection and try again."
+          );
+          navigation.goBack();
+        }
+      );
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (route?.params?.editingProperty && !editingListingId) {
+      // An edit entry without a usable listing id cannot load the source of
+      // truth: refuse to edit (creating a duplicate would be worse) and go
+      // back instead of silently falling back to Add.
+      Alert.alert(
+        "Could Not Load Listing",
+        "This listing cannot be edited because its listing ID is missing."
+      );
+      navigation.goBack();
+      return;
     }
     // Continue Listing from a server draft: hydrate the exact saved state.
     // Full object preferred (no refetch); draftId alone triggers a fetch.
@@ -573,6 +603,194 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     setFailedUploadIds([]);
     setUploadedOkIds([]);
     setUploadError(null);
+  };
+
+  // Apply a full Edit-hydration form (from toEditForm) to every step state.
+  // Mirrors hydrateForm field-for-field; currentStep is left untouched so
+  // resubmit-into-step flows (initialStep) keep working.
+  const applyEditForm = (form) => {
+    setLookingTo(form.lookingTo);
+    setCategory(form.category);
+    setPropertyType(form.propertyType);
+    setBhk(form.bhk);
+    setPhoneNumber(form.phoneNumber);
+    setEmail(form.email);
+    setCity(form.city);
+    setDistrict(form.district);
+    setLocality(form.locality);
+    setPincode(form.pincode);
+    setSubLocality(form.subLocality);
+    setApartmentSociety(form.apartmentSociety);
+    setHouseNo(form.houseNo);
+    setLandmark(form.landmark);
+    setBedrooms(form.bedrooms);
+    setBathrooms(form.bathrooms);
+    setBalconies(form.balconies);
+    setCarpetArea(form.carpetArea);
+    setBuiltUpArea(form.builtUpArea);
+    setSuperBuiltUpArea(form.superBuiltUpArea);
+    setTotalFloors(form.totalFloors);
+    setFloorOn(form.floorOn);
+    setDuplex(form.duplex);
+    setAvailabilityStatus(form.availabilityStatus);
+    setPropertyAge(form.propertyAge);
+    setMonthlyRent(form.monthlyRent);
+    setSecurityDeposit(form.securityDeposit);
+    setMaintenanceCharges(form.maintenanceCharges);
+    setMaintenanceFrequency(form.maintenanceFrequency);
+    setRentNegotiable(form.rentNegotiable);
+    setAvailableFrom(form.availableFrom);
+    setTenantPreference(form.tenantPreference);
+    setLockInPeriod(form.lockInPeriod);
+    setPreferredAgreementDuration(form.preferredAgreementDuration);
+    setPhotosList(form.photosList);
+    setOtherRooms(form.otherRooms);
+    setFurnishing(form.furnishing);
+    setCoveredParking(form.coveredParking);
+    setOpenParking(form.openParking);
+    setDescription(form.description);
+    setOwnership(form.ownership);
+    setPropertyFeatures(form.propertyFeatures);
+    setSelectedAmenities(form.selectedAmenities);
+    setOpenSides(form.openSides);
+    setOverlooking(form.overlooking);
+    setPowerBackup(form.powerBackup);
+    setPropertyFacing(form.propertyFacing);
+    setErrors({});
+    setSubmitError(null);
+    // Fresh upload context for this listing (same rule as drafts: transient
+    // retry/uploaded state is rebuilt from current photos as needed).
+    setPendingListingId(null);
+    setFailedUploadIds([]);
+    setUploadedOkIds([]);
+    setUploadError(null);
+  };
+
+  // Build the Edit-dirty baseline in collectFormSnapshot() key order/shape
+  // (photo entries client-metadata-stripped in identical key order).
+  const editSnapshotOf = (form, step) => ({
+    lookingTo: form.lookingTo, category: form.category,
+    propertyType: form.propertyType, bhk: form.bhk,
+    phoneNumber: form.phoneNumber, email: form.email,
+    city: form.city, district: form.district, locality: form.locality,
+    pincode: form.pincode, subLocality: form.subLocality,
+    apartmentSociety: form.apartmentSociety, houseNo: form.houseNo,
+    landmark: form.landmark, bedrooms: form.bedrooms,
+    bathrooms: form.bathrooms, balconies: form.balconies,
+    carpetArea: form.carpetArea, builtUpArea: form.builtUpArea,
+    superBuiltUpArea: form.superBuiltUpArea, totalFloors: form.totalFloors,
+    floorOn: form.floorOn, duplex: form.duplex,
+    availabilityStatus: form.availabilityStatus, propertyAge: form.propertyAge,
+    monthlyRent: form.monthlyRent, securityDeposit: form.securityDeposit,
+    maintenanceCharges: form.maintenanceCharges,
+    maintenanceFrequency: form.maintenanceFrequency,
+    rentNegotiable: form.rentNegotiable, availableFrom: form.availableFrom,
+    tenantPreference: form.tenantPreference, lockInPeriod: form.lockInPeriod,
+    preferredAgreementDuration: form.preferredAgreementDuration,
+    photosList: (form.photosList || []).map((p) => ({
+      id: p.id, url: p.url,
+      fileName: p.fileName || null, mimeType: p.mimeType || null,
+      fileSize: typeof p.fileSize === "number" ? p.fileSize : null,
+      category: p.category || null, isCover: !!p.isCover,
+    })),
+    otherRooms: form.otherRooms, furnishing: form.furnishing,
+    coveredParking: form.coveredParking, openParking: form.openParking,
+    description: form.description, ownership: form.ownership,
+    propertyFeatures: form.propertyFeatures,
+    selectedAmenities: form.selectedAmenities, openSides: form.openSides,
+    overlooking: form.overlooking, powerBackup: form.powerBackup,
+    propertyFacing: form.propertyFacing, currentStep: step,
+  });
+
+  // Existing listings screen (Edit exit destination; the list refetches on
+  // focus so the updated listing appears without appending a duplicate).
+  const exitToProperties = () => {
+    navigation.navigate("OwnerNavigator", { screen: "Properties" });
+  };
+
+  // Top-left header exit: leaves the ENTIRE form from any step (never steps
+  // back). Dirty forms reuse the existing exit-confirm modal; clean forms
+  // exit directly (Add → Dashboard, Edit → Properties list).
+  const handleHeaderBack = () => {
+    setErrors({});
+    const dirty = isEditing ? isEditDirty : isDraftDirty;
+    const action = headerExitAction({ isEditing, dirty });
+    if (action === "confirm") {
+      setShowExitConfirmModal(true);
+      return;
+    }
+    if (action === "exit-properties") {
+      exitToProperties();
+      return;
+    }
+    navigation.navigate("Dashboard");
+  };
+
+  // Edit-mode save (PATCH in place — createOwnerListing is NEVER called
+  // here, so no duplicate listing can be produced). Returns true when the
+  // save fully succeeded (caller navigates away); upload failures stay on
+  // Review with retry state (same rule as Add).
+  const handleUpdateProperty = async (serverId, newProperty, pin, coverPhotoObj) => {
+    const payload = buildUpdatePayload(newProperty);
+    const updated = await updateOwnerListing(serverId, payload);
+    if (updated?.listing_id === undefined || updated?.listing_id === null) {
+      throw new Error("Server did not return the updated listing.");
+    }
+    // Upload newly picked device files (cover first), capturing server URLs
+    // so the final order/cover PATCH below references real gallery rows.
+    // Already-uploaded and remote photos are never re-uploaded.
+    const uploads = orderedUploadsFor(photosList, coverPhotoObj);
+    let uploadedById = {};
+    if (uploads.length > 0) {
+      const failures = [];
+      for (const photo of uploads) {
+        try {
+          const saved = await uploadListingPhoto(serverId, {
+            uri: photo.url, name: photo.fileName,
+            type: photo.mimeType, size: photo.fileSize,
+            category: photo.category,
+          });
+          uploadedById[photo.id] = saved;
+        } catch (err) {
+          failures.push({ photo, message: err?.message });
+        }
+      }
+      const failedIds = failures.map((f) => f.photo?.id).filter(Boolean);
+      const okIds = uploads.map((p) => p.id).filter((id) => !failedIds.includes(id));
+      setUploadedOkIds((prev) => Array.from(new Set([...prev, ...okIds])));
+      // Swap local file URIs for server URLs so retries skip them and the
+      // order PATCH below sees the true gallery.
+      if (okIds.length > 0) {
+        setPhotosList((prev) =>
+          prev.map((p) =>
+            uploadedById[p.id]
+              ? { ...p, url: uploadedById[p.id].url, mediaId: uploadedById[p.id].id }
+              : p
+          )
+        );
+      }
+      if (failures.length > 0) {
+        failUploadsStayOnReview(serverId, failures);
+        return false;
+      }
+      // Final order/cover reconciliation now that every photo is server-side.
+      const endState = photosList
+        .map((p) => (uploadedById[p.id] ? { ...p, url: uploadedById[p.id].url } : p))
+        .filter((p) => p && typeof p.url === "string" && p.url.startsWith("http"))
+        .map((p) => ({ url: p.url, category: p.category || null }));
+      await updateOwnerListing(serverId, { photos: endState });
+    }
+    // Server-confirmed: refetch for gallery/cover truth, then exit to the
+    // list (which refetches on focus). No addProperty (no duplicate), no
+    // draft delete, no subscription increment — nothing new was created.
+    await fetchOwnerListing(serverId).catch(() => null);
+    setPendingListingId(null);
+    setFailedUploadIds([]);
+    setUploadedOkIds([]);
+    setUploadError(null);
+    setSubmitError(null);
+    exitToProperties();
+    return true;
   };
 
   // Save Draft button handler: POST on first save, PUT on repeat saves
@@ -745,8 +963,8 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       const pin = (pincode || "").trim();
       if (!pin) {
         newErrors.pincode = "Pincode is required";
-      } else if (!/^\d{6}$/.test(pin)) {
-        newErrors.pincode = "Enter a valid 6-digit pincode";
+      } else if (!isValidChennaiPincode(pin)) {
+        newErrors.pincode = CHENNAI_PINCODE_ERROR;
       }
     }
 
@@ -931,22 +1149,23 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     if (isSubmitting) return;
     setSubmitError(null);
 
-    // Pincode is required before submit. Validate first and remain on Review
-    // (no step jump, no POST) so the user can fix it inline.
+    // Pincode is required (Chennai 600001–600118) before submit. Validate
+    // first and remain on Review (no step jump, no POST) so the user can
+    // fix it inline.
     const pin = (pincode || "").trim();
     if (!pin) {
       setErrors((prev) => ({ ...prev, pincode: "Pincode is required" }));
       Alert.alert(
         "Pincode Required",
-        "Please enter the 6-digit pincode for this property before publishing."
+        "Please enter the Chennai pincode for this property before publishing."
       );
       return;
     }
-    if (!/^\d{6}$/.test(pin)) {
-      setErrors((prev) => ({ ...prev, pincode: "Enter a valid 6-digit pincode" }));
+    if (!isValidChennaiPincode(pin)) {
+      setErrors((prev) => ({ ...prev, pincode: CHENNAI_PINCODE_ERROR }));
       Alert.alert(
         "Invalid Pincode",
-        "Please enter a valid 6-digit numeric pincode before publishing."
+        CHENNAI_PINCODE_ERROR
       );
       return;
     }
@@ -963,12 +1182,12 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       }
     }
 
-    // Check subscription active
+    // Check subscription active (Add mode only: edits consume no new quota).
     const isSubActive =
       subscription?.active &&
       (subscription?.usedListings || 0) < (subscription?.listingLimit || 5);
 
-    if (!isSubActive) {
+    if (!isSubActive && !(isEditing && editingListingId)) {
       setShowRenewModal(true);
       return;
     }
@@ -1063,6 +1282,33 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
 
     setIsSubmitting(true);
     try {
+      // Edit mode: PATCH the existing listing in place. The shared pincode
+      // + step validation above already ran; the subscription gate was
+      // skipped (edits consume no new quota). createOwnerListing is NEVER
+      // reached on this path, so no duplicate listing can be produced, and
+      // no draft is deleted (drafts are Add-mode only).
+      if (isEditing && editingListingId) {
+        try {
+          await handleUpdateProperty(editingListingId, newProperty, pin, coverPhotoObj);
+        } catch (err) {
+          console.warn("[OwnerAddProperty] Backend update failed:", err?.message);
+          let message = "Could not save your changes. Please check your connection and try again.";
+          if (err?.kind === "login" || err?.status === 401) {
+            message = "Your session has expired. Please log in again, then try saving.";
+          } else if (err?.kind === "denied" || err?.status === 403) {
+            message = "Your account does not have Owner access yet. Please re-enter Owner mode and try again.";
+          } else if (err?.kind === "validation" || err?.status === 400 || err?.status === 422) {
+            message = "Some details were rejected by the server. Please review the highlighted fields and try again.";
+          } else if (err?.kind === "offline") {
+            message = "No connection. Make sure the backend is running and reachable, then try again.";
+          } else if (err?.status === 404 || err?.kind === "missing") {
+            message = "This listing is no longer available. It may have been removed.";
+          }
+          setSubmitError(message);
+          Alert.alert("Could Not Save Changes", message);
+        }
+        return;
+      }
       // Upload-only path: a previous publish already created the listing, so
       // POST /owner/listings is NEVER called again here (no duplicates).
       // The upload set is re-derived from CURRENT photos minus confirmed
@@ -1126,9 +1372,9 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       // fake local published state.
       console.warn("[OwnerAddProperty] Backend submit failed:", err?.message);
       let message = "Could not publish your property. Please check your connection and try again.";
-      if (err?.message === "A valid 6-digit pincode is required before submit.") {
-        message = "Please enter a valid 6-digit pincode before publishing.";
-        setErrors((prev) => ({ ...prev, pincode: "Enter a valid 6-digit pincode" }));
+      if (err?.message === CHENNAI_PINCODE_ERROR) {
+        message = CHENNAI_PINCODE_ERROR;
+        setErrors((prev) => ({ ...prev, pincode: CHENNAI_PINCODE_ERROR }));
       } else if (err?.kind === "login" || err?.status === 401) {
         message = "Your session has expired. Please log in again, then try publishing.";
       } else if (err?.kind === "denied" || err?.status === 403) {
@@ -1185,6 +1431,29 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   ]);
   const isDraftDirtyOrSaving = savingDraft || isDraftDirty;
 
+  // Edit-dirty tracking: same snapshot comparison against the loaded-listing
+  // baseline (null baseline = still loading → counts as dirty so exit
+  // always confirms rather than silently dropping a pending load).
+  const isEditDirty = useMemo(() => {
+    if (!isEditing) return false;
+    if (editBaselineSnapshot === null) return true;
+    const liveEditSnapshotJson = JSON.stringify(collectFormSnapshot());
+    return liveEditSnapshotJson !== editBaselineSnapshot;
+  }, [
+    isEditing,
+    editBaselineSnapshot,
+    lookingTo, category, propertyType, bhk, phoneNumber, email,
+    city, district, locality, pincode, subLocality, apartmentSociety,
+    houseNo, landmark, bedrooms, bathrooms, balconies, carpetArea,
+    builtUpArea, superBuiltUpArea, totalFloors, floorOn, duplex,
+    availabilityStatus, propertyAge, monthlyRent, securityDeposit,
+    maintenanceCharges, maintenanceFrequency, rentNegotiable, availableFrom,
+    tenantPreference, lockInPeriod, preferredAgreementDuration,
+    photosList, otherRooms, furnishing, coveredParking, openParking, description,
+    ownership, propertyFeatures, selectedAmenities, openSides, overlooking,
+    powerBackup, propertyFacing, currentStep,
+  ]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -1194,7 +1463,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
         <View style={styles.headerLeft}>
           <TouchableOpacity
             style={styles.headerCircleBtn}
-            onPress={handleBack}
+            onPress={handleHeaderBack}
             activeOpacity={0.7}
           >
             <ArrowLeft size={19} color="#111111" strokeWidth={2.2} />
@@ -1216,21 +1485,23 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
           <TouchableOpacity
             style={[
               styles.saveDraftBtn,
-              !savingDraft && !isDraftDirty && styles.saveDraftBtnSaved,
+              // Edit mode reuses the same button chrome; dirty state tracks
+              // listing edits (no draft APIs are ever called in Edit mode).
+              !savingDraft && !(isEditing ? isEditDirty : isDraftDirty) && styles.saveDraftBtnSaved,
             ]}
-            onPress={() => handleSaveDraftPress()}
-            disabled={savingDraft || !isDraftDirty}
+            onPress={() => (isEditing ? handleHeaderBack() : handleSaveDraftPress())}
+            disabled={savingDraft || !(isEditing ? isEditDirty : isDraftDirty)}
             activeOpacity={0.7}
           >
             <Text
               style={[
                 styles.saveDraftText,
-                !savingDraft && !isDraftDirty && styles.saveDraftTextSaved,
+                !savingDraft && !(isEditing ? isEditDirty : isDraftDirty) && styles.saveDraftTextSaved,
               ]}
             >
               {savingDraft
                 ? "Saving..."
-                : isDraftDirty
+                : (isEditing ? isEditDirty : isDraftDirty)
                   ? "Save Draft"
                   : "Saved ✓"}
             </Text>
@@ -1436,7 +1707,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
               placeholder="e.g. 600040"
               keyboardType="numeric"
               error={errors.pincode}
-              helperText="6-digit postal pincode. Required before publishing."
+              helperText="Chennai pincode between 600001 and 600118. Required before publishing."
             />
 
             <FormInput
@@ -2386,7 +2657,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
                   placeholder="e.g. 600040"
                   keyboardType="numeric"
                   error={errors.pincode}
-                  helperText="6-digit postal pincode. Required before publishing."
+                  helperText="Chennai pincode between 600001 and 600118. Required before publishing."
                 />
               </View>
             </View>
@@ -2783,6 +3054,14 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
         confirmText="Save & Exit"
         cancelText="Discard"
         onConfirm={async () => {
+          if (isEditing) {
+            // Edit mode has no drafts: Save & Exit persists via the PATCH
+            // update path (same validation as Publish), then exits to the
+            // list. Failures stay on the form with data preserved.
+            setShowExitConfirmModal(false);
+            await handlePublishProperty();
+            return;
+          }
           // Persist first; navigate only on backend success. On failure we
           // stay on the form with data preserved. Discard never deletes an
           // already-saved server draft.
@@ -2797,6 +3076,11 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
         }}
         onCancel={() => {
           setShowExitConfirmModal(false);
+          // Discarding edit changes keeps the saved server listing intact.
+          if (isEditing) {
+            exitToProperties();
+            return;
+          }
           navigation.navigate("Dashboard");
         }}
       />

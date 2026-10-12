@@ -8,11 +8,46 @@ import {
   apiPost,
   apiGetAuth,
   apiPutAuth,
+  apiPatchAuth,
   apiDelete,
   getAuthTokenSync,
   API_BASE_URL,
 } from "./client";
 import { getCleanImageUrl } from "./mappers";
+
+/**
+ * Chennai-only pincode rule (temporary business rule, Phase 2). Single
+ * frontend source of truth — every form gate and the payload builder share
+ * it. Pincodes stay strings end-to-end (never int-converted) so leading
+ * zeros survive; exactly six digits are required before the range check.
+ */
+export const CHENNAI_PINCODE_MIN = 600001;
+export const CHENNAI_PINCODE_MAX = 600118;
+export const CHENNAI_PINCODE_ERROR =
+  "Please enter a valid pincode between 600001 and 600118.";
+
+/**
+ * True only for exactly-six-digit strings within the Chennai range.
+ * Trims surrounding whitespace; null/undefined/"" are invalid (callers
+ * needing "required" vs "invalid" wording branch on emptiness first).
+ */
+export function isValidChennaiPincode(value) {
+  const s = String(value ?? "").trim();
+  if (!/^\d{6}$/.test(s)) return false;
+  const n = Number(s);
+  return n >= CHENNAI_PINCODE_MIN && n <= CHENNAI_PINCODE_MAX;
+}
+
+/**
+ * Normalize a mandatory pincode: trimmed string, or null when missing.
+ * Throws CHENNAI_PINCODE_ERROR for any present-but-invalid value.
+ */
+export function requireChennaiPincode(value) {
+  const s = String(value ?? "").trim();
+  if (!s) return null;
+  if (!isValidChennaiPincode(s)) throw new Error(CHENNAI_PINCODE_ERROR);
+  return s;
+}
 
 /**
  * Map a UI property form object to the backend OwnerListingCreate schema.
@@ -89,14 +124,14 @@ export function buildPayload(property) {
   }
 
   // --- Location ---
-  // Pincode is required: no fake default. Callers must collect a real 6-digit
-  // pincode before submit; we throw here so a missing pincode can never be
-  // silently replaced and POSTed as "600000".
+  // Pincode is required and Chennai-only (600001–600118): no fake default.
+  // Callers must collect a real in-range pincode before submit; we throw
+  // here so a missing/invalid pincode can never be silently replaced.
   const rawPincode = String(property.pincode ?? property.postalCode ?? "").trim();
-  if (!/^\d{6}$/.test(rawPincode)) {
-    throw new Error("A valid 6-digit pincode is required before submit.");
+  const pincode = requireChennaiPincode(rawPincode);
+  if (pincode === null) {
+    throw new Error(CHENNAI_PINCODE_ERROR);
   }
-  const pincode = rawPincode;
   const locality = (property.locality || property.area || "").trim() || "Unknown";
   const city = (property.city || property.district || "Chennai").trim();
   const address_line = (property.address || property.landmark || "").trim() || null;
@@ -197,7 +232,8 @@ export function buildPayload(property) {
   const maintenance_rupees = toIntOrNull(
     property.maintenanceCharges ?? property.maintenance_rupees ?? property.maintenance
   );
-  const rent_terms = {
+  const rent_terms = (transaction_type === "RENT" || transaction_type === "LEASE")
+    ? {
     security_deposit_rupees,
     maintenance_rupees,
     maintenance_period: cleanStr(property.maintenanceFrequency ?? property.maintenance_period, 20),
@@ -208,7 +244,12 @@ export function buildPayload(property) {
     agreement_months: cleanStr(
       property.preferredAgreementDuration ?? property.agreement_months, 20
     ),
-  };
+  }
+    // RESALE/BUY listings have no terms row in the database: omit terms so
+    // the backend (which explicitly rejects terms on those types) accepts
+    // the payload. Mirrors the existing sale-type nulling of
+    // tenant/lock-in/agreement in the submit handler.
+    : null;
 
   // --- Amenities / features / rooms (names only; server resolves by name) ---
   const amenities = toStrArray(property.amenities);
@@ -510,6 +551,216 @@ export async function fetchOwnerListings(page = 1, pageSize = 20) {
  */
 export async function fetchOwnerListing(listingId) {
   return apiGetAuth(`/owner/listings/${listingId}`);
+}
+
+/**
+ * Update an existing owner property listing in place (Edit mode).
+ * NEVER creates a new listing: callers must pass the persistent listing_id
+ * and must never fall back to createOwnerListing on failure.
+ * @param {number} listingId - persistent property_listings.id
+ * @param {object} payload - full OwnerListingUpdate-shaped body
+ * @returns {Promise<object>} The updated OwnerListingOut object
+ */
+export async function updateOwnerListing(listingId, payload) {
+  return apiPatchAuth(`/owner/listings/${listingId}`, payload);
+}
+
+/**
+ * Delete one gallery photo from an owned listing. Returns true on 204;
+ * throws otherwise (incl. 404 for foreign listings/photos).
+ */
+export async function deleteListingPhoto(listingId, mediaId) {
+  await apiDelete(`/owner/listings/${listingId}/photos/${mediaId}`);
+  return true;
+}
+
+/**
+ * Resolve the persistent listing id for Edit mode from navigation params.
+ * Returns a positive integer listing id, or null when the params carry no
+ * usable identity (caller must stay in Add mode / refuse to edit).
+ * Draft pseudo-ids ("draft-…") and local ids ("own-prop-…") resolve to null.
+ */
+export function resolveEditingListingId(routeParams) {
+  const p = routeParams?.editingProperty;
+  const raw = p
+    ? (p.listing_id ?? p.listingId ?? p.id)
+    : (routeParams?.listingId ?? routeParams?.listing_id);
+  const n = typeof raw === "number" ? raw : parseInt(String(raw ?? ""), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Build the PATCH /owner/listings/{id} body from the same form object used
+ * for creation. Reuses buildPayload so every field maps identically, then
+ * applies the Edit-only rule: RESALE/BUY listings carry rent_terms: null
+ * because the backend explicitly rejects terms on those types (422).
+ * Remote (http) photos ride along as the gallery end-state (order = display
+ * order, index 0 = cover); local device files are excluded here and
+ * uploaded afterwards via uploadListingPhoto.
+ */
+export function buildUpdatePayload(property) {
+  const payload = buildPayload(property);
+  if (payload.transaction_type === "RESALE" || payload.transaction_type === "BUY") {
+    payload.rent_terms = null;
+  }
+  return payload;
+}
+
+const _EDIT_MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+function _paiseToStr(paise) {
+  if (paise === undefined || paise === null) return "";
+  const n = Math.round(Number(paise) / 100);
+  return Number.isFinite(n) ? String(n) : "";
+}
+
+function _isoToFormDate(iso) {
+  if (!iso) return "Immediately";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  if (!m) return String(iso);
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return `${d.getUTCDate()} ${_EDIT_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+function _monthsToLockLabel(months) {
+  if (months === undefined || months === null) return "";
+  const map = { 6: "6 Months", 12: "1 Year", 24: "2 Years" };
+  return map[Number(months)] || String(months);
+}
+
+function _monthsToAgreementLabel(months) {
+  if (months === undefined || months === null) return "";
+  const map = { 11: "11 Months", 12: "1 Year", 24: "2 Years", 36: "3 Years", 60: "5 Years" };
+  return map[Number(months)] || String(months);
+}
+
+function _countChip(value, plusAt, plusLabel) {
+  if (value === undefined || value === null) return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  if (n >= plusAt) return plusLabel;
+  return String(Math.trunc(n));
+}
+
+/**
+ * Map a backend OwnerListingOut (GET /owner/listings/{id}) onto the
+ * OwnerAddPropertyScreen form-state keys. This is the SOLE source for Edit
+ * hydration — never the lossy display card. Every key buildPayload reads is
+ * restored; approved approximations (documented):
+ * - commercial subtype / HOUSE / AGRICULTURAL_LAND collapse to the closest
+ *   UI option (the forward mapper is already lossy there);
+ * - bedrooms>=5 → "5"/"5+" chips, bathrooms>=4 → "4"/"4+", balconies>=3 →
+ *   "3"/"3+" (exact chip cannot be inferred);
+ * - available_from null → "Immediately" (step-4 validation requires a value);
+ * - duplex null → "No" (create-path parity coerces null to false);
+ * - numeric steppers (parking) map null → 0; other absent strings → "".
+ * Returns null when detail is missing.
+ */
+export function toEditForm(detail) {
+  if (!detail || typeof detail !== "object") return null;
+  const tx = String(detail.transaction_type || "RENT").toUpperCase();
+  const lookingTo = tx === "LEASE" ? "Lease" : tx === "RESALE" ? "Resale" : tx === "BUY" ? "New" : "Rent";
+  const category = detail.property_type === "COMMERCIAL" ? "Commercial" : "Residential";
+  let propertyType = "Apartment";
+  if (category === "Commercial") {
+    propertyType = "Office";
+  } else if (detail.property_type === "VILLA" || detail.property_type === "HOUSE") {
+    propertyType = "Independent House / Villa";
+  } else if (detail.property_type === "PLOT" || detail.property_type === "AGRICULTURAL_LAND") {
+    propertyType = "Plot / Land";
+  }
+  const bd = detail.bedrooms;
+  const bhk = category !== "Residential" || propertyType === "Plot / Land"
+    ? "N/A"
+    : bd === 1 ? "1 BHK" : bd === 2 ? "2 BHK" : bd === 3 ? "3 BHK"
+    : bd === 4 ? "4 BHK" : typeof bd === "number" && bd >= 5 ? "4+ BHK" : "2 BHK";
+  const terms = detail.rent_terms || {};
+  const furnishingMap = { UNFURNISHED: "Unfurnished", SEMI_FURNISHED: "Semi-Furnished", FURNISHED: "Furnished" };
+  const powerMap = { NONE: "None", PARTIAL: "Partial", FULL: "Full" };
+  const ownershipMap = {
+    FREEHOLD: "Freehold", LEASEHOLD: "Leasehold",
+    COOPERATIVE_SOCIETY: "Co-operative Society", POWER_OF_ATTORNEY: "Power of Attorney",
+  };
+  const availMap = {
+    READY_TO_MOVE: "Ready to Move", UNDER_CONSTRUCTION: "Under Construction", NEW_LAUNCH: "New Launch",
+  };
+  const maintMap = { MONTHLY: "Monthly", QUARTERLY: "Quarterly", YEARLY: "Yearly" };
+  const tenantMap = { FAMILY: "Family", BACHELOR: "Bachelor", COMPANY: "Company", ANY: "Any" };
+  const photos = Array.isArray(detail.photos) ? detail.photos : [];
+  return {
+    editingListingId: detail.listing_id,
+    lookingTo,
+    category,
+    propertyType,
+    bhk,
+    phoneNumber: detail.contact_phone || "",
+    email: detail.contact_email || "",
+    city: detail.city || "",
+    district: detail.district || "",
+    locality: detail.locality || "",
+    pincode: detail.pincode || "",
+    subLocality: detail.sub_locality || "",
+    apartmentSociety: detail.society_name || "",
+    houseNo: detail.house_no || "",
+    landmark: detail.landmark || "",
+    bedrooms: detail.bedrooms === undefined || detail.bedrooms === null ? "" : String(detail.bedrooms),
+    bathrooms: _countChip(detail.bathrooms, 5, "4+"),
+    balconies: _countChip(detail.balconies, 4, "3+"),
+    carpetArea: detail.area_value === undefined || detail.area_value === null ? "" : String(detail.area_value),
+    builtUpArea: detail.built_up_area === undefined || detail.built_up_area === null ? "" : String(detail.built_up_area),
+    superBuiltUpArea: detail.super_built_up_area === undefined || detail.super_built_up_area === null
+      ? "" : String(detail.super_built_up_area),
+    totalFloors: detail.total_floors === undefined || detail.total_floors === null ? "" : String(detail.total_floors),
+    floorOn: detail.floor_on || "",
+    duplex: detail.is_duplex ? "Yes" : "No",
+    availabilityStatus: availMap[detail.construction_status] || "Ready to Move",
+    propertyAge: detail.property_age_band || "",
+    monthlyRent: _paiseToStr(detail.price_paise) || "0",
+    securityDeposit: _paiseToStr(terms.security_deposit_paise),
+    maintenanceCharges: _paiseToStr(terms.maintenance_paise),
+    maintenanceFrequency: maintMap[terms.maintenance_period] || "",
+    rentNegotiable: terms.is_negotiable ? "Yes" : "No",
+    availableFrom: _isoToFormDate(terms.available_from),
+    tenantPreference: tenantMap[terms.tenant_preference] || "",
+    lockInPeriod: _monthsToLockLabel(terms.lock_in_months),
+    preferredAgreementDuration: _monthsToAgreementLabel(terms.agreement_months),
+    otherRooms: Array.isArray(detail.other_rooms) ? detail.other_rooms : [],
+    furnishing: furnishingMap[detail.furnishing] || "",
+    coveredParking: typeof detail.covered_parking === "number" ? detail.covered_parking : 0,
+    openParking: typeof detail.open_parking === "number" ? detail.open_parking : 0,
+    description: detail.description || "",
+    ownership: ownershipMap[detail.ownership_type] || "",
+    propertyFeatures: Array.isArray(detail.property_features) ? detail.property_features : [],
+    selectedAmenities: Array.isArray(detail.amenities) ? detail.amenities : [],
+    openSides: detail.open_sides || "",
+    overlooking: detail.overlooking || "",
+    powerBackup: powerMap[detail.power_backup] || "",
+    propertyFacing: detail.facing || "",
+    photosList: photos.map((p, idx) => ({
+      id: p && p.id !== undefined && p.id !== null ? `remote-${p.id}` : `remote-idx-${idx}`,
+      mediaId: p && p.id !== undefined && p.id !== null ? p.id : null,
+      url: p ? p.url : "",
+      fileName: null,
+      mimeType: null,
+      fileSize: null,
+      category: (p && p.category) || null,
+      isCover: idx === 0,
+    })),
+  };
+}
+
+/**
+ * Header (top-left) Back decision table (pure; tested).
+ * The header ALWAYS exits the whole form — never steps back.
+ * @returns {"confirm"|"exit-properties"|"exit-dashboard"}
+ */
+export function headerExitAction({ isEditing, dirty }) {
+  if (dirty) return "confirm";
+  return isEditing ? "exit-properties" : "exit-dashboard";
 }
 
 /**
