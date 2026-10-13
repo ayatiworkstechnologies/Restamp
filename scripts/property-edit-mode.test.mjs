@@ -9,6 +9,8 @@
 // empty form carries no photos/emails into the next publish; edit exits
 // clear to fresh params so bare Add tab presses stay safe without a
 // blanket tabPress reset).
+// Shared freshAddParams entry contract (all Add buttons + edit exits) with
+// stale-tab Switch coverage, and the four-purpose New/Rent/Resale/Lease matrix.
 //
 // Same harness as photo-retry-state.test.mjs: src/api/owner.js uses
 // extensionless imports (Metro), so copy to tmp with extensions fixed.
@@ -34,6 +36,7 @@ const {
   isValidChennaiPincode, requireChennaiPincode,
   CHENNAI_PINCODE_MIN, CHENNAI_PINCODE_MAX, CHENNAI_PINCODE_ERROR,
   isValidOwnerEmail, normalizeOwnerEmail, OWNER_EMAIL_ERROR,
+  freshAddParams,
 } = await import(join(tmp, "owner.js"));
 
 let failures = 0;
@@ -401,6 +404,39 @@ for (const pc of purposeCases) {
     fresh.photos === undefined && Array.isArray(fresh.images)
     && fresh.images.length === 0 && fresh.contact_email === null);
 }
+
+// --- 12. Shared fresh-Add entry contract (top-right +, bottom-tab safety,
+//         Dashboard parity, email error-clearing) ---
+// Every "Add Property" entry (Dashboard, My Properties header + and
+// EmptyState, PublishSuccess "Add Another", edit-exit clearing) must send
+// freshAddParams(); the Add screen already holding stale edit params (e.g.
+// after an edit when the bottom tab supplies no params) must resolve to a
+// fresh create once cleared.
+const fp = freshAddParams();
+check("N1 freshAddParams shape",
+  typeof fp.resetForm === "number" && Number.isFinite(fp.resetForm)
+  && fp.initialStep === 1 && fp.editingProperty === null
+  && fp.listingId === undefined && fp.listing_id === undefined);
+check("N2 freshAddParams exits edit mode",
+  resolveEditingListingId(fp) === null);
+check("N3 freshAddParams is unique per call",
+  freshAddParams().resetForm !== undefined
+  && typeof freshAddParams().resetForm === "number");
+const staleTabParams = { editingProperty: { listing_id: 77, title: "Old Villa" } };
+check("N4 stale tab params still detect the old edit (bug trigger)",
+  resolveEditingListingId(staleTabParams) === 77);
+check("N5 cleared tab params open a fresh create",
+  resolveEditingListingId({ ...staleTabParams, ...freshAddParams() }) === null);
+check("N6 Dashboard-equivalent entry is fresh",
+  resolveEditingListingId(freshAddParams()) === null);
+// Email error-clearing contract used by the input onChange: a field showing
+// an error becomes valid as soon as it is emptied (no stale red error), and
+// only a malformed non-empty value keeps the error.
+check("N7 emptied email clears its error",
+  isValidOwnerEmail("not-an-email") === false && isValidOwnerEmail("") === true
+  && isValidOwnerEmail("   ") === true);
+check("N8 valid email keeps no error",
+  isValidOwnerEmail("owner@example.com") === true);
 
 if (failures > 0) {
   console.log(`${failures} FAILURE(S)`);

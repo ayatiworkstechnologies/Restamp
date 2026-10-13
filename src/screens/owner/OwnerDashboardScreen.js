@@ -31,7 +31,7 @@ import {
 
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
-import { fetchOwnerListings, toOwnerProperty } from "../../api/owner";
+import { fetchOwnerListings, toOwnerProperty, freshAddParams } from "../../api/owner";
 import RestampLogo from "../../components/RestampLogo";
 import AppBrandHeader from "../../components/AppBrandHeader";
 
@@ -98,7 +98,7 @@ export default function OwnerDashboardScreen({ navigation }) {
   const ownerName = ownerProfile?.firstName || "Arunavo";
 
   const handleAddProperty = () => {
-    navigation.navigate("Add", { resetForm: Date.now(), initialStep: 1 });
+    navigation.navigate("Add", freshAddParams());
   };
 
   const handleMyProperties = (tab = "Active") => {

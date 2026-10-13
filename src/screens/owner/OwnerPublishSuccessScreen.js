@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CheckCircle2, Building2, Plus, Clock, ArrowLeft } from "lucide-react-native";
 import COLORS from "../../constants/colors";
+import { freshAddParams } from "../../api/owner";
 import StatusBadge from "../../components/owner/StatusBadge";
 import PrimaryButton from "../../components/owner/PrimaryButton";
 import SecondaryButton from "../../components/owner/SecondaryButton";
@@ -32,7 +33,7 @@ export default function OwnerPublishSuccessScreen({ route, navigation }) {
   const handleAddAnother = () => {
     navigation.navigate("OwnerNavigator", {
       screen: "Add",
-      params: { resetForm: Date.now(), initialStep: 1, editingProperty: null },
+      params: freshAddParams(),
     });
   };
 

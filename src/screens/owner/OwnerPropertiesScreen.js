@@ -22,7 +22,7 @@ import {
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
-import { fetchOwnerListings, toOwnerProperty, fetchDrafts, deleteDraft } from "../../api/owner";
+import { fetchOwnerListings, toOwnerProperty, fetchDrafts, deleteDraft, freshAddParams } from "../../api/owner";
 import RestampLogo from "../../components/RestampLogo";
 import AppBrandHeader from "../../components/AppBrandHeader";
 import OwnerHeader from "../../components/owner/OwnerHeader";
@@ -295,7 +295,7 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
 
             <TouchableOpacity
               style={styles.addPropertyCircleBtn}
-              onPress={() => navigation.navigate("Add", { resetForm: Date.now(), initialStep: 1, editingProperty: null })}
+              onPress={() => navigation.navigate("Add", freshAddParams())}
               activeOpacity={0.8}
             >
               <Plus size={18} color="#FFFFFF" strokeWidth={2.4} />
@@ -407,7 +407,7 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
                   : `You currently have zero properties under the ${activeTab} category.`
             }
             buttonTitle="+ Add Property"
-            onButtonPress={() => navigation.navigate("Add", { resetForm: Date.now(), initialStep: 1, editingProperty: null })}
+            onButtonPress={() => navigation.navigate("Add", freshAddParams())}
           />
         ) : (
           filteredProperties.map((prop) => (

@@ -52,7 +52,7 @@ import {
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
-import { createOwnerListing, updateOwnerListing, buildUpdatePayload, resolveEditingListingId, toEditForm, headerExitAction, isValidChennaiPincode, CHENNAI_PINCODE_ERROR, isValidOwnerEmail, OWNER_EMAIL_ERROR, fetchOwnerListing, isLocalPhotoUri, uploadListingPhoto, createDraft, updateDraft, fetchDraft, deleteDraft, syncIdSetWithPhotos, pendingLocalPhotos } from "../../api/owner";
+import { createOwnerListing, updateOwnerListing, buildUpdatePayload, resolveEditingListingId, toEditForm, headerExitAction, isValidChennaiPincode, CHENNAI_PINCODE_ERROR, isValidOwnerEmail, OWNER_EMAIL_ERROR, freshAddParams, fetchOwnerListing, isLocalPhotoUri, uploadListingPhoto, createDraft, updateDraft, fetchDraft, deleteDraft, syncIdSetWithPhotos, pendingLocalPhotos } from "../../api/owner";
 import RestampLogo from "../../components/RestampLogo";
 import StepIndicator from "../../components/owner/StepIndicator";
 import FormInput from "../../components/owner/FormInput";
@@ -725,7 +725,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   // is ever wiped (this is why there is deliberately no blanket tabPress
   // reset, which could not tell a finished edit from one paused mid-way).
   const exitToProperties = () => {
-    navigation.setParams({ resetForm: Date.now(), initialStep: 1, editingProperty: null });
+    navigation.setParams(freshAddParams());
     navigation.navigate("OwnerNavigator", { screen: "Properties" });
   };
 
@@ -1676,7 +1676,14 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
             <FormInput
               label="Email (Optional)"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                // Clear a stale field error while typing so an emptied field
+                // never keeps showing red; validity is re-checked on Next.
+                if (errors.email) {
+                  setErrors((prev) => ({ ...prev, email: undefined }));
+                }
+              }}
               placeholder="e.g. owner@example.com"
               keyboardType="email-address"
               error={errors.email}

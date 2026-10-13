@@ -622,6 +622,18 @@ export function resolveEditingListingId(routeParams) {
 }
 
 /**
+ * Fresh Add entry params shared by every "Add Property" entry point
+ * (Dashboard, My Properties header + and EmptyState, PublishSuccess
+ * "Add Another", edit-exit clearing). Carries a unique resetForm stamp so
+ * the Add screen's reset effect always fires, starts at Step 1, and
+ * explicitly nulls any stale editingProperty (React Navigation merges
+ * params, so omitting the key would preserve the previous edit).
+ */
+export function freshAddParams() {
+  return { resetForm: Date.now(), initialStep: 1, editingProperty: null };
+}
+
+/**
  * Build the PATCH /owner/listings/{id} body from the same form object used
  * for creation. Reuses buildPayload so every field maps identically, then
  * applies the Edit-only rule: RESALE/BUY listings carry rent_terms: null
