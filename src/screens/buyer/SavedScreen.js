@@ -38,70 +38,26 @@ import COLORS from "../../constants/colors";
 import { useWishlist } from "../../context/WishlistContext";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import AppBrandHeader from "../../components/AppBrandHeader";
-import ALL_PROPERTIES from "../../data/properties";
 import SafeImage from "../../components/common/SafeImage";
 
-const INITIAL_VIEWED_PROPERTIES = [
-  {
-    ...ALL_PROPERTIES[0],
-    viewedTime: "Viewed 20m ago",
-  },
-  {
-    ...ALL_PROPERTIES[1],
-    viewedTime: "Viewed 2h ago",
-  },
-  {
-    ...ALL_PROPERTIES[2],
-    viewedTime: "Viewed Yesterday",
-  },
-  {
-    ...ALL_PROPERTIES[3],
-    viewedTime: "Viewed 3 days ago",
-  },
-];
+// P2 honesty: no fabricated history. Viewed properties and call records have
+// no backend source or local persistence, so both start empty and stay empty
+// until genuine product-backed tracking lands. Existing empty states below
+// cover the honest zero cases.
 
-const INITIAL_CALL_HISTORY = [
-  {
-    id: "call-1",
-    property: ALL_PROPERTIES[0],
-    agentName: ALL_PROPERTIES[0]?.agent?.name || "Ramesh Kumar",
-    agentPhone: ALL_PROPERTIES[0]?.agent?.phone || "+91 98765 43210",
-    agency: ALL_PROPERTIES[0]?.agent?.agency || "Chennai Prime Realty",
-    callTime: "Today, 11:20 AM",
-    duration: "Connected (2m 45s)",
-    status: "Outgoing Call",
-    type: "connected",
-  },
-  {
-    id: "call-2",
-    property: ALL_PROPERTIES[1],
-    agentName: ALL_PROPERTIES[1]?.agent?.name || "Kavitha Sundar",
-    agentPhone: ALL_PROPERTIES[1]?.agent?.phone || "+91 98401 22334",
-    agency: ALL_PROPERTIES[1]?.agent?.agency || "Anna Nagar Elite Homes",
-    callTime: "Yesterday, 4:15 PM",
-    duration: "Site Visit Scheduled",
-    status: "Site Visit Confirmed",
-    type: "visit",
-  },
-  {
-    id: "call-3",
-    property: ALL_PROPERTIES[2],
-    agentName: ALL_PROPERTIES[2]?.agent?.name || "Suresh Menon",
-    agentPhone: ALL_PROPERTIES[2]?.agent?.phone || "+91 98402 33445",
-    agency: ALL_PROPERTIES[2]?.agent?.agency || "OMR Property Advisors",
-    callTime: "3 days ago",
-    duration: "Connected (1m 18s)",
-    status: "Outgoing Call",
-    type: "connected",
-  },
-];
+// Returns digits-only phone or null when no valid number is available.
+// Callers show an honest unavailable message instead of a sample number.
+function cleanPhoneOrNull(raw) {
+  const digits = String(raw || "").replace(/[^0-9]/g, "");
+  return digits.length > 0 ? digits : null;
+}
 
 export default function SavedScreen({ navigation, route }) {
   const { wishlist, removeFromWishlist, isWishlisted, toggleWishlist, refreshWishlist } = useWishlist();
 
-  // Pull the server wishlist when authenticated; logged-out users keep
-  // the existing local mock behavior untouched. Refreshed on mount and
-  // whenever the screen regains focus (e.g. after a save elsewhere).
+  // Pull the server wishlist when authenticated; logged-out users have an
+  // honest empty wishlist. Refreshed on mount and whenever the screen regains
+  // focus (e.g. after a save elsewhere).
   useEffect(() => {
     refreshWishlist().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,11 +81,11 @@ export default function SavedScreen({ navigation, route }) {
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [viewedNumberProperty, setViewedNumberProperty] = useState(null);
 
-  // Viewed properties state
-  const [viewedProperties, setViewedProperties] = useState(INITIAL_VIEWED_PROPERTIES);
+  // Viewed properties state (P2: honest empty — no backend/persistence yet)
+  const [viewedProperties, setViewedProperties] = useState([]);
 
-  // Call history state
-  const [callHistory, setCallHistory] = useState(INITIAL_CALL_HISTORY);
+  // Call history state (P2: honest empty — contact actions do not fabricate records)
+  const [callHistory, setCallHistory] = useState([]);
 
   // User Profile State
   const [userProfile, setUserProfile] = useState({
@@ -181,22 +137,36 @@ export default function SavedScreen({ navigation, route }) {
     return { perSqft, statusText };
   };
 
-  // Contact Handlers
+  // Contact Handlers (P2 honesty: only dial/message a genuine number; never
+  // fall back to a sample number. Missing numbers show an honest message.)
   const handleWhatsApp = (property) => {
-    const rawPhone = property?.agent?.phone || "+919876543210";
-    const cleanPhone = rawPhone.replace(/[^0-9]/g, "");
+    const cleanPhone = cleanPhoneOrNull(property?.agent?.phone);
+    if (!cleanPhone) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The contact number for this property is not available."
+      );
+      return;
+    }
     const text = encodeURIComponent(
       `Hello! I am interested in ${property?.title || "your property"} (${property?.price || ""}) in ${property?.location || "Chennai"}.`
     );
     Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`).catch(() => {
-      Alert.alert("WhatsApp Not Available", `Please contact ${property?.agent?.name || "Agent"} at ${rawPhone}`);
+      Alert.alert("WhatsApp Not Available", "Could not open WhatsApp for this contact.");
     });
   };
 
   const handleCall = (phone, name = "Agent") => {
-    const cleanPhone = String(phone || "+919876543210").replace(/[^0-9+]/g, "");
-    Linking.openURL(`tel:${cleanPhone}`).catch(() => {
-      Alert.alert("Call Agent", `${name}: ${phone}`);
+    const digits = cleanPhoneOrNull(phone);
+    if (!digits) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        `The contact number${name && name !== "Agent" ? ` for ${name}` : ""} is not available.`
+      );
+      return;
+    }
+    Linking.openURL(`tel:+${digits}`).catch(() => {
+      Alert.alert("Call Unavailable", "Could not place this call.");
     });
   };
 
@@ -749,10 +719,10 @@ export default function SavedScreen({ navigation, route }) {
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={styles.sheetTitle}>
-                  {viewedNumberProperty?.agent?.name || "Verified Agent"}
+                  {viewedNumberProperty?.agent?.name || "Property contact"}
                 </Text>
                 <Text style={styles.sheetSub}>
-                  {viewedNumberProperty?.agent?.agency || "Chennai Prime Realty"}
+                  {viewedNumberProperty?.agent?.agency || "Contact details"}
                 </Text>
               </View>
               <TouchableOpacity
@@ -776,9 +746,16 @@ export default function SavedScreen({ navigation, route }) {
               style={styles.phoneBox}
               activeOpacity={0.7}
               onPress={() => {
+                if (!viewedNumberProperty?.agent?.phone) {
+                  Alert.alert(
+                    "Phone Number Unavailable",
+                    "The contact number for this property is not available."
+                  );
+                  return;
+                }
                 Alert.alert(
                   "Copied!",
-                  `${viewedNumberProperty?.agent?.phone || "+91 98401 22334"} copied to clipboard.`
+                  `${viewedNumberProperty?.agent?.phone} copied to clipboard.`
                 );
               }}
             >
@@ -788,7 +765,7 @@ export default function SavedScreen({ navigation, route }) {
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={styles.phoneLabel}>PHONE NUMBER</Text>
                 <Text style={styles.phoneNumber}>
-                  {viewedNumberProperty?.agent?.phone || "+91 98401 22334"}
+                  {viewedNumberProperty?.agent?.phone || "Not available"}
                 </Text>
               </View>
               <View style={styles.copyPill}>
@@ -832,6 +809,7 @@ export default function SavedScreen({ navigation, route }) {
         property={selectedProperty}
         onClose={() => setSelectedProperty(null)}
         onSelectProperty={(p) => setSelectedProperty(p)}
+        onLoginRequired={() => navigation.navigate("Login")}
         isWishlisted={isWishlisted}
         onToggleWishlist={toggleWishlist}
       />

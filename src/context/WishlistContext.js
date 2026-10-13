@@ -1,5 +1,4 @@
 import React, { createContext, useCallback, useContext, useState, useMemo } from "react";
-import ALL_PROPERTIES from "../data/properties";
 import { getAuthTokenSync } from "../api/client";
 import { fetchSavedWishlist, saveListingRemote, unsaveListingRemote } from "../api/saved";
 import { useAuth } from "./AuthContext";
@@ -23,8 +22,10 @@ function backendIdOf(property) {
 }
 
 export function WishlistProvider({ children }) {
-  // Initialize with initial sample properties
-  const [wishlist, setWishlist] = useState(ALL_PROPERTIES.slice(0, 2));
+  // P2 honesty: start empty. Logged-out users have no saved properties;
+  // authenticated BUYER accounts replace this with the server wishlist via
+  // refreshWishlist(). Never seed with sample catalog records.
+  const [wishlist, setWishlist] = useState([]);
   // Buyer endpoints 403 for non-BUYER roles (single active role per
   // account), so remote sync only runs for live BUYER accounts. Everyone
   // else keeps the existing local behavior — no request is ever sent.
@@ -104,17 +105,12 @@ export function WishlistProvider({ children }) {
     setWishlist([]);
   };
 
-  const restoreDefaultWishlist = () => {
-    setWishlist(ALL_PROPERTIES);
-  };
-
   const contextValue = useMemo(() => ({
     wishlist,
     isWishlisted,
     toggleWishlist,
     removeFromWishlist,
     clearWishlist,
-    restoreDefaultWishlist,
     refreshWishlist,
     wishlistLoading,
     wishlistSynced,

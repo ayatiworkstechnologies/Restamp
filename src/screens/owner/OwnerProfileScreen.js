@@ -240,7 +240,7 @@ export default function OwnerProfileScreen({ navigation }) {
               <Text style={styles.menuLabel}>Current Plan</Text>
             </View>
             <View style={styles.badgeRow}>
-              <Text style={styles.planBadge}>{subscription?.planName || "Owner Pro"}</Text>
+              <Text style={styles.planBadge}>{subscription?.planName || "Standard"}</Text>
               <ChevronRight size={16} color="#94A3B8" />
             </View>
           </TouchableOpacity>

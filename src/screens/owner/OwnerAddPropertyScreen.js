@@ -1140,6 +1140,12 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     setFailedUploadIds([]);
     setUploadedOkIds([]);
     setUploadError(null);
+    // Clear our own route params before leaving: a later bare Add tab press
+    // supplies no params, so without this the just-published edit (or form
+    // state) would be resurrected as stale. Same mechanism as
+    // exitToProperties; paused mid-edit progress is untouched because this
+    // runs only on publish success.
+    navigation.setParams(freshAddParams());
     navigation.navigate("OwnerPublishSuccess", {
       property: publishedProperty,
       serverResponse: created,

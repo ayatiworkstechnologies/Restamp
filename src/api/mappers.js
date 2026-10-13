@@ -137,6 +137,21 @@ export function buildListingParams(ui, page, pageSize) {
     const n = parseInt(ui.bhk, 10);
     if (!Number.isNaN(n)) params.bedrooms = n;
   }
+  // Construction status has a real backend filter (exact canonical match).
+  // Unknown labels are omitted (never invented); the screens keep their
+  // client-side pass as a second layer for legacy shapes.
+  const statusMap = {
+    "Ready to move": "READY_TO_MOVE",
+    "Under Construction": "UNDER_CONSTRUCTION",
+    "New Launch": "NEW_LAUNCH",
+    READY_TO_MOVE: "READY_TO_MOVE",
+    UNDER_CONSTRUCTION: "UNDER_CONSTRUCTION",
+    NEW_LAUNCH: "NEW_LAUNCH",
+  };
+  const statusVal = ui.constructionStatus || ui.status;
+  if (statusVal && statusVal !== "All Status" && statusMap[statusVal]) {
+    params.construction_status = statusMap[statusVal];
+  }
   // UI budgets are rupees; API takes paise.
   const lo = Math.max(ui.presetMinRupees || 0, ui.minRupees || 0, ui.budgetMin || 0);
   const rawHi = Math.min(

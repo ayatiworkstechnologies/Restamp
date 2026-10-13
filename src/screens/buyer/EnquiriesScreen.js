@@ -29,7 +29,6 @@ import {
   ArrowLeft,
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
-import ALL_PROPERTIES from "../../data/properties";
 import { useWishlist } from "../../context/WishlistContext";
 import { useAuth } from "../../context/AuthContext";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
@@ -71,80 +70,15 @@ function toRow(e) {
   };
 }
 
-const INITIAL_ENQUIRIES = [
-  {
-    id: "enq-1",
-    propertyId: "rec-omr-1",
-    agentName: "Arun Kumar",
-    agency: "OMR Tech Realty",
-    phone: "+91 98840 55667",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80",
-    propertyTitle: "2 BHK Luxury Apartment in Anna Nagar",
-    propertyPrice: "₹20K – ₹30K",
-    propertyLocation: "Anna Nagar, Chennai",
-    propertyImage: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=400&q=80",
-    lastMessage: "Scheduled site visit enquiry. Owner confirmed inspection for tomorrow.",
-    time: "Today • 10:35 AM",
-    unread: true,
-    category: "Site Visits",
-    status: "Direct Enquiry",
-    scheduledVisit: "Sat, 3:30 PM",
-  },
-  {
-    id: "enq-2",
-    propertyId: "chennai-1",
-    agentName: "Priya Sundaram",
-    agency: "Anna Nagar Elite Homes",
-    phone: "+91 98401 22334",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80",
-    propertyTitle: "3 BHK Premium Sea-View Villa in ECR",
-    propertyPrice: "₹2.2 Cr – ₹2.5 Cr",
-    propertyLocation: "ECR, Chennai",
-    propertyImage: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=400&q=80",
-    lastMessage: "Scheduled site visit enquiry. Legal documentation verified with bank loan assistance.",
-    time: "Yesterday • 4:15 PM",
-    unread: false,
-    category: "Site Visits",
-    status: "Visit Scheduled",
-    scheduledVisit: "Tomorrow, 4:00 PM",
-  },
-  {
-    id: "enq-3",
-    propertyId: "rec-omr-2",
-    agentName: "Karthik Raman",
-    agency: "Chennai Prime Realty",
-    phone: "+91 97909 33445",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80",
-    propertyTitle: "Commercial Office Floor in Guindy",
-    propertyPrice: "₹80K – ₹90K",
-    propertyLocation: "Guindy, Chennai",
-    propertyImage: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=400&q=80",
-    lastMessage: "Scheduled site visit enquiry. Available for immediate IT/Commercial fit-outs.",
-    time: "2 days ago",
-    unread: false,
-    category: "Active",
-    status: "Direct Enquiry",
-    scheduledVisit: null,
-  },
-  {
-    id: "enq-4",
-    propertyId: "chennai-2",
-    agentName: "Ramesh Kumar",
-    agency: "Prime Corridor Estates",
-    phone: "+91 98410 77889",
-    avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=300&q=80",
-    propertyTitle: "Shanthi Colony Gated House",
-    propertyPrice: "₹3.10 Cr",
-    propertyLocation: "Shanthi Colony, Anna Nagar",
-    propertyImage: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=400&q=80",
-    lastMessage: "Advance token verified and registration draft submitted with the legal team. Deal closed!",
-    time: "5 days ago",
-    unread: false,
-    category: "Closed",
-    status: "Closed",
-    scheduledVisit: null,
-  },
-];
+// P2 honesty: no sample enquiries. The list starts empty; authenticated BUYER
+// accounts replace it with real API rows. Failures surface an error state and
+// never render fabricated conversations.
+
+// Returns digits-only phone or null when no valid number is available.
+function cleanPhoneOrNull(raw) {
+  const digits = String(raw || "").replace(/[^0-9]/g, "");
+  return digits.length > 0 ? digits : null;
+}
 
 const FILTER_TABS = ["All", "Site Visits", "Negotiating", "Closed"];
 
@@ -152,12 +86,14 @@ export default function EnquiriesScreen({ navigation, route }) {
   const { wishlist, isWishlisted, toggleWishlist } = useWishlist();
   const { user: authUser } = useAuth();
   // Buyer endpoints 403 for non-BUYER roles: only fetch while the account
-  // holds BUYER, otherwise keep the existing local mock list untouched.
+  // holds BUYER. Everyone else sees an honest empty list (no sample data).
   const isBuyerRole = authUser?.role === "BUYER";
-  // null = not loaded from server (logged out or not yet fetched) -> existing mock list.
+  // null = not loaded from server yet; [] = loaded but empty (or logged out).
+  // listError distinguishes a failed request from a genuine empty result.
   const [serverEnquiries, setServerEnquiries] = useState(null);
   const [listLoading, setListLoading] = useState(false);
-  const enquiries = serverEnquiries ?? INITIAL_ENQUIRIES;
+  const [listError, setListError] = useState(false);
+  const enquiries = serverEnquiries ?? [];
   const [activeTab, setActiveTab] = useState(route?.params?.initialTab || "All");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -168,49 +104,54 @@ export default function EnquiriesScreen({ navigation, route }) {
   }, [route?.params?.initialTab]);
 
   // Pull the authenticated buyer's real enquiries whenever the screen gains
-  // focus. Logged-out or non-buyer users keep the existing local mock
-  // behavior untouched (their buyer reads would 403).
+  // focus. Logged-out or non-buyer users see an honest empty list (their
+  // buyer reads would 403). Failures set listError and never show samples.
+  const loadEnquiries = useCallback(() => {
+    if (!getAuthTokenSync() || !isBuyerRole) {
+      setServerEnquiries([]);
+      setListError(false);
+      setListLoading(false);
+      return;
+    }
+    setListLoading(true);
+    setListError(false);
+    fetchMyEnquiries(1, 100).then(
+      (data) => {
+        setServerEnquiries((data.items || []).map(toRow));
+        setListError(false);
+        setListLoading(false);
+      },
+      () => {
+        setListError(true);
+        setListLoading(false);
+      }
+    );
+  }, [isBuyerRole]);
+
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      if (!getAuthTokenSync() || !isBuyerRole) {
-        return undefined;
-      }
-      setListLoading(true);
-      fetchMyEnquiries(1, 100).then(
-        (data) => {
-          if (!cancelled) {
-            setServerEnquiries((data.items || []).map(toRow));
-            setListLoading(false);
-          }
-        },
-        () => {
-          if (!cancelled) {
-            setListLoading(false);
-          }
-        }
-      );
-      return () => {
-        cancelled = true;
-      };
-    }, [isBuyerRole])
+      loadEnquiries();
+      return undefined;
+    }, [loadEnquiries])
   );
 
   // Modals
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [contactSheetEnquiry, setContactSheetEnquiry] = useState(null);
 
-  // Filter
+  // Filter (real rows carry no category/scheduledVisit/time, so they appear
+  // under All; tab filters never invent matches for them).
   const filteredEnquiries = enquiries.filter((item) => {
+    const statusText = item.status || "";
     const matchesTab =
       activeTab === "All"
         ? true
         : activeTab === "Site Visits"
         ? item.category === "Site Visits" || !!item.scheduledVisit
         : activeTab === "Negotiating"
-        ? item.category === "Negotiating" || item.status.includes("Negotiat")
+        ? item.category === "Negotiating" || statusText.includes("Negotiat")
         : activeTab === "Closed"
-        ? item.category === "Closed" || item.status.includes("Closed")
+        ? item.category === "Closed" || statusText.includes("Closed")
         : true;
 
     const matchesSearch =
@@ -223,45 +164,48 @@ export default function EnquiriesScreen({ navigation, route }) {
     return matchesTab && matchesSearch;
   });
 
-  // Contact Handlers
+  // Contact Handlers (P2 honesty: only message/call a genuine number; real
+  // enquiry rows carry no phone, so these show an unavailable message.)
   const handleWhatsApp = (item) => {
-    const rawPhone = item.phone || "+919876543210";
-    const cleanPhone = rawPhone.replace(/[^0-9]/g, "");
+    const cleanPhone = cleanPhoneOrNull(item.phone);
+    if (!cleanPhone) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The contact number for this enquiry is not available."
+      );
+      return;
+    }
+    const greeting = item.agentName ? `Hello ${item.agentName}! ` : "Hello! ";
     const text = encodeURIComponent(
-      `Hello ${item.agentName}! I am following up on my enquiry for ${item.propertyTitle} (${item.propertyPrice}) in ${item.propertyLocation} on RESTAMP.`
+      `${greeting}I am following up on my enquiry for ${item.propertyTitle} (${item.propertyPrice}) on RESTAMP.`
     );
     Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`).catch(() => {
-      Alert.alert("WhatsApp Not Available", `Please contact ${item.agentName} at ${rawPhone}`);
+      Alert.alert("WhatsApp Not Available", "Could not open WhatsApp for this contact.");
     });
   };
 
   const handleCall = (item) => {
-    const rawPhone = item.phone || "+919876543210";
-    const cleanPhone = rawPhone.replace(/[^0-9+]/g, "");
-    Linking.openURL(`tel:${cleanPhone}`).catch(() => {
-      Alert.alert("Call Contact", `${item.agentName}: ${rawPhone}`);
+    const cleanPhone = cleanPhoneOrNull(item.phone);
+    if (!cleanPhone) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The contact number for this enquiry is not available."
+      );
+      return;
+    }
+    Linking.openURL(`tel:+${cleanPhone}`).catch(() => {
+      Alert.alert("Call Unavailable", "Could not place this call.");
     });
   };
 
   const handleOpenProperty = (item) => {
-    const found = ALL_PROPERTIES.find((p) => p.id === item.propertyId);
-    if (found) {
-      setSelectedProperty(found);
-    } else {
-      setSelectedProperty({
-        id: item.propertyId,
-        title: item.propertyTitle,
-        price: item.propertyPrice,
-        location: item.propertyLocation,
-        image: item.propertyImage,
-        agent: {
-          name: item.agentName,
-          agency: item.agency,
-          phone: item.phone,
-          avatar: item.avatar,
-        },
-      });
-    }
+    // P2 honesty: no sample-catalog lookup and no synthetic property
+    // construction. Real enquiry rows carry no full property record, so there
+    // is nothing genuine to open yet (detail fetch per enquiry is P4 scope).
+    Alert.alert(
+      "Property Details Unavailable",
+      "Full property details for this enquiry are not available yet."
+    );
   };
 
   return (
@@ -362,10 +306,25 @@ export default function EnquiriesScreen({ navigation, route }) {
           })}
         </ScrollView>
 
-        {/* Enquiries List (Cards Matching Screenshot Layout) */}
+        {/* Enquiries List (honest states: loading / error / empty / real rows) */}
         {listLoading && serverEnquiries === null ? (
           <View style={styles.emptyContainer}>
             <ActivityIndicator size="small" color={COLORS.primary} />
+          </View>
+        ) : listError && enquiries.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MessageCircle size={36} color="#CBD5E1" strokeWidth={1.5} />
+            <Text style={styles.emptyTitle}>Couldn't load enquiries</Text>
+            <Text style={styles.emptySubtitle}>
+              Please check your connection and try again.
+            </Text>
+            <TouchableOpacity
+              style={[styles.tabBtn, styles.tabBtnActive, { marginTop: 12 }]}
+              onPress={loadEnquiries}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.tabText, styles.tabTextActive]}>Retry</Text>
+            </TouchableOpacity>
           </View>
         ) : filteredEnquiries.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -400,7 +359,7 @@ export default function EnquiriesScreen({ navigation, route }) {
 
                   <View style={styles.infoCol}>
                     <Text style={styles.contactName} numberOfLines={1}>
-                      {item.agentName}
+                      {item.agentName || item.propertyTitle || "Enquiry"}
                     </Text>
                     <Text style={styles.contactSub} numberOfLines={1}>
                       {item.category === "Site Visits"
@@ -500,10 +459,12 @@ export default function EnquiriesScreen({ navigation, route }) {
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={styles.sheetTitle}>
-                  {contactSheetEnquiry?.agentName}
+                  {contactSheetEnquiry?.agentName ||
+                    contactSheetEnquiry?.propertyTitle ||
+                    "Enquiry"}
                 </Text>
                 <Text style={styles.sheetSub}>
-                  {contactSheetEnquiry?.agency}
+                  {contactSheetEnquiry?.agency || "Enquiry details"}
                 </Text>
               </View>
               <TouchableOpacity
@@ -532,6 +493,13 @@ export default function EnquiriesScreen({ navigation, route }) {
               style={styles.phoneBox}
               activeOpacity={0.7}
               onPress={() => {
+                if (!contactSheetEnquiry?.phone) {
+                  Alert.alert(
+                    "Phone Number Unavailable",
+                    "The contact number for this enquiry is not available."
+                  );
+                  return;
+                }
                 Alert.alert(
                   "Copied!",
                   `${contactSheetEnquiry?.phone} copied to clipboard.`
@@ -544,7 +512,7 @@ export default function EnquiriesScreen({ navigation, route }) {
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={styles.phoneLabel}>PHONE NUMBER</Text>
                 <Text style={styles.phoneNumber}>
-                  {contactSheetEnquiry?.phone}
+                  {contactSheetEnquiry?.phone || "Not available"}
                 </Text>
               </View>
               <View style={styles.copyPill}>
@@ -592,6 +560,7 @@ export default function EnquiriesScreen({ navigation, route }) {
         property={selectedProperty}
         onClose={() => setSelectedProperty(null)}
         onSelectProperty={(p) => setSelectedProperty(p)}
+        onLoginRequired={() => navigation.navigate("Login")}
         isWishlisted={isWishlisted}
         onToggleWishlist={toggleWishlist}
       />

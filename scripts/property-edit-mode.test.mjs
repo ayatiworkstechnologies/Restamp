@@ -438,6 +438,54 @@ check("N7 emptied email clears its error",
 check("N8 valid email keeps no error",
   isValidOwnerEmail("owner@example.com") === true);
 
+// --- 13. Publish exit clears stale Add params (stale Add-tab fix) ---
+// finishPublishSuccess must reset the Add route params BEFORE navigating to
+// OwnerPublishSuccess, so a later bare Add-tab press (no params) cannot
+// resurrect the just-published edit/form. Verified by source assertion (the
+// screen itself cannot run in this harness) plus inspection and build.
+const addScreenSrc = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "screens", "owner", "OwnerAddPropertyScreen.js"),
+  "utf8"
+);
+{
+  const fnStart = addScreenSrc.indexOf("const finishPublishSuccess");
+  const navCall = addScreenSrc.indexOf('navigation.navigate("OwnerPublishSuccess"', fnStart);
+  const clearCall = addScreenSrc.indexOf("navigation.setParams(freshAddParams())", fnStart);
+  check("F1 publish clears Add params before success navigation",
+    fnStart !== -1 && navCall !== -1 && clearCall !== -1 && clearCall < navCall);
+}
+
+// --- 14. Unfinished-edit resume + draft-save feedback (regression review) ---
+// G1: the Add tab must carry no tabPress listener/reset — a bare tab press
+// supplies no params, so any listener that resets would discard a paused
+// mid-edit. Scoped to the Add Tab.Screen block only, so unrelated future
+// listeners elsewhere never trip this guard.
+const ownerNavSrc = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "navigation", "OwnerNavigator.js"),
+  "utf8"
+);
+{
+  const addStart = ownerNavSrc.indexOf('name="Add"');
+  const nextScreen = ownerNavSrc.indexOf("<Tab.Screen", addStart + 1);
+  const addBlock = ownerNavSrc.slice(addStart, nextScreen === -1 ? undefined : nextScreen);
+  check("G1 no Add-tab press reset (paused edits resume)",
+    addStart !== -1 &&
+      !addBlock.includes("tabPress") &&
+      !addBlock.includes("listeners") &&
+      !addBlock.includes("resetForm") &&
+      !addBlock.includes("setParams"));
+}
+// G2: draft-save feedback already exists as button state (no toast required):
+// saving state, saved/disabled state, and a visible failure alert.
+check("G2 draft saving state shown",
+  addScreenSrc.includes("setSavingDraft(true)") &&
+    addScreenSrc.includes('"Saving..."'));
+check("G2 draft saved/disabled state shown",
+  addScreenSrc.includes("saveDraftBtnSaved") &&
+    addScreenSrc.includes("disabled={savingDraft"));
+check("G2 draft failure visibly reported",
+  addScreenSrc.includes('"Could Not Save Draft"'));
+
 if (failures > 0) {
   console.log(`${failures} FAILURE(S)`);
   process.exit(1);

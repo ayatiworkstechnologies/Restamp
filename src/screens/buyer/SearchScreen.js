@@ -64,9 +64,11 @@ const SORT_OPTIONS = [
   { id: "relevance", label: "Relevance" },
   { id: "price_asc", label: "Price: Low to High" },
   { id: "price_desc", label: "Price: High to Low" },
-  { id: "rating", label: "Rating: High to Low" },
   { id: "area_desc", label: "Size: Largest First" },
 ];
+// NOTE: no rating sort is offered — the backend has no rating field, so a
+// "Rating: High to Low" option could not sort accurately. The mapper keeps a
+// defensive rating->relevance fallback for legacy state only.
 
 const BUDGET_OPTIONS = [
   { label: "All Budgets", min: 0, max: Infinity },
@@ -207,9 +209,10 @@ export default function SearchScreen({ navigation, route }) {
   }, [route?.params]);
 
   // Discovery data: server-side filter/sort/pagination via GET /buyer/listings.
-  // Deal, type, BHK, budgets, query and supported sorts run on the backend.
-  // Category pseudo-filters (Pool/Townhouse) and construction status have no backend
-  // equivalent and are applied client-side below; verified-only is guaranteed server-side.
+  // Deal, type, BHK, budgets, construction status, query and supported sorts
+  // run on the backend. Category pseudo-filters (Pool/Townhouse) have no
+  // backend equivalent and are applied client-side below; verified-only is
+  // guaranteed server-side.
   const budgetPreset = BUDGET_OPTIONS.find((b) => b.label === selectedBudget);
   const {
     items: apiProperties,
@@ -231,6 +234,7 @@ export default function SearchScreen({ navigation, route }) {
       minRupees: minBudget,
       maxRupees: maxBudget,
       sort: selectedSort,
+      constructionStatus: selectedStatus,
     },
     { pageSize: 20 }
   );
@@ -271,41 +275,93 @@ export default function SearchScreen({ navigation, route }) {
     }
   };
 
-  // Contact Handlers
+  // Contact Handlers (honest: only a number returned by the authorized
+  // contact-reveal API may be messaged/called — never a sample number.
+  // Card-level actions have no revealed number, so they direct buyers to
+  // View Number instead of dialing anything.)
   const handleWhatsApp = (property) => {
-    const rawPhone = property.agent?.phone || "+919876543210";
-    const cleanPhone = rawPhone.replace(/[^0-9]/g, "");
+    const cleanPhone = cleanPhoneOrNull(property?.agent?.phone);
+    if (!cleanPhone) {
+      Alert.alert(
+        "Contact Number Unavailable",
+        "Use View Number on this property to request the seller's contact."
+      );
+      return;
+    }
     const text = encodeURIComponent(
       `Hello! I am interested in ${property.title} (${property.price}) in ${property.location} listed on RESTAMP.`
     );
     Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`).catch(() => {
-      Alert.alert("WhatsApp Not Available", `Please contact ${property.agent?.name} at ${rawPhone}`);
+      Alert.alert("WhatsApp Not Available", "Could not open WhatsApp for this contact.");
     });
   };
 
   const handleCall = (property) => {
-    const rawPhone = property.agent?.phone || "+919876543210";
-    const cleanPhone = rawPhone.replace(/[^0-9+]/g, "");
-    Linking.openURL(`tel:${cleanPhone}`).catch(() => {
-      Alert.alert("Call Agent", `${property.agent?.name || "Agent"}: ${rawPhone}`);
+    const digits = cleanPhoneOrNull(property?.agent?.phone);
+    if (!digits) {
+      Alert.alert(
+        "Contact Number Unavailable",
+        "Use View Number on this property to request the seller's contact."
+      );
+      return;
+    }
+    Linking.openURL(`tel:+${digits}`).catch(() => {
+      Alert.alert("Call Unavailable", "Could not place this call.");
     });
   };
 
+  // Returns digits-only phone or null when no valid number is available.
+  // NOTE: server listings carry no contact fields, so this is null unless a
+  // revealed number was merged into the property first.
+  function cleanPhoneOrNull(raw) {
+    const digits = String(raw || "").replace(/[^0-9]/g, "");
+    return digits.length > 0 ? digits : null;
+  }
+
+  // Contact-reveal state for the open sheet: "idle" | "loading" |
+  // "revealed" | "failed" | "login". A number is shown, copied, or dialed
+  // only in "revealed", i.e. after the authorized backend call succeeds.
+  const [revealState, setRevealState] = useState("idle");
+  const revealReq = useRef(0);
+
   const handleViewNumber = (property) => {
     setViewedNumberProperty(property);
-    // Phase 6: live contact reveal when authenticated. The sheet keeps showing
-    // the existing mock number until (and unless) the audited API succeeds —
-    // a real number is never displayed without a successful reveal response.
     setRevealedPhone(null);
     const backendId = property && property.backendId;
-    if (typeof backendId === "number" && getAuthTokenSync()) {
-      revealContactPhone(backendId).then(
-        (phone) => {
-          if (phone) setRevealedPhone(phone);
-        },
-        () => {}
-      );
+    if (typeof backendId !== "number") {
+      // No backend record behind this card: nothing genuine to reveal.
+      setRevealState("failed");
+      return;
     }
+    if (!getAuthTokenSync()) {
+      setRevealState("login");
+      return;
+    }
+    // Guard against repeated taps: only the latest request may settle.
+    const myReq = ++revealReq.current;
+    setRevealState("loading");
+    revealContactPhone(backendId).then(
+      (phone) => {
+        if (revealReq.current !== myReq) return;
+        if (phone) {
+          setRevealedPhone(phone);
+          setRevealState("revealed");
+        } else {
+          setRevealState("failed");
+        }
+      },
+      () => {
+        if (revealReq.current !== myReq) return;
+        setRevealState("failed");
+      }
+    );
+  };
+
+  const handleLoginFromSheet = () => {
+    // The Login flow resets to MainTabs (no return context by design), so
+    // the buyer re-taps View Number after signing in. Auth logic untouched.
+    setViewedNumberProperty(null);
+    navigation.navigate("Login");
   };
 
   const handleClearAllFilters = () => {
@@ -705,24 +761,35 @@ export default function SearchScreen({ navigation, route }) {
                   <View style={styles.builderFooterRow}>
                     <View style={styles.agentContactLeft}>
                       <View style={styles.agentAvatarBox}>
-                        <Image
-                          source={{
-                            uri:
-                              property.agent?.avatar ||
-                              "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80",
-                          }}
-                          style={styles.agentAvatar}
-                        />
+                        {property.agent?.avatar ? (
+                          <Image
+                            source={{
+                              uri: property.agent.avatar,
+                            }}
+                            style={styles.agentAvatar}
+                          />
+                        ) : (
+                          <View
+                            style={[
+                              styles.agentAvatar,
+                              { alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" },
+                            ]}
+                          >
+                            <Check size={12} color="#64748B" strokeWidth={3} />
+                          </View>
+                        )}
                         <View style={styles.agentVerifiedBadge}>
                           <Check size={7} color="#FFFFFF" strokeWidth={3.5} />
                         </View>
                       </View>
                       <View style={styles.builderInfoBox}>
-                        <Text style={styles.agencyNameText} numberOfLines={1}>
-                          {property.agent?.agency || "Chennai Prime Realty"}
-                        </Text>
+                        {property.agent?.agency ? (
+                          <Text style={styles.agencyNameText} numberOfLines={1}>
+                            {property.agent.agency}
+                          </Text>
+                        ) : null}
                         <Text style={styles.agentSubText} numberOfLines={1}>
-                          {property.agent?.name || "Verified Agent"}
+                          {property.agent?.name || "Seller"}
                         </Text>
                       </View>
                     </View>
@@ -776,7 +843,7 @@ export default function SearchScreen({ navigation, route }) {
             );
           })
         )}
-        {!listingsLoading && !listingsError && total > 0 && filteredProperties.length < total && (
+        {!listingsLoading && !listingsError && total > 0 && apiProperties.length < total && (
           <TouchableOpacity
             style={[styles.clearFiltersBtn, { alignSelf: "center", marginVertical: 16 }]}
             onPress={loadMoreListings}
@@ -1120,7 +1187,7 @@ export default function SearchScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            {/* Agent Profile Box */}
+            {/* Agent Profile Box (honest: no invented agent identity) */}
             <View style={styles.sheetAgentProfileCard}>
               <View style={styles.modalAvatarBox}>
                 {viewedNumberProperty?.agent?.avatar ? (
@@ -1138,25 +1205,28 @@ export default function SearchScreen({ navigation, route }) {
 
               <View style={styles.sheetAgentInfo}>
                 <Text style={styles.contactAgentName}>
-                  {viewedNumberProperty?.agent?.name || "Verified Agent"}
+                  {viewedNumberProperty?.agent?.name || "Seller"}
                 </Text>
-                <Text style={styles.contactAgencyName}>
-                  {viewedNumberProperty?.agent?.agency || "Chennai Verified Partner"}
-                </Text>
+                {viewedNumberProperty?.agent?.agency ? (
+                  <Text style={styles.contactAgencyName}>
+                    {viewedNumberProperty.agent.agency}
+                  </Text>
+                ) : null}
                 <Text style={styles.sheetPropertyContext} numberOfLines={1}>
                   Ref: <Text style={styles.sheetPropertyTitleHighlight}>{viewedNumberProperty?.title}</Text> ({viewedNumberProperty?.price})
                 </Text>
               </View>
             </View>
 
-            {/* Phone Number Display with Tap to Copy */}
+            {/* Phone Number Display: real number only after authorized reveal */}
             <TouchableOpacity
               style={styles.phoneDisplayBox}
               activeOpacity={0.7}
               onPress={() => {
+                if (revealState !== "revealed" || !revealedPhone) return;
                 Alert.alert(
                   "Phone Number Copied! 📋",
-                  `${revealedPhone || viewedNumberProperty?.agent?.phone || "+91 98401 22334"} is ready to use.`
+                  `${revealedPhone} is ready to use.`
                 );
               }}
             >
@@ -1166,58 +1236,94 @@ export default function SearchScreen({ navigation, route }) {
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={styles.phoneLabelSmall}>CONTACT NUMBER</Text>
                 <Text style={styles.phoneDisplayText}>
-                  {revealedPhone || viewedNumberProperty?.agent?.phone || "+91 98401 22334"}
+                  {revealState === "revealed" && revealedPhone
+                    ? revealedPhone
+                    : revealState === "loading"
+                      ? "Requesting number…"
+                      : revealState === "login"
+                        ? "Log in to view"
+                        : "Not available"}
                 </Text>
               </View>
-              <View style={styles.copyBadge}>
-                <Copy size={13} color={COLORS.primary} style={{ marginRight: 4 }} />
-                <Text style={styles.copyBadgeText}>Copy</Text>
-              </View>
+              {revealState === "revealed" && revealedPhone ? (
+                <View style={styles.copyBadge}>
+                  <Copy size={13} color={COLORS.primary} style={{ marginRight: 4 }} />
+                  <Text style={styles.copyBadgeText}>Copy</Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
 
-            <Text style={styles.sheetAvailabilityNote}>
-              ⚡ Usually responds within 15 minutes • 9:00 AM – 8:00 PM
-            </Text>
+            {revealState === "login" ? (
+              <Text style={styles.sheetAvailabilityNote}>
+                Sign in to request the seller's contact number.
+              </Text>
+            ) : revealState === "failed" ? (
+              <Text style={styles.sheetAvailabilityNote}>
+                The contact number could not be loaded. Check your connection and reopen to retry.
+              </Text>
+            ) : (
+              <Text style={styles.sheetAvailabilityNote}>
+                ⚡ Usually responds within 15 minutes • 9:00 AM – 8:00 PM
+              </Text>
+            )}
 
-            {/* Action Buttons: Call Now & WhatsApp */}
+            {/* Action Buttons: Call Now & WhatsApp (revealed number only) */}
             <View style={styles.contactModalActions}>
-              <TouchableOpacity
-                style={styles.callNowBtn}
-                activeOpacity={0.85}
-                onPress={() => {
-                  handleCall(
-                    revealedPhone && viewedNumberProperty
-                      ? {
-                          ...viewedNumberProperty,
-                          agent: { ...(viewedNumberProperty.agent || {}), phone: revealedPhone },
-                        }
-                      : viewedNumberProperty
-                  );
-                  setViewedNumberProperty(null);
-                }}
-              >
-                <Phone size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.callNowBtnText}>Call Now</Text>
-              </TouchableOpacity>
+              {revealState === "login" ? (
+                <TouchableOpacity
+                  style={styles.callNowBtn}
+                  activeOpacity={0.85}
+                  onPress={handleLoginFromSheet}
+                >
+                  <Text style={styles.callNowBtnText}>Log In to Continue</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[
+                      styles.callNowBtn,
+                      revealState !== "revealed" && { opacity: 0.5 },
+                    ]}
+                    activeOpacity={0.85}
+                    disabled={revealState !== "revealed"}
+                    onPress={() => {
+                      if (revealState !== "revealed" || !revealedPhone || !viewedNumberProperty) {
+                        return;
+                      }
+                      handleCall({
+                        ...viewedNumberProperty,
+                        agent: { ...(viewedNumberProperty.agent || {}), phone: revealedPhone },
+                      });
+                      setViewedNumberProperty(null);
+                    }}
+                  >
+                    <Phone size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.callNowBtnText}>Call Now</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.whatsappNowBtn}
-                activeOpacity={0.85}
-                onPress={() => {
-                  handleWhatsApp(
-                    revealedPhone && viewedNumberProperty
-                      ? {
-                          ...viewedNumberProperty,
-                          agent: { ...(viewedNumberProperty.agent || {}), phone: revealedPhone },
-                        }
-                      : viewedNumberProperty
-                  );
-                  setViewedNumberProperty(null);
-                }}
-              >
-                <MessageCircle size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.whatsappNowBtnText}>WhatsApp</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.whatsappNowBtn,
+                      revealState !== "revealed" && { opacity: 0.5 },
+                    ]}
+                    activeOpacity={0.85}
+                    disabled={revealState !== "revealed"}
+                    onPress={() => {
+                      if (revealState !== "revealed" || !revealedPhone || !viewedNumberProperty) {
+                        return;
+                      }
+                      handleWhatsApp({
+                        ...viewedNumberProperty,
+                        agent: { ...(viewedNumberProperty.agent || {}), phone: revealedPhone },
+                      });
+                      setViewedNumberProperty(null);
+                    }}
+                  >
+                    <MessageCircle size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.whatsappNowBtnText}>WhatsApp</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -1269,7 +1375,7 @@ export default function SearchScreen({ navigation, route }) {
           setSelectedProperty(null);
         }}
         onSelectProperty={(p) => openProperty(p)}
-        isWishlisted={isWishlisted}
+        onLoginRequired={() => navigation.navigate("Login")}        isWishlisted={isWishlisted}
         onToggleWishlist={toggleWishlist}
         detailLoading={detailLoading}
       />

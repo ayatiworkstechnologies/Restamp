@@ -577,6 +577,86 @@ export async function fetchOwnerListings(page = 1, pageSize = 20) {
 }
 
 /**
+ * Fetch the authenticated owner's buyer-enquiry leads (P3 leads MVP).
+ * Only rows the backend authorizes for this owner are ever returned.
+ * @param {{propertyListingId?: number, status?: "NEW"|"CONTACTED"|"CLOSED", page?: number, pageSize?: number}} opts
+ * @returns {Promise<{items: Array, total: number, page: number, page_size: number}>}
+ */
+export async function fetchOwnerLeads({ propertyListingId, status, page = 1, pageSize = 50 } = {}) {
+  const params = { page, page_size: pageSize };
+  if (propertyListingId != null) params.property_listing_id = propertyListingId;
+  if (status) params.status = status;
+  return apiGetAuth("/owner/leads", params);
+}
+
+/**
+ * Persist an owner-side lead status change (P4).
+ * Status accepts either UI casing ("contacted") or backend casing
+ * ("CONTACTED"); it is normalized to the backend vocabulary
+ * (NEW/CONTACTED/CLOSED) — anything else rejects with a 422 ApiError.
+ * Returns the updated OwnerLeadOut row (phone-free). Callers must render
+ * from this server-confirmed response and roll back optimistic flips when
+ * the request fails.
+ */
+export async function updateOwnerLeadStatus(leadId, { status, closingReason } = {}) {
+  const normalized = String(status || "").toUpperCase();
+  const body = { status: normalized };
+  if (closingReason !== undefined && closingReason !== null) {
+    body.closing_reason = closingReason;
+  }
+  return apiPatchAuth(`/owner/leads/${leadId}`, body);
+}
+
+/**
+ * Paise integer -> short display string (mirrors backend price_display).
+ */
+function formatLeadPaise(paise, period) {
+  const rupees = Math.floor((paise || 0) / 100);
+  const main =
+    rupees >= 10000000
+      ? `₹${(rupees / 10000000).toFixed(2)} Cr`
+      : rupees >= 100000
+      ? `₹${(rupees / 100000).toFixed(2)} L`
+      : `₹${rupees.toLocaleString("en-IN")}`;
+  return period === "MONTHLY" ? `${main}/mo` : main;
+}
+
+/**
+ * Map a backend OwnerLeadOut to the shape owner lead screens render (P3).
+ * Only genuine backend fields are forwarded. Buyer phone, name, avatar,
+ * rating, budget, visit, and email have no backend source and stay
+ * undefined — callers render honest unavailable states instead of samples.
+ * propertyId is the string form of the numeric listing id so the existing
+ * selectPropertyLeads matching (same property id) keeps working; status is
+ * lowercased to the UI vocabulary ("new"/"contacted"/"closed").
+ */
+export function toOwnerLead(row) {
+  const listing = row && row.listing ? row.listing : null;
+  return {
+    id: row.id,
+    propertyId: row.property_listing_id != null ? String(row.property_listing_id) : undefined,
+    property_listing_id: row.property_listing_id,
+    buyer_user_id: row.buyer_user_id,
+    customerName: row.buyer_user_id != null ? `Buyer #${row.buyer_user_id}` : "Buyer enquiry",
+    phone: undefined,
+    avatar: undefined,
+    rating: undefined,
+    email: undefined,
+    message: row.message || undefined,
+    status: String(row.status || "NEW").toLowerCase(),
+    closedOutcome: row.closing_reason || undefined,
+    propertyTitle: listing ? listing.title : "",
+    propertyPrice: listing ? formatLeadPaise(listing.price_paise, listing.price_period) : "",
+    propertyLocality: "",
+    propertyImage: undefined,
+    budget: undefined,
+    timestamp: undefined,
+    visitData: undefined,
+    agency: undefined,
+  };
+}
+
+/**
  * Fetch a single owner listing by ID.
  * @param {number} listingId
  * @returns {Promise<object>}
@@ -631,6 +711,39 @@ export function resolveEditingListingId(routeParams) {
  */
 export function freshAddParams() {
   return { resetForm: Date.now(), initialStep: 1, editingProperty: null };
+}
+
+/**
+ * Select the leads belonging to one property (P0 honesty rule).
+ * Returns only genuinely matching records — possibly an empty array, which
+ * callers render as an empty state. Never invents leads: a property with no
+ * lead records has no leads. Matching mirrors the previous UI behavior
+ * (same property id, or same title case-insensitively).
+ */
+export function selectPropertyLeads(leads, property) {
+  const list = Array.isArray(leads) ? leads : [];
+  if (!property) return list;
+  return list.filter(
+    (l) =>
+      l.propertyId === property.id ||
+      (l.propertyTitle &&
+        property.title &&
+        l.propertyTitle.toLowerCase() === property.title.toLowerCase())
+  );
+}
+
+/**
+ * Derive owner activity totals from genuine property records only (P1).
+ * Missing counters count as zero; an empty or absent list totals to honest
+ * zeros — never fabricated fallback metrics. Non-array input yields zeros.
+ */
+export function sumOwnerMetrics(properties) {
+  const list = Array.isArray(properties) ? properties : [];
+  return {
+    totalViews: list.reduce((acc, p) => acc + (p.views || 0), 0),
+    totalEnquiries: list.reduce((acc, p) => acc + (p.enquiries || 0), 0),
+    totalVisits: list.reduce((acc, p) => acc + (p.visits || 0), 0),
+  };
 }
 
 /**

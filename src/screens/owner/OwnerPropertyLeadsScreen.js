@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   TextInput,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -31,6 +32,7 @@ import {
 
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
+import { selectPropertyLeads, fetchOwnerLeads, toOwnerLead, updateOwnerLeadStatus } from "../../api/owner";
 import StatusBadge from "../../components/owner/StatusBadge";
 import EmptyState from "../../components/owner/EmptyState";
 import OwnerSiteVisitModal from "./OwnerSiteVisitModal";
@@ -71,7 +73,7 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
   const [showPropertyModal, setShowPropertyModal] = useState(false);
 
   const formattedPrice = useMemo(() => {
-    if (!property) return "₹25,000 / month";
+    if (!property) return "—";
     if (property.priceFormatted) return property.priceFormatted;
     if (property.price) {
       const priceNum =
@@ -82,99 +84,111 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
         ? `₹${priceNum.toLocaleString("en-IN")}${property.priceUnit || ""}`
         : String(property.price);
     }
-    return "₹25,000 / month";
+    return "—";
   }, [property]);
 
-  // Filter leads specifically for this property
-  const projectLeads = useMemo(() => {
-    if (!property) return leads;
+  // Genuine backend leads for this property (P3). The backend validates the
+  // property filter against the caller's owned properties (foreign ids 404),
+  // and the client-side selectPropertyLeads match below keeps the existing
+  // no-leak guarantee as a second layer.
+  const [serverLeads, setServerLeads] = useState(null);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState(false);
+  const leadReqId = useRef(0);
 
-    const matched = leads.filter(
-      (l) =>
-        l.propertyId === property.id ||
-        (l.propertyTitle &&
-          property.title &&
-          l.propertyTitle.toLowerCase() === property.title.toLowerCase())
+  const routeListingId = useMemo(() => {
+    if (property && typeof property.listing_id === "number") return property.listing_id;
+    const raw = property ? property.listing_id ?? property.id : null;
+    const n = parseInt(String(raw ?? ""), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [property]);
+
+  const loadLeads = useCallback(() => {
+    if (routeListingId == null) {
+      setServerLeads([]);
+      setLeadsError(false);
+      setLeadsLoading(false);
+      return;
+    }
+    // Request-ID guard: stale responses must never overwrite newer rows.
+    const myReq = ++leadReqId.current;
+    setLeadsLoading(true);
+    setLeadsError(false);
+    fetchOwnerLeads({ propertyListingId: routeListingId, pageSize: 100 }).then(
+      (resp) => {
+        if (leadReqId.current !== myReq) return;
+        setServerLeads((resp.items || []).map(toOwnerLead));
+        setLeadsError(false);
+        setLeadsLoading(false);
+      },
+      () => {
+        if (leadReqId.current !== myReq) return;
+        setLeadsError(true);
+        setLeadsLoading(false);
+      }
     );
+  }, [routeListingId]);
 
-    // If matching leads exist, use them
-    if (matched.length > 0) return matched;
+  useEffect(() => {
+    loadLeads();
+  }, [loadLeads]);
 
-    // Fallback contextual mock leads for this specific property
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", loadLeads);
+    return unsubscribe;
+  }, [navigation, loadLeads]);
 
-    return [
-      {
-        id: `gen-lead-${property.id}-1`,
-        customerName: "Harrison Ledley",
-        phone: "+91 98840 12345",
-        email: "harrison.ledley@gmail.com",
-        avatar:
-          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-        propertyId: property.id,
-        propertyTitle: property.title,
-        propertyLocality: `${property.locality || "Anna Nagar"}, Chennai`,
-        propertyPrice: formattedPrice,
-        propertyImage: property.coverPhoto || property.images?.[0],
-        requirement: property.purpose || "Rent",
-        budget: formattedPrice,
-        rating: 5,
-        status: "new",
-        timestamp: "Today • 10:35 AM",
-        preferredVisitDate: "Tomorrow, 11:00 AM",
-        message: "Great place with a lovely garden. Conveniently located near the city",
-        visitData: null,
-      },
-      {
-        id: `gen-lead-${property.id}-2`,
-        customerName: "Deepak Verma",
-        phone: "+91 97910 88231",
-        email: "deepak.v@techcorp.in",
-        avatar:
-          "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=200&q=80",
-        propertyId: property.id,
-        propertyTitle: property.title,
-        propertyLocality: `${property.locality || "Anna Nagar"}, Chennai`,
-        propertyPrice: formattedPrice,
-        propertyImage: property.coverPhoto || property.images?.[0],
-        requirement: property.purpose || "Rent",
-        budget: formattedPrice,
-        rating: 5,
-        status: "negotiating",
-        timestamp: "Yesterday • 4:15 PM",
-        preferredVisitDate: "Saturday, 4:00 PM",
-        message: `Had a great site visit. We agree to ₹24,500/month. Ready to sign agreement with 10 months security deposit.`,
-        visitData: {
-          date: "Saturday, 28 Sep",
-          time: "4:00 PM",
-          note: "Family visit confirmed. Wants to check parking and kitchen layout.",
-        },
-      },
-      {
-        id: `gen-lead-${property.id}-3`,
-        customerName: "Priya Sundaram",
-        phone: "+91 94441 55678",
-        email: "priya.s@enterprise.in",
-        avatar:
-          "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
-        propertyId: property.id,
-        propertyTitle: property.title,
-        propertyLocality: `${property.locality || "Anna Nagar"}, Chennai`,
-        propertyPrice: formattedPrice,
-        propertyImage: property.coverPhoto || property.images?.[0],
-        requirement: property.purpose || "Rent",
-        budget: formattedPrice,
-        status: "visit_scheduled",
-        timestamp: "2 days ago",
-        preferredVisitDate: "Sunday, 11:30 AM",
-        message: "Photos look fantastic! Looking forward to viewing the property this weekend with my family.",
-        visitData: {
-          date: "Sunday, 29 Sep",
-          time: "11:30 AM",
-          note: "Wants to check natural light and ventilation.",
-        },
-      },
-    ];
-  }, [leads, property]);
+  // Invalidate in-flight fetches on unmount.
+  useEffect(() => {
+    return () => {
+      leadReqId.current++;
+    };
+  }, []);
+
+  // Mirror local-only status flips onto server rows (device-local until
+  // owner transition endpoints exist; a refetch restores the server state).
+  const patchServerLead = useCallback((leadId, patch) => {
+    setServerLeads((prev) =>
+      Array.isArray(prev) ? prev.map((l) => (l.id === leadId ? { ...l, ...patch } : l)) : prev
+    );
+  }, []);
+
+  // Persist a supported status change (P4): optimistic flip, server-confirmed
+  // row on success, honest error + refetch on failure (never false success).
+  const persistLeadStatus = useCallback(
+    async (leadId, status, closingReason) => {
+      patchServerLead(leadId, {
+        status,
+        ...(closingReason !== undefined ? { closedOutcome: closingReason } : {}),
+      });
+      updateLeadStatus(leadId, status, closingReason ?? undefined);
+      try {
+        const updated = await updateOwnerLeadStatus(leadId, { status, closingReason });
+        const mapped = toOwnerLead(updated);
+        setServerLeads((prev) =>
+          Array.isArray(prev) ? prev.map((l) => (l.id === leadId ? mapped : l)) : prev
+        );
+      } catch {
+        Alert.alert(
+          "Couldn't update lead",
+          "Please check your connection and try again."
+        );
+        loadLeads();
+      }
+    },
+    [patchServerLead, updateLeadStatus, loadLeads]
+  );
+
+  // Filter leads specifically for this property. Honest empty (P0+P3): a
+  // property with no lead records shows the empty state below — leads are
+  // never invented. Server rows come pre-filtered; local-only records are
+  // matched with the same genuine-only rule.
+  const projectLeads = useMemo(() => {
+    const server = Array.isArray(serverLeads) ? serverLeads : [];
+    const serverIds = new Set(server.map((l) => l.id));
+    const localOnly = (leads || []).filter((l) => !serverIds.has(l.id));
+    return selectPropertyLeads([...server, ...localOnly], property);
+  }, [serverLeads, leads, property]);
 
   // Tab and search filtered leads
   const filteredLeads = useMemo(() => {
@@ -200,13 +214,34 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
   }, [projectLeads, activeTab, searchQuery]);
 
   const handleCall = (lead) => {
-    Alert.alert("Calling Customer", `Dialing ${lead.customerName} at ${lead.phone || "+91 98840 12345"}...`, [
+    if (!lead.phone) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The buyer's contact number is not available."
+      );
+      return;
+    }
+    Alert.alert("Calling Customer", `Dialing ${lead.customerName} at ${lead.phone}...`, [
       { text: "Cancel", style: "cancel" },
-      { text: "Call", onPress: () => {} },
+      {
+        text: "Call",
+        onPress: () => {
+          if (lead.status === "new") {
+            persistLeadStatus(lead.id, "contacted");
+          }
+        },
+      },
     ]);
   };
 
   const handleChat = (lead) => {
+    if (!lead.phone) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The buyer's contact number is not available."
+      );
+      return;
+    }
     Alert.alert(
       "WhatsApp & Message",
       `Opening direct conversation with ${lead.customerName} (${lead.phone}).`,
@@ -395,8 +430,20 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
           </ScrollView>
         </View>
 
-        {/* ── 2nd Section: LEADS LIST (Old Card Design) ── */}
-        {filteredLeads.length === 0 ? (
+        {/* ── 2nd Section: LEADS LIST (loading / error / empty / real rows) ── */}
+        {leadsLoading && serverLeads === null ? (
+          <View style={{ alignItems: "center", paddingVertical: 40 }}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+          </View>
+        ) : leadsError && projectLeads.length === 0 ? (
+          <EmptyState
+            icon={Building2}
+            title="Couldn't load leads"
+            description="Please check your connection and try again."
+            buttonTitle="Retry"
+            onButtonPress={loadLeads}
+          />
+        ) : filteredLeads.length === 0 ? (
           <EmptyState
             icon={Building2}
             title={activeTab === "All" ? "No Leads Yet" : `No ${activeTab} Leads`}
@@ -409,7 +456,6 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
         ) : (
           <View style={styles.leadsList}>
             {filteredLeads.map((lead) => {
-              const rating = lead.rating || 5;
               const isVisitScheduled = lead.status === "visit_scheduled";
 
               return (
@@ -419,34 +465,40 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
                   activeOpacity={0.94}
                   onPress={() => navigation.navigate("OwnerLeadDetail", { lead })}
                 >
-                  {/* Top Header: Avatar, Name & 5 Stars, Right Actions */}
+                  {/* Top Header: Avatar, Name, Right Actions */}
                   <View style={styles.leadHeaderRow}>
-                    <Image
-                      source={{
-                        uri:
-                          lead.avatar ||
-                          "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
-                      }}
-                      style={styles.leadAvatar}
-                    />
+                    {lead.avatar ? (
+                      <Image
+                        source={{ uri: lead.avatar }}
+                        style={styles.leadAvatar}
+                      />
+                    ) : (
+                      <View style={[styles.leadAvatar, { alignItems: "center", justifyContent: "center", backgroundColor: "#EFF6FF" }]}>
+                        <Text style={{ fontSize: 18, fontWeight: "700", color: "#2563EB" }}>
+                          {(lead.customerName || "B").charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
 
                     <View style={styles.leadInfoCol}>
                       <Text style={styles.leadCustomerName} numberOfLines={1}>
-                        {lead.customerName}
+                        {lead.customerName || "Buyer enquiry"}
                       </Text>
 
-                      {/* 5 Gold Stars Rating */}
-                      <View style={styles.ratingStarsRow}>
-                        {[1, 2, 3, 4, 5].map((starIdx) => (
-                          <Star
-                            key={starIdx}
-                            size={14}
-                            color="#F59E0B"
-                            fill={starIdx <= Math.round(rating) ? "#F59E0B" : "transparent"}
-                            style={{ marginRight: 2.5 }}
-                          />
-                        ))}
-                      </View>
+                      {/* Rating row only when a genuine rating exists (never invented) */}
+                      {lead.rating ? (
+                        <View style={styles.ratingStarsRow}>
+                          {[1, 2, 3, 4, 5].map((starIdx) => (
+                            <Star
+                              key={starIdx}
+                              size={14}
+                              color="#F59E0B"
+                              fill={starIdx <= Math.round(lead.rating) ? "#F59E0B" : "transparent"}
+                              style={{ marginRight: 2.5 }}
+                            />
+                          ))}
+                        </View>
+                      ) : null}
                     </View>
 
                     <View style={styles.headerRightActions}>
@@ -483,8 +535,7 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
 
                   {/* Body Text: Lead Message Quote / Enquiry Paragraph */}
                   <Text style={styles.leadMessageText} numberOfLines={3}>
-                    {lead.message ||
-                      "Great place with a lovely garden. Conveniently located near the city"}
+                    {lead.message || "No message provided."}
                   </Text>
 
                   {/* Visit Scheduled Alert Chip (Preserving visit details) */}
@@ -523,7 +574,10 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
           lead={selectedLeadForVisit}
           onClose={() => setSelectedLeadForVisit(null)}
           onVisitScheduled={(leadId, visitDetails) => {
+            // Visit scheduling persistence is on hold (no backend support):
+            // device-local flip only, documented in the P4 report.
             scheduleVisit(leadId, visitDetails);
+            patchServerLead(leadId, { status: "visit_scheduled", visitData: visitDetails });
             setSelectedLeadForVisit(null);
           }}
         />
@@ -536,7 +590,9 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
           lead={selectedLeadForClose}
           onClose={() => setSelectedLeadForClose(null)}
           onLeadClosed={(leadId, reason) => {
-            closeLead(leadId, reason);
+            // P4 rule: close only the lead — never the listing.
+            closeLead(leadId, reason, false, null);
+            persistLeadStatus(leadId, "closed", reason);
             setSelectedLeadForClose(null);
           }}
         />

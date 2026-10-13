@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Pressable,
 } from "react-native";
-import { CheckCircle2, X, Sparkles, Building2 } from "lucide-react-native";
+import { X, Sparkles } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import PrimaryButton from "../../components/owner/PrimaryButton";
 import SecondaryButton from "../../components/owner/SecondaryButton";
@@ -26,13 +26,14 @@ export default function OwnerCloseLeadModal({
   onCloseLeadWithOutcome,
 }) {
   const [selectedOutcome, setSelectedOutcome] = useState("Rented");
-  const [closePropertyToo, setClosePropertyToo] = useState(true);
   const [isSuccessView, setIsSuccessView] = useState(false);
 
   if (!lead) return null;
 
   const handleConfirmClose = () => {
-    onCloseLeadWithOutcome?.(lead.id, selectedOutcome, closePropertyToo, lead.propertyId);
+    // P4 rule: close only the lead — the listing is never modified. The
+    // property-close option was removed; only the outcome is reported.
+    onCloseLeadWithOutcome?.(lead.id, selectedOutcome, false, null);
     setIsSuccessView(true);
   };
 
@@ -62,11 +63,11 @@ export default function OwnerCloseLeadModal({
               <Text style={styles.successTitle}>
                 {isPositiveDeal ? "Deal Closed Successfully! 🎉" : "Lead Closed"}
               </Text>
-              <Text style={styles.successSub}>
-                {isPositiveDeal
-                  ? `Congratulations on closing the deal with ${lead.customerName}. Your property listing status has been updated.`
-                  : `Lead record updated for ${lead.customerName}.`}
-              </Text>
+                <Text style={styles.successSub}>
+                  {isPositiveDeal
+                    ? `Congratulations on closing the deal with ${lead.customerName}.`
+                    : `Lead record updated for ${lead.customerName}.`}
+                </Text>
 
               <PrimaryButton
                 title="Done"
@@ -125,26 +126,8 @@ export default function OwnerCloseLeadModal({
                 })}
               </View>
 
-              {/* Option to close associated property listing */}
-              {isPositiveDeal && (
-                <TouchableOpacity
-                  style={styles.togglePropertyClose}
-                  onPress={() => setClosePropertyToo(!closePropertyToo)}
-                  activeOpacity={0.8}
-                >
-                  <View
-                    style={[
-                      styles.checkbox,
-                      closePropertyToo && styles.checkboxActive,
-                    ]}
-                  >
-                    {closePropertyToo && <CheckCircle2 size={13} color="#FFFFFF" />}
-                  </View>
-                  <Text style={styles.toggleText}>
-                    Also mark "{lead.propertyTitle}" as Closed listing
-                  </Text>
-                </TouchableOpacity>
-              )}
+              {/* P4: closing a lead never modifies the listing, so no
+                  property-close option is offered. */}
 
               <PrimaryButton
                 title="Save & Close Deal"

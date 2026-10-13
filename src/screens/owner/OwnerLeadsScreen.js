@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   Modal,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -34,6 +35,7 @@ import {
 
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
+import { fetchOwnerLeads, toOwnerLead, updateOwnerLeadStatus } from "../../api/owner";
 import StatusBadge from "../../components/owner/StatusBadge";
 import EmptyState from "../../components/owner/EmptyState";
 import OwnerSiteVisitModal from "./OwnerSiteVisitModal";
@@ -53,9 +55,10 @@ const LEAD_FILTERS = [
 export default function OwnerLeadsScreen({ navigation }) {
   const { properties, leads, updateLeadStatus, scheduleVisit, closeLead } = useOwner();
 
-  // Selected property for property-scoped leads
+  // Selected property for property-scoped leads (null = none selected yet;
+  // the list below then correctly shows no property-scoped leads).
   const [selectedPropertyId, setSelectedPropertyId] = useState(
-    properties[0]?.id || "own-prop-1"
+    properties[0]?.id || null
   );
   const [activeFilter, setActiveFilter] = useState("All");
   const [showPropertyPicker, setShowPropertyPicker] = useState(false);
@@ -72,10 +75,115 @@ export default function OwnerLeadsScreen({ navigation }) {
     );
   }, [properties, selectedPropertyId]);
 
+  // Genuine backend leads for the selected property (P3). The backend
+  // validates the property filter against the caller's owned properties, so
+  // a foreign id can never leak another owner's rows here.
+  const [serverLeads, setServerLeads] = useState(null);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState(false);
+  const leadReqId = useRef(0);
+
+  const selectedListingId = useMemo(() => {
+    if (!selectedProperty) return null;
+    if (typeof selectedProperty.listing_id === "number") return selectedProperty.listing_id;
+    const n = parseInt(String(selectedProperty.id ?? ""), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [selectedProperty]);
+
+  const loadLeads = useCallback(() => {
+    if (selectedListingId == null) {
+      setServerLeads([]);
+      setLeadsError(false);
+      setLeadsLoading(false);
+      return;
+    }
+    // Request-ID guard (same convention as useListings): a late response
+    // from a previous property selection must never overwrite newer rows.
+    const myReq = ++leadReqId.current;
+    setLeadsLoading(true);
+    setLeadsError(false);
+    fetchOwnerLeads({ propertyListingId: selectedListingId, pageSize: 100 }).then(
+      (resp) => {
+        if (leadReqId.current !== myReq) return;
+        setServerLeads((resp.items || []).map(toOwnerLead));
+        setLeadsError(false);
+        setLeadsLoading(false);
+      },
+      () => {
+        if (leadReqId.current !== myReq) return;
+        setLeadsError(true);
+        setLeadsLoading(false);
+      }
+    );
+  }, [selectedListingId]);
+
+  useEffect(() => {
+    loadLeads();
+  }, [loadLeads]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", loadLeads);
+    return unsubscribe;
+  }, [navigation, loadLeads]);
+
+  // Invalidate in-flight fetches on unmount so late responses never touch
+  // state after the screen is gone.
+  useEffect(() => {
+    return () => {
+      leadReqId.current++;
+    };
+  }, []);
+
+  // Mirror local-only status flips onto server rows so taps give immediate
+  // feedback. These flips are device-local until owner transition endpoints
+  // exist (deferred); a refetch restores the server state.
+  const patchServerLead = useCallback((leadId, patch) => {
+    setServerLeads((prev) =>
+      Array.isArray(prev) ? prev.map((l) => (l.id === leadId ? { ...l, ...patch } : l)) : prev
+    );
+  }, []);
+
+  // Persist a supported status change (P4: NEW/CONTACTED/CLOSED only).
+  // Optimistic flip first; the server-confirmed row wins on success, and a
+  // refetch restores honest state with an error message on failure — success
+  // is never shown when the update fails.
+  const persistLeadStatus = useCallback(
+    async (leadId, status, closingReason) => {
+      patchServerLead(leadId, {
+        status,
+        ...(closingReason !== undefined ? { closedOutcome: closingReason } : {}),
+      });
+      updateLeadStatus(leadId, status, closingReason ?? undefined);
+      try {
+        const updated = await updateOwnerLeadStatus(leadId, { status, closingReason });
+        const mapped = toOwnerLead(updated);
+        setServerLeads((prev) =>
+          Array.isArray(prev) ? prev.map((l) => (l.id === leadId ? mapped : l)) : prev
+        );
+      } catch {
+        Alert.alert(
+          "Couldn't update lead",
+          "Please check your connection and try again."
+        );
+        loadLeads();
+      }
+    },
+    [patchServerLead, updateLeadStatus, loadLeads]
+  );
+
+  // All leads: genuine server rows first, then any local-only records not
+  // already present (post-P1 the local store starts empty).
+  const allLeads = useMemo(() => {
+    const server = Array.isArray(serverLeads) ? serverLeads : [];
+    const serverIds = new Set(server.map((l) => l.id));
+    const localOnly = (leads || []).filter((l) => !serverIds.has(l.id));
+    return [...server, ...localOnly];
+  }, [serverLeads, leads]);
+
   // All leads belonging to the selected property
   const propertyLeads = useMemo(() => {
     if (!selectedProperty) return [];
-    return leads.filter(
+    return allLeads.filter(
       (l) =>
         l.propertyId === selectedProperty.id ||
         (l.propertyTitle &&
@@ -83,7 +191,7 @@ export default function OwnerLeadsScreen({ navigation }) {
           l.propertyTitle.toLowerCase().trim() ===
             selectedProperty.title.toLowerCase().trim())
     );
-  }, [leads, selectedProperty]);
+  }, [allLeads, selectedProperty]);
 
   // Top Summary counts for the selected property
   const summaryCounts = useMemo(() => {
@@ -125,15 +233,23 @@ export default function OwnerLeadsScreen({ navigation }) {
     return propertyLeads;
   }, [propertyLeads, activeFilter]);
 
-  // Actions
+  // Actions (P3 honesty: real leads carry no phone; contact actions show an
+  // honest unavailable message instead of dialing a sample number.)
   const handleCall = (lead) => {
+    if (!lead.phone) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The buyer's contact number is not available."
+      );
+      return;
+    }
     Alert.alert("Calling Buyer", `Dialing ${lead.customerName} (${lead.phone})...`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Call",
         onPress: () => {
           if (lead.status === "new") {
-            updateLeadStatus(lead.id, "contacted");
+            persistLeadStatus(lead.id, "contacted");
           }
         },
       },
@@ -141,6 +257,13 @@ export default function OwnerLeadsScreen({ navigation }) {
   };
 
   const handleMessage = (lead) => {
+    if (!lead.phone) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The buyer's contact number is not available."
+      );
+      return;
+    }
     Alert.alert(
       "WhatsApp & Message",
       `Open chat conversation with ${lead.customerName} (${lead.phone}).`,
@@ -150,7 +273,7 @@ export default function OwnerLeadsScreen({ navigation }) {
           text: "Open Chat",
           onPress: () => {
             if (lead.status === "new") {
-              updateLeadStatus(lead.id, "contacted");
+              persistLeadStatus(lead.id, "contacted");
             }
           },
         },
@@ -194,8 +317,8 @@ export default function OwnerLeadsScreen({ navigation }) {
     ? selectedProperty.priceFormatted ||
       (selectedProperty.price
         ? `₹${selectedProperty.price.toLocaleString("en-IN")}${selectedProperty.priceUnit || ""}`
-        : "₹25,000 / month")
-    : "₹25,000 / month";
+        : "—")
+    : "—";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -455,8 +578,20 @@ export default function OwnerLeadsScreen({ navigation }) {
           </ScrollView>
         </View>
 
-        {/* ================= LEAD CARDS LIST ================= */}
-        {filteredLeads.length === 0 ? (
+        {/* ================= LEAD CARDS LIST (loading / error / empty / real rows) ================= */}
+        {leadsLoading && serverLeads === null ? (
+          <View style={{ alignItems: "center", paddingVertical: 40 }}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+          </View>
+        ) : leadsError && propertyLeads.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="Couldn't load leads"
+            description="Please check your connection and try again."
+            buttonTitle="Retry"
+            onButtonPress={loadLeads}
+          />
+        ) : filteredLeads.length === 0 ? (
           <EmptyState
             icon={Users}
             title="No buyer leads yet"
@@ -467,8 +602,6 @@ export default function OwnerLeadsScreen({ navigation }) {
         ) : (
           <View style={styles.leadsList}>
             {filteredLeads.map((lead) => {
-              const rating = lead.rating || 5;
-
               return (
                 <TouchableOpacity
                   key={lead.id}
@@ -476,7 +609,7 @@ export default function OwnerLeadsScreen({ navigation }) {
                   activeOpacity={0.94}
                   onPress={() => handleViewDetails(lead)}
                 >
-                  {/* Card Header: Avatar + (Name & 5 Stars) + Header Actions */}
+                  {/* Card Header: Avatar + Name + Header Actions */}
                   <View style={styles.leadHeaderRow}>
                     {lead.avatar ? (
                       <Image source={{ uri: lead.avatar }} style={styles.leadAvatar} />
@@ -490,21 +623,23 @@ export default function OwnerLeadsScreen({ navigation }) {
 
                     <View style={styles.leadInfoCol}>
                       <Text style={styles.leadCustomerName} numberOfLines={1}>
-                        {lead.customerName}
+                        {lead.customerName || "Buyer enquiry"}
                       </Text>
 
-                      {/* 5 Gold Stars Rating */}
-                      <View style={styles.ratingStarsRow}>
-                        {[1, 2, 3, 4, 5].map((starIdx) => (
-                          <Star
-                            key={starIdx}
-                            size={14}
-                            color="#F59E0B"
-                            fill={starIdx <= Math.round(rating) ? "#F59E0B" : "transparent"}
-                            style={{ marginRight: 2.5 }}
-                          />
-                        ))}
-                      </View>
+                      {/* Rating row only when a genuine rating exists (never invented) */}
+                      {lead.rating ? (
+                        <View style={styles.ratingStarsRow}>
+                          {[1, 2, 3, 4, 5].map((starIdx) => (
+                            <Star
+                              key={starIdx}
+                              size={14}
+                              color="#F59E0B"
+                              fill={starIdx <= Math.round(lead.rating) ? "#F59E0B" : "transparent"}
+                              style={{ marginRight: 2.5 }}
+                            />
+                          ))}
+                        </View>
+                      ) : null}
                     </View>
 
                     {/* Right side actions: Call, WhatsApp, StatusBadge, 3-dots */}
@@ -546,8 +681,7 @@ export default function OwnerLeadsScreen({ navigation }) {
 
                   {/* Enquiry Review / Feedback Text */}
                   <Text style={styles.leadMessageText} numberOfLines={3}>
-                    {lead.message ||
-                      "Great place with a lovely garden. Conveniently located near the city"}
+                    {lead.message || "No message provided."}
                   </Text>
 
                   {/* Visit Alert Tag (if scheduled) */}
@@ -615,7 +749,7 @@ export default function OwnerLeadsScreen({ navigation }) {
             >
               {properties.map((prop) => {
                 const isSelected = prop.id === selectedPropertyId;
-                const propLeadsCount = leads.filter(
+                const propLeadsCount = allLeads.filter(
                   (l) =>
                     l.propertyId === prop.id ||
                     (l.propertyTitle &&
@@ -663,7 +797,7 @@ export default function OwnerLeadsScreen({ navigation }) {
                       </Text>
                       <View style={styles.pickerBottomRow}>
                         <Text style={styles.pickerPrice}>
-                          {prop.priceFormatted || `₹${prop.price?.toLocaleString("en-IN") || "25,000"}${prop.priceUnit || ""}`}
+                          {prop.priceFormatted || (prop.price != null ? `₹${prop.price?.toLocaleString("en-IN")}${prop.priceUnit || ""}` : "—")}
                         </Text>
                         <View style={styles.pickerBadge}>
                           <Text style={styles.pickerBadgeText}>
@@ -698,7 +832,10 @@ export default function OwnerLeadsScreen({ navigation }) {
           lead={selectedLeadForVisit}
           onClose={() => setSelectedLeadForVisit(null)}
           onVisitScheduled={(leadId, visitData) => {
+            // Visit scheduling persistence is on hold (no backend support):
+            // device-local flip only, documented in the P4 report.
             scheduleVisit(leadId, visitData);
+            patchServerLead(leadId, { status: "visit_scheduled", visitData });
             setSelectedLeadForVisit(null);
           }}
         />
@@ -711,7 +848,10 @@ export default function OwnerLeadsScreen({ navigation }) {
           lead={selectedLeadForClose}
           onClose={() => setSelectedLeadForClose(null)}
           onCloseLeadWithOutcome={(leadId, outcome, closeProp, propId) => {
-            closeLead(leadId, outcome, closeProp, propId);
+            // P4 rule: close only the lead — never the listing. closeProp is
+            // intentionally ignored (the modal no longer offers it).
+            closeLead(leadId, outcome, false, null);
+            persistLeadStatus(leadId, "closed", outcome);
             setSelectedLeadForClose(null);
           }}
         />

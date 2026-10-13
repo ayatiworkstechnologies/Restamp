@@ -3,17 +3,76 @@
  * Base URL from EXPO_PUBLIC_API_URL (LAN IP for Android, localhost for web/iOS sim).
  * fetch-based; no extra dependencies. No auth yet (public discovery endpoints need
  * none); an Authorization hook is reserved for the auth phase.
+ *
+ * Environment rules (never edit per environment — use env files / dashboards):
+ * - Local dev (`expo start`, `__DEV__ === true`) with no configured URL uses the
+ *   local FastAPI backend at http://127.0.0.1:8000. Prefer setting
+ *   EXPO_PUBLIC_API_URL in `.env.local` (gitignored) for LAN-device testing.
+ * - Production (`expo export`, Vercel) with no configured URL uses the deployed
+ *   Render backend. Set EXPO_PUBLIC_API_URL in the Vercel dashboard to override.
+ * - A configured URL always wins in both environments.
+ * The base URL is fixed per app load: requests never silently switch between
+ * local and production hosts after a failure.
  */
-const RAW_BASE_URL =
-  (typeof process !== "undefined" &&
-    process.env &&
-    process.env.EXPO_PUBLIC_API_URL) ||
-  "https://restamp-backend-h3x8.onrender.com";
+const DEFAULT_LOCAL_API_URL = "http://127.0.0.1:8000";
+const DEFAULT_PROD_API_URL = "https://restamp-backend-h3x8.onrender.com";
 
-export const API_BASE_URL = (RAW_BASE_URL || "http://127.0.0.1:8000").replace(
-  /\/+$/,
-  "",
-);
+function trimTrailingSlashes(url) {
+  return String(url || "").trim().replace(/\/+$/, "");
+}
+
+/**
+ * True for loopback hosts only (fails closed on malformed URLs).
+ */
+export function isLocalHostUrl(url) {
+  try {
+    // Node keeps IPv6 brackets in hostname ("[::1]"); strip them first.
+    const host = new URL(String(url)).hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pure resolver (unit-testable): configured URL wins; otherwise development
+ * targets the local backend and anything else targets production.
+ */
+export function resolveApiBaseUrl({ envUrl, isDev } = {}) {
+  const configured = trimTrailingSlashes(envUrl);
+  if (configured) return configured;
+  if (isDev) return DEFAULT_LOCAL_API_URL;
+  return DEFAULT_PROD_API_URL;
+}
+
+function readEnvApiUrl() {
+  if (typeof process !== "undefined" && process.env) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  return "";
+}
+
+function readIsDev() {
+  if (typeof __DEV__ !== "undefined") return !!__DEV__;
+  // Unknown runtime (e.g. plain node in tests): fail toward production so a
+  // production bundle can never accidentally target localhost.
+  return false;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl({
+  envUrl: readEnvApiUrl(),
+  isDev: readIsDev(),
+});
+
+// Development safeguard: a production build must never talk to localhost.
+// This fires only when someone explicitly configures a loopback URL for a
+// production export (e.g. a stray Vercel env value) — not during local dev.
+if (!readIsDev() && isLocalHostUrl(API_BASE_URL)) {
+  console.error(
+    "[RESTAMP] Production build resolved the API to localhost. " +
+      "Set EXPO_PUBLIC_API_URL to the deployed backend URL."
+  );
+}
 
 export class ApiError extends Error {
   constructor(kind, status, detail) {

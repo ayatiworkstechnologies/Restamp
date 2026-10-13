@@ -23,79 +23,13 @@ import {
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 
-const INITIAL_CHATS = [
-  {
-    id: "1",
-    name: "Ramesh Kumar",
-    role: "Property Consultant",
-    agency: "Chennai Prime Realty",
-    avatar:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-    online: true,
-    category: "Agents",
-    lastMessage: "Looking forward to showing you Emerald Heights Luxury 3BHK tomorrow!",
-    time: "10:42 AM",
-    unread: 2,
-    messages: [
-      { id: "m1", sender: "them", text: "Hello! Welcome to RESTAMP Property Services 🏡", time: "10:30 AM" },
-      { id: "m2", sender: "me", text: "Hi Ramesh! What time is our site visit tomorrow?", time: "10:35 AM" },
-      { id: "m3", sender: "them", text: "I will meet you at the property gate at 11:00 AM sharp.", time: "10:40 AM" },
-      { id: "m4", sender: "them", text: "Looking forward to showing you Emerald Heights Luxury 3BHK tomorrow!", time: "10:42 AM" },
-    ],
-  },
-  {
-    id: "2",
-    name: "Sriya Sundaram",
-    role: "Luxury Estates Specialist",
-    agency: "ECR Luxury Estates",
-    avatar:
-      "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80",
-    online: true,
-    category: "Agents",
-    lastMessage: "The owner is open to negotiation on token advance for Sea Breeze Villa.",
-    time: "Yesterday",
-    unread: 0,
-    messages: [
-      { id: "m1", sender: "them", text: "Hello Alex! I received your inquiry for the ECR Beach Road Villa.", time: "Yesterday" },
-      { id: "m2", sender: "them", text: "The owner is open to negotiation on token advance for Sea Breeze Villa.", time: "Yesterday" },
-    ],
-  },
-  {
-    id: "3",
-    name: "RESTAMP Support",
-    role: "24/7 Verified Support",
-    avatar:
-      "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=200&q=80",
-    online: false,
-    category: "Support",
-    lastMessage: "Your property title deed verification request #RS-8821 is complete.",
-    time: "2 days ago",
-    unread: 0,
-    messages: [
-      { id: "m1", sender: "them", text: "Hi Alex, your enquiry #RS-8821 has been verified!", time: "2 days ago" },
-      { id: "m2", sender: "them", text: "Your property title deed verification request #RS-8821 is complete.", time: "2 days ago" },
-    ],
-  },
-  {
-    id: "4",
-    name: "Karthik Raja",
-    role: "Property Owner",
-    agency: "Besant Nagar Garden Duplex",
-    avatar:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
-    online: false,
-    category: "Owners",
-    lastMessage: "I have shared the floor plan and video walkthrough for the duplex.",
-    time: "3 days ago",
-    unread: 0,
-    messages: [
-      { id: "m1", sender: "them", text: "Hi! I have shared the floor plan and video walkthrough for the duplex.", time: "3 days ago" },
-    ],
-  },
-];
+// P2 honesty: this screen is not registered in AppNavigator (dead code) and
+// has no thread/message backend. It stays empty with no fabricated chats,
+// auto-replies, or calling behavior. Thread UI shell is preserved only pending
+// the Sec. 6B product decision (message APIs vs removing the screen).
 
 export default function MessageScreen() {
-  const [chats, setChats] = useState(INITIAL_CHATS);
+  const [chats, setChats] = useState([]);
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeChat, setActiveChat] = useState(null);
@@ -146,43 +80,8 @@ export default function MessageScreen() {
       prev.map((c) => (c.id === activeChat.id ? updatedActiveChat : c))
     );
     setInputMessage("");
-
-    // Realistic auto-reply from property consultant after 1 second
-    setTimeout(() => {
-      const replies = [
-        "Got it! Let me check the property availability and get back to you shortly.",
-        "Perfect, I've noted down your preferred time for the site visit!",
-        "Sounds great! I will share the property brochure and pricing breakup.",
-      ];
-      const randomReply = replies[Math.floor(Math.random() * replies.length)];
-      const replyMsg = {
-        id: `msg-reply-${Date.now()}`,
-        sender: "them",
-        text: randomReply,
-        time: "Just now",
-      };
-
-      setActiveChat((current) => {
-        if (!current || current.id !== activeChat.id) return current;
-        return {
-          ...current,
-          lastMessage: replyMsg.text,
-          messages: [...current.messages, replyMsg],
-        };
-      });
-
-      setChats((prev) =>
-        prev.map((c) =>
-          c.id === activeChat.id
-            ? {
-                ...c,
-                lastMessage: replyMsg.text,
-                messages: [...c.messages, replyMsg],
-              }
-            : c
-        )
-      );
-    }, 1200);
+    // P2 honesty: no simulated consultant auto-replies. Replies arrive only
+    // via a future real messaging backend (Sec. 6B decision).
   };
 
   return (
@@ -199,7 +98,7 @@ export default function MessageScreen() {
         <Pressable
           style={styles.newChatBtn}
           onPress={() => {
-            alert("Starting a new enquiry with a RESTAMP property consultant.");
+            alert("Messaging is not available yet.");
           }}
         >
           <SquarePen size={18} color={COLORS.primary} />
@@ -304,9 +203,9 @@ export default function MessageScreen() {
       ) : (
         <View style={styles.emptyContainer}>
           <MessageSquare size={40} color={COLORS.muted} />
-          <Text style={styles.emptyTitle}>No messages found</Text>
+          <Text style={styles.emptyTitle}>No messages yet</Text>
           <Text style={styles.emptySub}>
-            Try changing your search query or filter tab.
+            Your conversations will appear here once messaging is available.
           </Text>
         </View>
       )}
@@ -348,7 +247,7 @@ export default function MessageScreen() {
 
               <Pressable
                 style={styles.modalActionBtn}
-                onPress={() => alert(`Calling ${activeChat.name}...`)}
+                onPress={() => alert("Calling is not available yet.")}
               >
                 <Phone size={18} color={COLORS.primary} />
               </Pressable>

@@ -91,12 +91,17 @@ function PropertyDetailModal({
   isAgentView = false,
   onMatchToLead,
   onContactOwner,
+  // Optional: called when an action needs authentication (e.g. logged-out
+  // enquiry). Callers wire this to the existing Login route; auth logic
+  // itself is never changed here.
+  onLoginRequired,
 }) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("overview");
   const [questionText, setQuestionText] = useState("");
-  const [siteVisitRequested, setSiteVisitRequested] = useState(false);
   const [enquirySent, setEnquirySent] = useState(false);
+  // Guards duplicate taps while an enquiry request is in flight.
+  const [enquirySending, setEnquirySending] = useState(false);
   const [customAddress, setCustomAddress] = useState(null);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [customInputAddress, setCustomInputAddress] = useState("");
@@ -238,12 +243,18 @@ function PropertyDetailModal({
           "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1000&q=80",
         ]);
 
-  // Similar properties: live API result wins once loaded (even when empty);
-  // while loading, on error, or for mock flows, the existing mock fallback stays.
+  // Similar properties: live API result wins once loaded (even when empty).
+  // A failed fetch for a backend-backed listing renders no similar cards
+  // (honest empty, never mock substitution). Mock-sourced flows with no
+  // backend record keep their existing local behavior.
   const mockSimilarProps = (RECOMMENDED_PROPERTIES || ALL_PROPERTIES)
     .filter((p) => p.id !== (property && property.id))
     .slice(0, 5);
-  const similarProps = Array.isArray(liveSimilar) ? liveSimilar : mockSimilarProps;
+  const similarProps = Array.isArray(liveSimilar)
+    ? liveSimilar
+    : liveSimilar === null && isBackendBacked
+      ? []
+      : mockSimilarProps;
 
   const handleSendQuestion = () => {
     if (!questionText.trim()) {
@@ -253,52 +264,70 @@ function PropertyDetailModal({
       );
       return;
     }
+    // No backend persists questions: never claim delivery.
     Alert.alert(
-      "Question Sent! 📩",
-      `Your query regarding "${property.title}" has been forwarded to the owner. They will get back to you shortly!`,
+      "Questions Not Supported Yet",
+      "Sending questions to the owner isn't available yet. Please use Send Enquiry for genuine interest.",
       [{ text: "OK" }],
     );
-    setQuestionText("");
   };
 
   const handleRequestSiteVisit = () => {
-    setSiteVisitRequested(true);
+    // No backend books visits: never claim a booking was made.
     Alert.alert(
-      "Site Visit Requested! 📅",
-      `We have registered your request to visit "${property.title}". Our property consultant will contact you to confirm the time slot.`,
-      [{ text: "Great, thanks!" }],
+      "Site Visits Not Supported Yet",
+      `Visits for "${property.title}" can't be booked in the app yet. Please use Send Enquiry and the seller will contact you.`,
+      [{ text: "OK" }],
     );
   };
 
+  const handleLoginRequired = (contextMessage) => {
+    // Logged-out buyers go through the existing Login route. Login resets
+    // to MainTabs by design, so buyers re-tap the action after signing in.
+    Alert.alert("Log In Required", contextMessage, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log In",
+        onPress: () => {
+          if (onLoginRequired) onLoginRequired();
+        },
+      },
+    ]);
+  };
+
   const handleSendEnquiry = () => {
-    // Phase 6: live enquiry when authenticated with a real listing id.
-    // Otherwise the long-standing mock confirmation is preserved unchanged.
+    // Real enquiry when authenticated with a real listing id; the backend
+    // confirms persistence (creating or reusing the buyer's active lead for
+    // this property) before any success is shown. Duplicate taps are
+    // ignored while the request is in flight.
+    if (enquirySending) return;
     const backendId = property && property.backendId;
-    if (typeof backendId === "number" && getAuthTokenSync()) {
-      createEnquiry(backendId)
-        .then(() => {
-          setEnquirySent(true);
-          Alert.alert(
-            "Enquiry Sent Successfully! 🚀",
-            `Your interest in "${property.title}" (${property.price}) has been shared with the property seller.`,
-            [{ text: "Done" }]
-          );
-        })
-        .catch(() => {
-          Alert.alert(
-            "Couldn't send enquiry",
-            "Please check your connection and try again.",
-            [{ text: "OK" }]
-          );
-        });
+    if (typeof backendId !== "number" || !getAuthTokenSync()) {
+      handleLoginRequired(
+        "Log in to send an enquiry for this property. Your interest is only shared after a successful submission."
+      );
       return;
     }
-    setEnquirySent(true);
-    Alert.alert(
-      "Enquiry Sent Successfully! 🚀",
-      `Your interest in "${property.title}" (${property.price}) has been shared with the property seller.`,
-      [{ text: "Done" }],
-    );
+    setEnquirySending(true);
+    createEnquiry(backendId)
+      .then(() => {
+        setEnquirySent(true);
+        Alert.alert(
+          "Enquiry Sent Successfully! 🚀",
+          `Your interest in "${property.title}" (${property.price}) has been shared with the property seller.`,
+          [{ text: "Done" }]
+        );
+      })
+      .catch(() => {
+        Alert.alert(
+          "Couldn't send enquiry",
+          "Please check your connection and try again.",
+          [{ text: "OK" }]
+        );
+      })
+      .finally(() => {
+        setEnquirySending(false);
+      });
   };
 
   const quickQuestions = [
@@ -719,32 +748,43 @@ function PropertyDetailModal({
             </View>
           </View>
 
-          {/* 9. LISTED BY / PROPERTY OWNER */}
+          {/* 9. LISTED BY / PROPERTY OWNER (honest: no invented identity;
+              the genuine contact number is only available through the
+              authorized reveal on Search) */}
           <View style={styles.sectionContainer}>
             <Text style={styles.subSectionTitle}>Listed By</Text>
             <View style={styles.ownerCard}>
-              <Image
-                source={{
-                  uri:
-                    property.agent?.avatar ||
-                    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80",
-                }}
-                style={styles.ownerAvatar}
-              />
+              {property.agent?.avatar ? (
+                <Image
+                  source={{ uri: property.agent.avatar }}
+                  style={styles.ownerAvatar}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.ownerAvatar,
+                    { alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" },
+                  ]}
+                >
+                  <Users size={20} color="#64748B" />
+                </View>
+              )}
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={styles.ownerName}>
                   {property.agent?.name || "Property Owner"}
                 </Text>
-                <Text style={styles.ownerRole}>
-                  {property.agent?.agency || "Verified Owner / Seller"}
-                </Text>
+                {property.agent?.agency ? (
+                  <Text style={styles.ownerRole}>
+                    {property.agent.agency}
+                  </Text>
+                ) : null}
               </View>
               <TouchableOpacity
                 style={styles.ownerCallBtn}
                 onPress={() =>
                   Alert.alert(
-                    "Contacting Owner",
-                    `Calling ${property.agent?.name || "Owner"} at ${property.agent?.phone || "+91 98765 43210"}`,
+                    "Contact Number Unavailable",
+                    "Owner contact details are shared only through the authorized View Number flow on Search.",
                   )
                 }
               >
@@ -905,25 +945,17 @@ function PropertyDetailModal({
           ) : (
             <>
               <TouchableOpacity
-                style={[
-                  styles.siteVisitBtn,
-                  siteVisitRequested && styles.siteVisitBtnActive,
-                ]}
+                style={styles.siteVisitBtn}
                 activeOpacity={0.85}
                 onPress={handleRequestSiteVisit}
               >
                 <Calendar
                   size={18}
-                  color={siteVisitRequested ? "#10B981" : COLORS.primary}
+                  color={COLORS.primary}
                   style={{ marginRight: 6 }}
                 />
-                <Text
-                  style={[
-                    styles.siteVisitBtnText,
-                    siteVisitRequested && styles.siteVisitBtnTextActive,
-                  ]}
-                >
-                  {siteVisitRequested ? "Requested ✓" : "Request Site Visit"}
+                <Text style={styles.siteVisitBtnText}>
+                  Request Site Visit
                 </Text>
               </TouchableOpacity>
 
@@ -931,9 +963,11 @@ function PropertyDetailModal({
                 style={[
                   styles.sendEnquiryBtn,
                   enquirySent && styles.sendEnquiryBtnActive,
+                  enquirySending && { opacity: 0.6 },
                 ]}
                 activeOpacity={0.85}
                 onPress={handleSendEnquiry}
+                disabled={enquirySending}
               >
                 <MessageSquare
                   size={18}
@@ -941,7 +975,11 @@ function PropertyDetailModal({
                   style={{ marginRight: 6 }}
                 />
                 <Text style={styles.sendEnquiryBtnText}>
-                  {enquirySent ? "Enquiry Sent ✓" : "Send Enquiry"}
+                  {enquirySending
+                    ? "Sending…"
+                    : enquirySent
+                      ? "Enquiry Sent ✓"
+                      : "Send Enquiry"}
                 </Text>
               </TouchableOpacity>
             </>

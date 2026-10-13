@@ -42,10 +42,6 @@ import TYPOGRAPHY from "../../constants/typography";
 import {
   PROPERTY_TYPES,
   CHENNAI_LOCALITIES,
-  RECOMMENDED_PROPERTIES,
-  VERIFIED_PROPERTIES,
-  RECENTLY_ADDED,
-  ALL_PROPERTIES,
   NEWLY_LAUNCHED_PROJECTS,
   DEMAND_DATA,
 } from "../../data/properties";
@@ -165,7 +161,7 @@ const renderCategoryIcon = (iconName, isSelected) => {
 
 export default function HomeScreen({ navigation }) {
   const [dealType, setDealType] = useState("Buy");
-  const [selectedType, setSelectedType] = useState("apartment");
+  const [selectedType, setSelectedType] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const { isWishlisted, toggleWishlist } = useWishlist();
   const { subscription } = useOwner();
@@ -262,26 +258,48 @@ export default function HomeScreen({ navigation }) {
 
   const filterProperties = (list) => {
     return list.filter((item) => {
-      // Deal filter
-      if (dealType === "Buy" && item.badgeType !== "sale" && item.badgeType !== "resale" && item.badgeType !== "new") return false;
-      if (dealType === "Resale" && item.badgeType !== "resale" && !item.isResale && item.constructionStatus !== "Ready to move") return false;
-      if (dealType === "Rent" && item.badgeType !== "rent") return false;
-      if (dealType === "Lease" && item.badgeType !== "lease") return false;
+      // Deal filter: live items carry transactionType (the feed is already
+      // scoped to this deal server-side); legacy mock badgeType accepted only
+      // when no transactionType is present.
+      const tx = (item.transactionType || "").toUpperCase();
+      const badge = (item.badgeType || "").toLowerCase();
+      if (dealType === "Buy" && !(tx === "BUY" || (!tx && (badge === "sale" || badge === "resale" || badge === "new")))) return false;
+      if (dealType === "Resale" && !(tx === "RESALE" || (!tx && (badge === "resale" || !!item.isResale || item.constructionStatus === "Ready to move")))) return false;
+      if (dealType === "Rent" && !(tx === "RENT" || (!tx && badge === "rent"))) return false;
+      if (dealType === "Lease" && !(tx === "LEASE" || (!tx && badge === "lease"))) return false;
+
+      // Home category filter (stays on Home — never navigates to Search).
+      // Missing types are kept so a real result is never erased by an
+      // absent optional field.
+      if (selectedType && selectedType !== "all") {
+        const allowedTypes = {
+          house: ["house", "home"],
+          plot: ["plot"],
+          villa: ["villa"],
+          apartment: ["apartment"],
+          commercial: ["commercial"],
+        }[selectedType] || [selectedType];
+        const itemType = (item.type || "").toLowerCase();
+        if (itemType && !allowedTypes.includes(itemType)) return false;
+      }
 
       // Locality filter
       if (selectedLocality && selectedLocality !== "") {
-        if (!item.location.toLowerCase().includes(selectedLocality.toLowerCase())) {
+        if (!(item.location || "").toLowerCase().includes(selectedLocality.toLowerCase())) {
           return false;
         }
       }
 
-      // BHK filter
+      // BHK filter (listings without a bedroom count are kept — a missing
+      // field must not erase a real result)
       if (modalBhk && modalBhk !== "All BHK") {
         const num = parseInt(modalBhk);
-        if (modalBhk === "4+ BHK") {
-          if (item.beds < 4) return false;
-        } else if (item.beds !== num) {
-          return false;
+        if (item.beds != null) {
+          if (modalBhk === "4+ BHK") {
+            if (item.beds < 4) return false;
+          } else if (item.beds !== num) {
+            return false;
+          }
         }
       }
 
@@ -291,17 +309,17 @@ export default function HomeScreen({ navigation }) {
         if (maxBudget < Infinity && item.rawPrice > maxBudget) return false;
       }
 
-      // Construction Status filter
+      // Construction Status filter (unknown status is kept, never dropped)
       if (constructionStatus && constructionStatus !== "All Status") {
-        const itemStatus = item.constructionStatus || (item.badge === "New Launch" || item.type === "Plot" ? "New Launch" : "Ready to move");
-        if (itemStatus.toLowerCase() !== constructionStatus.toLowerCase()) return false;
+        const itemStatus = item.constructionStatus || (item.badge === "New Launch" || item.type === "Plot" ? "New Launch" : undefined);
+        if (itemStatus && itemStatus.toLowerCase() !== constructionStatus.toLowerCase()) return false;
       }
 
       // Text query
       if (
         searchQuery.trim() !== "" &&
-        !item.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !item.location.toLowerCase().includes(searchQuery.toLowerCase())
+        !(item.title || "").toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !(item.location || "").toLowerCase().includes(searchQuery.toLowerCase())
       ) {
         return false;
       }
@@ -310,58 +328,81 @@ export default function HomeScreen({ navigation }) {
   };
 
   const [liveListings, setLiveListings] = useState(null);
+  // Honest feed state (P0): null = loading, error string = request failed,
+  // [] = successful empty result. Failures and empty results are never
+  // confused, and mock catalogs are never substituted.
+  const [listingsError, setListingsError] = useState(null);
+  const [listingsRetryKey, setListingsRetryKey] = useState(0);
 
   React.useEffect(() => {
     let cancelled = false;
     const dealMap = { Buy: "BUY", Resale: "RESALE", Rent: "RENT", Lease: "LEASE" };
     const deal = dealMap[dealType] || "BUY";
+    setListingsError(null);
     apiGet("/buyer/listings", { deal, page: 1, page_size: 20 })
       .then((data) => {
-        if (!cancelled && data && Array.isArray(data.items)) {
+        if (cancelled) return;
+        if (data && Array.isArray(data.items)) {
           setLiveListings(data.items.map(toUiProperty));
+        } else {
+          setLiveListings([]);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (cancelled) return;
+        setLiveListings([]);
+        setListingsError(
+          "Couldn't load properties. Check your connection and try again."
+        );
+      });
     return () => {
       cancelled = true;
     };
-  }, [dealType]);
+  }, [dealType, listingsRetryKey]);
 
-  const baseVerList = liveListings && liveListings.length > 0 ? liveListings : VERIFIED_PROPERTIES;
-  const baseRecAddedList = liveListings && liveListings.length > 0 ? [...liveListings].reverse() : RECENTLY_ADDED;
-  const baseRecList = liveListings && liveListings.length > 0 ? liveListings : RECOMMENDED_PROPERTIES;
+  // Real listings only: empty/error stays empty (never mock substitution).
+  const live = liveListings ?? [];
+  const baseVerList = live;
+  const baseRecAddedList = [...live].reverse();
+  const baseRecList = live;
 
   const recList = useMemo(() => {
-    const filtered = filterProperties(baseRecList);
-    return filtered.length > 0 ? filtered : baseRecList;
-  }, [baseRecList, dealType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus, searchQuery]);
+    return filterProperties(baseRecList);
+  }, [baseRecList, dealType, selectedType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus, searchQuery]);
 
   const verList = useMemo(() => {
-    const filtered = filterProperties(baseVerList);
-    return filtered.length > 0 ? filtered : baseVerList;
-  }, [baseVerList, dealType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus, searchQuery]);
+    return filterProperties(baseVerList);
+  }, [baseVerList, dealType, selectedType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus, searchQuery]);
 
   const recAddedList = useMemo(() => {
-    const filtered = filterProperties(baseRecAddedList);
-    return filtered.length > 0 ? filtered : baseRecAddedList;
-  }, [baseRecAddedList, dealType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus, searchQuery]);
+    return filterProperties(baseRecAddedList);
+  }, [baseRecAddedList, dealType, selectedType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus, searchQuery]);
 
-  // Filter preview count inside modal
+  // Shared feed status for all three sliders (single backing fetch).
+  const feedFailed = !!listingsError;
+  const feedLoading = liveListings === null && !listingsError;
+
+  // Filter preview count inside modal — counted over real results only, so an
+  // empty or failed load honestly reports zero instead of catalog size.
   const modalMatchedCount = useMemo(() => {
-    return ALL_PROPERTIES.filter((item) => {
-      if (dealType === "Buy" && item.badgeType !== "sale" && item.badgeType !== "resale" && item.badgeType !== "new") return false;
-      if (dealType === "Resale" && item.badgeType !== "resale" && !item.isResale && item.constructionStatus !== "Ready to move") return false;
-      if (dealType === "Rent" && item.badgeType !== "rent") return false;
-      if (dealType === "Lease" && item.badgeType !== "lease") return false;
-      if (selectedLocality && !item.location.toLowerCase().includes(selectedLocality.toLowerCase())) {
+    return live.filter((item) => {
+      const tx = (item.transactionType || "").toUpperCase();
+      const badge = (item.badgeType || "").toLowerCase();
+      if (dealType === "Buy" && !(tx === "BUY" || (!tx && (badge === "sale" || badge === "resale" || badge === "new")))) return false;
+      if (dealType === "Resale" && !(tx === "RESALE" || (!tx && (badge === "resale" || !!item.isResale || item.constructionStatus === "Ready to move")))) return false;
+      if (dealType === "Rent" && !(tx === "RENT" || (!tx && badge === "rent"))) return false;
+      if (dealType === "Lease" && !(tx === "LEASE" || (!tx && badge === "lease"))) return false;
+      if (selectedLocality && !(item.location || "").toLowerCase().includes(selectedLocality.toLowerCase())) {
         return false;
       }
       if (modalBhk && modalBhk !== "All BHK") {
         const num = parseInt(modalBhk);
-        if (modalBhk === "4+ BHK") {
-          if (item.beds < 4) return false;
-        } else if (item.beds !== num) {
-          return false;
+        if (item.beds != null) {
+          if (modalBhk === "4+ BHK") {
+            if (item.beds < 4) return false;
+          } else if (item.beds !== num) {
+            return false;
+          }
         }
       }
       if (item.rawPrice) {
@@ -369,12 +410,12 @@ export default function HomeScreen({ navigation }) {
         if (maxBudget < Infinity && item.rawPrice > maxBudget) return false;
       }
       if (constructionStatus && constructionStatus !== "All Status") {
-        const itemStatus = item.constructionStatus || (item.badge === "New Launch" || item.type === "Plot" ? "New Launch" : "Ready to move");
-        if (itemStatus.toLowerCase() !== constructionStatus.toLowerCase()) return false;
+        const itemStatus = item.constructionStatus || (item.badge === "New Launch" || item.type === "Plot" ? "New Launch" : undefined);
+        if (itemStatus && itemStatus.toLowerCase() !== constructionStatus.toLowerCase()) return false;
       }
       return true;
-    }).length || ALL_PROPERTIES.length;
-  }, [dealType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus]);
+    }).length;
+  }, [live, dealType, selectedLocality, modalBhk, minBudget, maxBudget, constructionStatus]);
 
   const handleApplyModalFilters = () => {
     setIsMinDropdownOpen(false);
@@ -524,7 +565,7 @@ export default function HomeScreen({ navigation }) {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.categoryPillScroll}
             >
-              {PROPERTY_TYPES.map((pt) => {
+              {[{ id: "all", name: "All" }, ...PROPERTY_TYPES].map((pt) => {
                 const isSelected = selectedType === pt.id;
                 return (
                   <TouchableOpacity
@@ -532,12 +573,10 @@ export default function HomeScreen({ navigation }) {
                     style={styles.categoryPillItem}
                     activeOpacity={0.75}
                     onPress={() => {
+                      // Category selection stays on Home and filters the Home
+                      // sections below. It must never navigate to Search or
+                      // activate the bottom Search tab.
                       setSelectedType(pt.id);
-                      navigation.navigate("Search", {
-                        propertyType: pt.name,
-                        dealType: dealType,
-                        locality: selectedLocality || "",
-                      });
                     }}
                   >
                     <Text
@@ -591,6 +630,35 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Recommended Properties</Text>
         </View>
 
+        {/* Honest feed status (P0): one shared fetch backs all three sliders.
+            Failure shows an error with retry (never mock substitution);
+            loading shows a placeholder; empty shows an empty state. */}
+        {feedFailed ? (
+          <View style={styles.listingStatusBox}>
+            <Text style={styles.listingStatusText}>{listingsError}</Text>
+            <TouchableOpacity
+              style={styles.listingRetryBtn}
+              activeOpacity={0.8}
+              onPress={() => setListingsRetryKey((k) => k + 1)}
+            >
+              <Text style={styles.listingRetryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        {feedLoading ? (
+          <View style={styles.listingStatusBox}>
+            <Text style={styles.listingStatusText}>Loading properties…</Text>
+          </View>
+        ) : null}
+
+        {!feedFailed && !feedLoading && recList.length === 0 ? (
+          <View style={styles.listingStatusBox}>
+            <Text style={styles.listingStatusText}>
+              No properties found. Try a different deal type or clear filters.
+            </Text>
+          </View>
+        ) : null}
+        {recList.length > 0 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -641,6 +709,7 @@ export default function HomeScreen({ navigation }) {
             );
           })}
         </ScrollView>
+        ) : null}
 
         {/* ================= VERIFIED PROPERTIES ================= */}
         <View style={styles.sectionHeader}>
@@ -653,6 +722,14 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
+        {!feedFailed && !feedLoading && verList.length === 0 ? (
+          <View style={styles.listingStatusBox}>
+            <Text style={styles.listingStatusText}>
+              No properties found. Try a different deal type or clear filters.
+            </Text>
+          </View>
+        ) : null}
+        {verList.length > 0 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -717,12 +794,21 @@ export default function HomeScreen({ navigation }) {
             );
           })}
         </ScrollView>
+        ) : null}
 
         {/* ================= RECENTLY ADDED ================= */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recently Added</Text>
         </View>
 
+        {!feedFailed && !feedLoading && recAddedList.length === 0 ? (
+          <View style={styles.listingStatusBox}>
+            <Text style={styles.listingStatusText}>
+              No properties found. Try a different deal type or clear filters.
+            </Text>
+          </View>
+        ) : null}
+        {recAddedList.length > 0 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -786,6 +872,7 @@ export default function HomeScreen({ navigation }) {
             );
           })}
         </ScrollView>
+        ) : null}
 
         {/* ================= NEWLY LAUNCHED PROJECTS (SECTION 4) ================= */}
         <View style={styles.projectSectionHeader}>
@@ -793,7 +880,12 @@ export default function HomeScreen({ navigation }) {
             <Sparkles size={18} color="#D97706" />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.projectSectionTitle}>Newly launched projects</Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Text style={styles.projectSectionTitle}>Newly launched projects</Text>
+              <View style={styles.sampleTag}>
+                <Text style={styles.sampleTagText}>Sample</Text>
+              </View>
+            </View>
             <Text style={styles.projectSectionSubtitle}>
               Best prices • Unit of choice • Easy payment plans
             </Text>
@@ -879,6 +971,9 @@ export default function HomeScreen({ navigation }) {
               <TouchableOpacity activeOpacity={0.7} style={{ marginLeft: 6 }}>
                 <Info size={18} color="#64748B" />
               </TouchableOpacity>
+              <View style={styles.sampleTag}>
+                <Text style={styles.sampleTagText}>Sample</Text>
+              </View>
             </View>
             <Text style={styles.demandSubtitle}>
               Where are buyers searching in Chennai
@@ -952,7 +1047,12 @@ export default function HomeScreen({ navigation }) {
 
         {/* ================= EXPLORE BY LOCATION ================= */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Explore by Location</Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text style={styles.sectionTitle}>Explore by Location</Text>
+            <View style={styles.sampleTag}>
+              <Text style={styles.sampleTagText}>Sample</Text>
+            </View>
+          </View>
         </View>
 
         <ScrollView
@@ -1022,6 +1122,7 @@ export default function HomeScreen({ navigation }) {
         property={selectedProperty}
         onClose={() => setSelectedProperty(null)}
         onSelectProperty={(property) => setSelectedProperty(property)}
+        onLoginRequired={() => navigation.navigate("Login")}
         isWishlisted={isWishlisted}
         onToggleWishlist={toggleWishlist}
       />
@@ -1345,6 +1446,50 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.smallHelperText,
     fontWeight: "500",
     color: "#16A34A",
+  },
+  // Honest feed status (P0): error/loading/empty boxes for real listings.
+  listingStatusBox: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  listingStatusText: {
+    ...TYPOGRAPHY.smallHelperText,
+    color: "#64748B",
+    lineHeight: 18,
+  },
+  listingRetryBtn: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  listingRetryText: {
+    ...TYPOGRAPHY.button,
+    color: "#FFFFFF",
+  },
+  // Marks static editorial sections whose figures are illustrative sample
+  // data, so they are never mistaken for live marketplace listings.
+  sampleTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  sampleTagText: {
+    ...TYPOGRAPHY.smallHelperText,
+    fontWeight: "500",
+    color: "#92400E",
   },
 
   /* RECOMMENDED PROPERTIES SLIDER (SINGLE ROW) */

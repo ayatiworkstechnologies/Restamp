@@ -190,23 +190,21 @@ export default function ExploreScreen({ navigation }) {
     return matched.length > 0 ? matched : ALL_PROPERTIES.slice(0, 6);
   }, [selectedLocality]);
 
+  // Honest contact: Explore rows are sample catalog entries with no backend
+  // record, so their numbers never came from an authorized reveal and must
+  // not be dialed, messaged, or copied. Real contact flows live on Search.
   const handleCall = (phone, name) => {
-    const cleanNumber = (phone || "").replace(/[^0-9+]/g, "");
-    if (cleanNumber) {
-      Linking.openURL(`tel:${cleanNumber}`).catch(() => {
-        Alert.alert("Call Agent", `Dial ${phone} to speak with ${name || "the agent"}.`);
-      });
-    }
+    Alert.alert(
+      "Contact Number Unavailable",
+      "Explore listings are samples. Use Search to find live properties and View Number for genuine contact."
+    );
   };
 
   const handleWhatsApp = (property) => {
-    const phone = property?.agent?.phone || "+919876543210";
-    const cleanNumber = phone.replace(/[^0-9]/g, "");
-    const msg = `Hi, I found ${property?.title || "your property"} in ${property?.location} on RESTAMP and would like more details.`;
-    const url = `whatsapp://send?phone=${cleanNumber}&text=${encodeURIComponent(msg)}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert("WhatsApp", `Chat with agent at ${phone}`);
-    });
+    Alert.alert(
+      "Contact Number Unavailable",
+      "Explore listings are samples. Use Search to find live properties and View Number for genuine contact."
+    );
   };
 
   return (
@@ -500,6 +498,7 @@ export default function ExploreScreen({ navigation }) {
         onClose={() => setSelectedProperty(null)}
         isWishlisted={isWishlisted(selectedProperty?.id)}
         onToggleWishlist={toggleWishlist}
+        onLoginRequired={() => navigation.navigate("Login")}
       />
 
       {/* ================= CONTACT BOTTOM SHEET ================= */}
@@ -524,11 +523,13 @@ export default function ExploreScreen({ navigation }) {
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={styles.sheetTitle}>
-                  {contactProperty?.agent?.name || "Verified Agent"}
+                  {contactProperty?.agent?.name || "Seller"}
                 </Text>
-                <Text style={styles.sheetSub}>
-                  {contactProperty?.agent?.agency || "Chennai Prime Realty"}
-                </Text>
+                {contactProperty?.agent?.agency ? (
+                  <Text style={styles.sheetSub}>
+                    {contactProperty.agent.agency}
+                  </Text>
+                ) : null}
               </View>
               <TouchableOpacity
                 style={styles.closeBtn}
@@ -546,14 +547,14 @@ export default function ExploreScreen({ navigation }) {
               </Text>
             </View>
 
-            {/* Phone Display */}
+            {/* Phone Display: sample rows have no authorized number */}
             <TouchableOpacity
               style={styles.phoneBox}
               activeOpacity={0.7}
               onPress={() => {
                 Alert.alert(
-                  "Copied!",
-                  `${contactProperty?.agent?.phone || "+91 98401 22334"} copied to clipboard.`
+                  "Contact Number Unavailable",
+                  "Explore listings are samples. Use Search to find live properties and View Number for genuine contact."
                 );
               }}
             >
@@ -563,7 +564,7 @@ export default function ExploreScreen({ navigation }) {
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={styles.phoneLabel}>PHONE NUMBER</Text>
                 <Text style={styles.phoneNumber}>
-                  {contactProperty?.agent?.phone || "+91 98401 22334"}
+                  Not available
                 </Text>
               </View>
               <View style={styles.copyPill}>

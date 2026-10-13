@@ -106,10 +106,12 @@ export default function AccountScreen() {
           </Pressable>
         </View>
 
-        {/* Quick Stats Banner */}
+        {/* Quick Stats Banner (P2 honesty: no sample counts. Saved is the
+            honest wishlist length; visits/enquiries have no data source here
+            so they show unknown instead of fabricated totals.) */}
         <View style={styles.statsCard}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statNumber}>–</Text>
             <Text style={styles.statLabel}>Site Visits</Text>
           </View>
           <View style={styles.statDivider} />
@@ -119,7 +121,7 @@ export default function AccountScreen() {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>4</Text>
+            <Text style={styles.statNumber}>–</Text>
             <Text style={styles.statLabel}>Enquiries</Text>
           </View>
         </View>
@@ -133,7 +135,7 @@ export default function AccountScreen() {
               onPress={() =>
                 Alert.alert(
                   "Scheduled Site Visits",
-                  "1. Emerald Heights Luxury 3BHK (Tomorrow, 11:00 AM)\n2. Sea Breeze Beach Villa (Saturday, 4:00 PM)"
+                  "You have no scheduled site visits."
                 )
               }
             >
@@ -141,9 +143,6 @@ export default function AccountScreen() {
                 <Building2 size={18} color={COLORS.primary} />
               </View>
               <Text style={styles.rowTitle}>Scheduled Site Visits</Text>
-              <View style={styles.upcomingBadge}>
-                <Text style={styles.upcomingBadgeText}>2 Upcoming</Text>
-              </View>
               <ChevronRight size={16} color={COLORS.muted} />
             </Pressable>
 
@@ -152,7 +151,7 @@ export default function AccountScreen() {
             <Pressable
               style={styles.rowItem}
               onPress={() =>
-                Alert.alert("Property Documents", "All title deeds & verification documents loaded.")
+                Alert.alert("Property Documents", "No property documents available.")
               }
             >
               <View style={[styles.iconBox, { backgroundColor: "#FFF7E6" }]}>
@@ -234,13 +233,13 @@ export default function AccountScreen() {
           <View style={styles.cardGroup}>
             <Pressable
               style={styles.rowItem}
-              onPress={() => Alert.alert("Payment Methods", "Visa ending in •••• 4242")}
+              onPress={() => Alert.alert("Payment Methods", "No payment methods added.")}
             >
               <View style={[styles.iconBox, { backgroundColor: "#FFF2E8" }]}>
                 <CreditCard size={18} color="#FA541C" />
               </View>
               <Text style={styles.rowTitle}>Payment Methods</Text>
-              <Text style={styles.rowValue}>•••• 4242</Text>
+              <Text style={styles.rowValue}>–</Text>
               <ChevronRight size={16} color={COLORS.muted} />
             </Pressable>
 

@@ -19,7 +19,6 @@ import {
   Clock,
   MapPin,
   CheckCircle2,
-  Check,
   Building2,
   User,
   Mail,
@@ -32,6 +31,7 @@ import {
 
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
+import { updateOwnerLeadStatus, toOwnerLead } from "../../api/owner";
 import StatusBadge from "../../components/owner/StatusBadge";
 import PrimaryButton from "../../components/owner/PrimaryButton";
 import SecondaryButton from "../../components/owner/SecondaryButton";
@@ -51,6 +51,9 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
 
   const matchedProperty = useMemo(() => {
     if (!lead) return null;
+    // Genuine match only; otherwise null (the property modal below is
+    // guarded, and the row shows an honest unavailable message). Never
+    // synthesize a property record.
     return (
       properties.find(
         (p) =>
@@ -58,18 +61,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
           (p.title &&
             lead.propertyTitle &&
             p.title.toLowerCase().trim() === lead.propertyTitle.toLowerCase().trim())
-      ) || {
-        id: lead.propertyId || "prop-lead",
-        title: lead.propertyTitle || "2 BHK Luxury Apartment",
-        coverPhoto: lead.propertyImage,
-        images: lead.propertyImage ? [lead.propertyImage] : [],
-        priceFormatted: lead.propertyPrice || "₹25,000 / month",
-        locality: lead.propertyLocality || "Anna Nagar, Chennai",
-        city: "Chennai",
-        purpose: lead.requirement || "Rent",
-        category: "Residential",
-        status: "active",
-      }
+      ) || null
     );
   }, [properties, lead]);
 
@@ -97,11 +89,51 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
       setShowVisitModal(true);
       return;
     }
-    updateLeadStatus(lead.id, newStatus);
-    setLead((prev) => ({ ...prev, status: newStatus }));
+    persistLeadStatus(newStatus);
+  };
+
+  // Persist a supported status change (P4): optimistic local flip, then the
+  // server-confirmed row; on failure the previous snapshot is restored with
+  // an honest error (never false success).
+  const persistLeadStatus = async (newStatus, closingReason) => {
+    const prevSnapshot = { ...lead };
+    updateLeadStatus(lead.id, newStatus, closingReason ?? undefined);
+    setLead((prev) => ({
+      ...prev,
+      status: newStatus,
+      ...(closingReason !== undefined ? { closedOutcome: closingReason } : {}),
+    }));
+    try {
+      const updated = await updateOwnerLeadStatus(lead.id, {
+        status: newStatus,
+        closingReason,
+      });
+      const mapped = toOwnerLead(updated);
+      setLead((prev) => ({
+        ...prev,
+        ...mapped,
+        visitData: prev.visitData,
+        internalNotes: prev.internalNotes,
+      }));
+    } catch {
+      updateLeadStatus(lead.id, prevSnapshot.status, prevSnapshot.closedOutcome);
+      setLead(prevSnapshot);
+      Alert.alert(
+        "Couldn't update lead",
+        "Please check your connection and try again."
+      );
+    }
   };
 
   const handleCall = () => {
+    // P3 honesty: real leads carry no phone; never dial a sample number.
+    if (!lead.phone) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The buyer's contact number is not available."
+      );
+      return;
+    }
     Alert.alert("Calling Customer", `Dialing ${lead.customerName} (${lead.phone})...`);
     if (lead.status === "new") {
       handleUpdateStatus("contacted");
@@ -109,6 +141,13 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
   };
 
   const handleWhatsApp = () => {
+    if (!lead.phone) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The buyer's contact number is not available."
+      );
+      return;
+    }
     Alert.alert(
       "WhatsApp & Message",
       `Opening direct chat with ${lead.customerName} (${lead.phone}).`
@@ -154,7 +193,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Lead Details</Text>
           <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {lead.customerName}
+            {lead.customerName || "Buyer enquiry"}
           </Text>
         </View>
 
@@ -169,22 +208,22 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         {/* ================= BUYER DETAILS ================= */}
         <View style={styles.section}>
           <View style={styles.buyerTopRow}>
-            <Image
-              source={{
-                uri:
-                  lead.avatar ||
-                  "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
-              }}
-              style={styles.buyerAvatar}
-            />
+            {lead.avatar ? (
+              <Image
+                source={{ uri: lead.avatar }}
+                style={styles.buyerAvatar}
+              />
+            ) : (
+              <View style={[styles.buyerAvatar, { alignItems: "center", justifyContent: "center", backgroundColor: "#EFF6FF" }]}>
+                <Text style={{ fontSize: 20, fontWeight: "700", color: "#2563EB" }}>
+                  {(lead.customerName || "B").charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.buyerInfoCol}>
               <View style={styles.buyerNameRow}>
-                <Text style={styles.buyerNameText}>{lead.customerName}</Text>
-                <View style={styles.verifiedTag}>
-                  <Check size={10} color="#16A34A" strokeWidth={3} />
-                  <Text style={styles.verifiedTagText}>Verified</Text>
-                </View>
+                <Text style={styles.buyerNameText}>{lead.customerName || "Buyer enquiry"}</Text>
               </View>
 
               <TouchableOpacity
@@ -193,7 +232,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
                 activeOpacity={0.7}
               >
                 <Phone size={13} color="#2563EB" style={{ marginRight: 6 }} />
-                <Text style={styles.buyerPhoneText}>{lead.phone}</Text>
+                <Text style={styles.buyerPhoneText}>{lead.phone || "Not available"}</Text>
               </TouchableOpacity>
 
               {lead.email ? (
@@ -236,37 +275,48 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
           <TouchableOpacity
             style={styles.propertyRow}
             activeOpacity={0.85}
-            onPress={() => setShowPropertyModal(true)}
+            onPress={() => {
+              if (matchedProperty) {
+                setShowPropertyModal(true);
+              } else {
+                Alert.alert(
+                  "Property Details Unavailable",
+                  "Full property details for this lead are not available."
+                );
+              }
+            }}
           >
-            <Image
-              source={{
-                uri:
-                  lead.propertyImage ||
-                  "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=500&q=80",
-              }}
-              style={styles.propertyImage}
-            />
+            {lead.propertyImage ? (
+              <Image
+                source={{ uri: lead.propertyImage }}
+                style={styles.propertyImage}
+              />
+            ) : (
+              <View style={[styles.propertyImage, { alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" }]}>
+                <Building2 size={24} color="#94A3B8" />
+              </View>
+            )}
 
             <View style={styles.propertyInfo}>
               <View style={styles.propertyBadgeWrap}>
                 <Text style={styles.propertyBadgeText}>
-                  {(lead.requirement || "FOR RENT").toUpperCase()}
+                  {(lead.requirement || "ENQUIRY").toUpperCase()}
                 </Text>
               </View>
 
               <Text style={styles.propertyTitleText} numberOfLines={1}>
-                {lead.propertyTitle || "2 BHK Luxury Apartment"}
+                {lead.propertyTitle || "Property enquiry"}
               </Text>
 
               <View style={styles.propertyLocRow}>
                 <MapPin size={12} color="#64748B" style={{ marginRight: 4 }} />
                 <Text style={styles.propertyLocText} numberOfLines={1}>
-                  {lead.propertyLocality || "Anna Nagar, Chennai"}
+                  {lead.propertyLocality || "Not available"}
                 </Text>
               </View>
 
               <Text style={styles.propertyPriceText}>
-                {lead.propertyPrice || "₹25,000 / month"}
+                {lead.propertyPrice || "—"}
               </Text>
             </View>
           </TouchableOpacity>
@@ -286,28 +336,28 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
                   ? "Villa"
                   : lead.propertyTitle?.includes("Office")
                   ? "Commercial"
-                  : "2 BHK Apartment"}
+                  : "Not available"}
               </Text>
             </View>
 
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>BUDGET</Text>
               <Text style={[styles.specValue, { color: "#2563EB", fontWeight: "700" }]}>
-                {lead.budget || lead.propertyPrice || "₹25,000 / month"}
+                {lead.budget || lead.propertyPrice || "—"}
               </Text>
             </View>
 
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>PREFERRED LOCALITY</Text>
               <Text style={styles.specValue}>
-                {lead.propertyLocality?.split(",")[0] || "Anna Nagar"}
+                {lead.propertyLocality?.split(",")[0] || "Not available"}
               </Text>
             </View>
 
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>MOVE-IN / VISIT</Text>
               <Text style={styles.specValue}>
-                {lead.preferredVisitDate || "Within 10 days"}
+                {lead.preferredVisitDate || "Not scheduled"}
               </Text>
             </View>
           </View>
@@ -453,6 +503,8 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         lead={lead}
         onClose={() => setShowVisitModal(false)}
         onVisitScheduled={(leadId, visitData) => {
+          // Visit scheduling persistence is on hold (no backend support):
+          // device-local flip only, documented in the P4 report.
           scheduleVisit(leadId, visitData);
           setLead((prev) => ({
             ...prev,
@@ -468,12 +520,12 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         lead={lead}
         onClose={() => setShowCloseModal(false)}
         onCloseLeadWithOutcome={(leadId, outcome, closeProp, propId) => {
-          closeLead(leadId, outcome, closeProp, propId);
-          setLead((prev) => ({
-            ...prev,
-            status: outcome === "Not Converted" ? "lost" : "closed",
-            closedOutcome: outcome,
-          }));
+          // P4 rules: close only the lead (closeProp ignored — the modal no
+          // longer offers it), and persist CLOSED with the outcome as
+          // closing_reason (no LOST backend status exists).
+          closeLead(leadId, outcome, false, null);
+          persistLeadStatus("closed", outcome);
+          setShowCloseModal(false);
         }}
       />
 

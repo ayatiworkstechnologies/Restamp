@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -31,7 +31,7 @@ import {
 
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
-import { fetchOwnerListings, toOwnerProperty, freshAddParams } from "../../api/owner";
+import { fetchOwnerListings, toOwnerProperty, freshAddParams, sumOwnerMetrics, fetchOwnerLeads, toOwnerLead } from "../../api/owner";
 import RestampLogo from "../../components/RestampLogo";
 import AppBrandHeader from "../../components/AppBrandHeader";
 
@@ -52,11 +52,41 @@ export default function OwnerDashboardScreen({ navigation }) {
       .catch(() => {});
   }, []);
 
+  // Genuine recent buyer-enquiry leads (P3, same GET /owner/leads as the
+  // Leads screens — no extra endpoint). Silent fallback to the local store
+  // (honest empty post-P1) when the request fails.
+  const [serverRecentLeads, setServerRecentLeads] = useState(null);
+  const [serverLeadsTotal, setServerLeadsTotal] = useState(null);
+  const recentLeadsReqId = useRef(0);
+
+  const loadRecentLeads = useCallback(() => {
+    // Request-ID guard: stale responses never overwrite newer rows.
+    const myReq = ++recentLeadsReqId.current;
+    fetchOwnerLeads({ pageSize: 4 })
+      .then((resp) => {
+        if (recentLeadsReqId.current !== myReq) return;
+        setServerRecentLeads((resp.items || []).map(toOwnerLead));
+        setServerLeadsTotal(typeof resp.total === "number" ? resp.total : null);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     loadLiveListings();
-    const unsubscribe = navigation.addListener("focus", loadLiveListings);
+    loadRecentLeads();
+    const unsubscribe = navigation.addListener("focus", () => {
+      loadLiveListings();
+      loadRecentLeads();
+    });
     return unsubscribe;
-  }, [navigation, loadLiveListings]);
+  }, [navigation, loadLiveListings, loadRecentLeads]);
+
+  // Invalidate in-flight lead fetches on unmount.
+  useEffect(() => {
+    return () => {
+      recentLeadsReqId.current++;
+    };
+  }, []);
 
   const properties = useMemo(() => {
     if (!liveProperties) return localProperties;
@@ -70,13 +100,14 @@ export default function OwnerDashboardScreen({ navigation }) {
   const pendingCount = properties.filter((p) => p.status === "pending").length;
   const closedCount = properties.filter((p) => p.status === "closed").length;
 
-  // Aggregate performance stats
-  const totalViews = properties.reduce((acc, p) => acc + (p.views || 0), 0);
-  const totalEnquiries = properties.reduce((acc, p) => acc + (p.enquiries || 0), 0);
-  const totalVisits = properties.reduce((acc, p) => acc + (p.visits || 0), 0);
+  // Aggregate performance stats from genuine records only (P1): missing
+  // counters count as zero, so a fresh account honestly shows 0s.
+  const { totalViews, totalEnquiries, totalVisits } = sumOwnerMetrics(properties);
 
-  // Latest leads & primary property
-  const recentLeads = leads.slice(0, 4);
+  // Latest leads & primary property (genuine server rows when loaded,
+  // otherwise the honest-empty local store).
+  const recentLeads = (serverRecentLeads ?? leads).slice(0, 4);
+  const recentLeadsTotal = serverLeadsTotal ?? leads.length;
   const primaryProperty = properties.find((p) => p.status === "active") || properties[0];
 
   // Dynamic date matching reference design ("Wednesday, 11 May")
@@ -226,7 +257,7 @@ export default function OwnerDashboardScreen({ navigation }) {
               </View>
               <ArrowRight size={14} color="#94A3B8" />
             </View>
-            <Text style={styles.metricNumber}>{totalEnquiries || 14}</Text>
+            <Text style={styles.metricNumber}>{totalEnquiries}</Text>
             <Text style={styles.metricLabel}>Total inquiries</Text>
           </TouchableOpacity>
 
@@ -243,7 +274,7 @@ export default function OwnerDashboardScreen({ navigation }) {
               <ArrowRight size={14} color="#94A3B8" />
             </View>
             <Text style={styles.metricNumber}>
-              {totalViews > 0 ? totalViews.toLocaleString("en-IN") : "1,248"}
+              {totalViews.toLocaleString("en-IN")}
             </Text>
             <Text style={styles.metricLabel}>Property views</Text>
           </TouchableOpacity>
@@ -264,7 +295,7 @@ export default function OwnerDashboardScreen({ navigation }) {
               <ArrowRight size={14} color="#94A3B8" />
             </View>
             <Text style={styles.metricNumber}>
-              {String(totalVisits || 6).padStart(2, "0")}
+              {String(totalVisits).padStart(2, "0")}
             </Text>
             <Text style={styles.metricLabel}>Site visits booked</Text>
           </TouchableOpacity>
@@ -316,7 +347,7 @@ export default function OwnerDashboardScreen({ navigation }) {
             <View>
               <Text style={styles.sectionTitle}>Recent Enquiries</Text>
               <Text style={styles.sectionSubtitle}>
-                {leads.length} enquiries • <Text style={styles.sectionSubtitleAccent}>Active today</Text>
+                {recentLeadsTotal} {recentLeadsTotal === 1 ? "enquiry" : "enquiries"} • <Text style={styles.sectionSubtitleAccent}>Active today</Text>
               </Text>
             </View>
             <TouchableOpacity
@@ -338,46 +369,57 @@ export default function OwnerDashboardScreen({ navigation }) {
                   onPress={() => navigation.navigate("OwnerLeadDetail", { lead })}
                   activeOpacity={0.75}
                 >
-                  {/* Round Profile Avatar Image */}
+                  {/* Round Profile Avatar Image (initial fallback when no genuine photo) */}
                   <View style={styles.enquiryAvatarWrap}>
-                    <Image
-                      source={{
-                        uri:
-                          lead.avatar ||
-                          "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
-                      }}
-                      style={styles.enquiryAvatar}
-                      resizeMode="cover"
-                    />
+                    {lead.avatar ? (
+                      <Image
+                        source={{ uri: lead.avatar }}
+                        style={styles.enquiryAvatar}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.enquiryAvatar, { alignItems: "center", justifyContent: "center", backgroundColor: "#EFF6FF" }]}>
+                        <Text style={{ fontSize: 16, fontWeight: "700", color: "#2563EB" }}>
+                          {(lead.customerName || "B").charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Middle Info */}
                   <View style={styles.enquiryInfo}>
                     <Text style={styles.enquiryName} numberOfLines={1}>
-                      {lead.customerName}
+                      {lead.customerName || "Buyer enquiry"}
                     </Text>
                     <View style={styles.enquirySubRow}>
                       <View style={styles.enquiryChip}>
                         <Text style={styles.enquiryChipText} numberOfLines={1}>
-                          {lead.propertyTitle || "2 BHK Luxury"}
+                          {lead.propertyTitle || "Property enquiry"}
                         </Text>
                       </View>
                       <Text style={styles.enquiryDot}>•</Text>
                       <Text style={styles.enquiryStatusText} numberOfLines={1}>
-                        {lead.budget || lead.timestamp || "Verified"}
+                        {lead.status ? lead.status.toUpperCase() : "NEW"}
                       </Text>
                     </View>
                   </View>
 
-                  {/* Right Action: Call button */}
+                  {/* Right Action: Call button (honest unavailable when no genuine number) */}
                   <TouchableOpacity
                     style={styles.enquiryCallBtn}
-                    onPress={() =>
-                      Alert.alert("Call Lead", `Dialing ${lead.phone || "+91 98765 43210"}?`, [
+                    onPress={() => {
+                      if (!lead.phone) {
+                        Alert.alert(
+                          "Phone Number Unavailable",
+                          "The buyer's contact number is not available."
+                        );
+                        return;
+                      }
+                      Alert.alert("Call Lead", `Dialing ${lead.phone}?`, [
                         { text: "Cancel", style: "cancel" },
                         { text: "Call", onPress: () => {} },
-                      ])
-                    }
+                      ]);
+                    }}
                     activeOpacity={0.7}
                   >
                     <Phone size={14} color={COLORS.primary} fill={COLORS.primary} />
@@ -403,12 +445,12 @@ export default function OwnerDashboardScreen({ navigation }) {
           <View style={styles.minimalListCard}>
             <View style={styles.planRowItem}>
               <Text style={styles.planKey}>Current Plan</Text>
-              <Text style={styles.planVal}>{subscription?.planName || "Owner Pro Plan"}</Text>
+              <Text style={styles.planVal}>{subscription?.planName || "Standard"}</Text>
             </View>
             <View style={styles.planRowDivider} />
             <View style={styles.planRowItem}>
               <Text style={styles.planKey}>Validity</Text>
-              <Text style={styles.planVal}>{subscription?.validity || "Until Leased / Sold"}</Text>
+              <Text style={styles.planVal}>{subscription?.validity || "—"}</Text>
             </View>
             <View style={styles.planRowDivider} />
             <View style={styles.planRowItem}>
