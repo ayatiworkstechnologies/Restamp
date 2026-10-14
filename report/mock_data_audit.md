@@ -738,3 +738,14 @@ draft-save feedback (saving/saved-disabled states, failure alert) without
 requiring new UI. No runtime, backend, or OTP changes. Full details in
 `report/property_workflow_regression_tests.md`. All 7 frontend suites pass;
 `npm run build:web` succeeds; `git diff --check` clean.
+
+## 19. Live fixes — Owner identity + API timeout (2026-10-13, frontend only, uncommitted)
+
+Owner Profile now derives identity from the authenticated user (mock person,
+avatar, KYC, and membership claims removed; neutral fallbacks); API requests
+carry a bounded 25s timeout mapping to a recoverable `"timeout"` error that
+is never reported as an invalid OTP. New `scripts/live-identity-timeout.test.mjs`
+passes; full details in `report/live_owner_identity_otp_fix.md`. All 8 frontend
+suites pass; `npm run build:web` succeeds; `git diff --check` clean. No backend,
+OTP-rule, schema, or deployment changes. Render cold-start remains an unproven
+hypothesis.

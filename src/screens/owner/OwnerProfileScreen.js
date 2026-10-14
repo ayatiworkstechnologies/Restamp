@@ -80,9 +80,15 @@ export default function OwnerProfileScreen({ navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* PROFILE HEADER */}
+        {/* PROFILE HEADER (identity comes from the authenticated user) */}
         <View style={styles.profileHeaderCard}>
-          <Image source={{ uri: ownerProfile.avatar }} style={styles.avatar} />
+          {ownerProfile.avatar ? (
+            <Image source={{ uri: ownerProfile.avatar }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, { alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" }]}>
+              <User size={24} color="#64748B" />
+            </View>
+          )}
 
           <View style={styles.profileInfo}>
             <TouchableOpacity
@@ -94,8 +100,8 @@ export default function OwnerProfileScreen({ navigation }) {
               <Pencil size={15} color="#475569" style={styles.pencilIcon} />
             </TouchableOpacity>
 
-            <Text style={styles.phoneText}>{ownerProfile.phone}</Text>
-            <Text style={styles.emailText}>{ownerProfile.email}</Text>
+            <Text style={styles.phoneText}>{ownerProfile.phone || "Phone not provided"}</Text>
+            <Text style={styles.emailText}>{ownerProfile.email || "Email not provided"}</Text>
 
             {ownerProfile.verified && (
               <View style={styles.verifiedBadge}>
@@ -144,7 +150,7 @@ export default function OwnerProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => Alert.alert("KYC & Verification", "Aadhaar / Property Deed Verification Status: VERIFIED")}
+            onPress={() => Alert.alert("KYC & Verification", "Identity verification is not available yet.")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -152,7 +158,6 @@ export default function OwnerProfileScreen({ navigation }) {
               <Text style={styles.menuLabel}>KYC / Verification</Text>
             </View>
             <View style={styles.badgeRow}>
-              <Text style={styles.kycStatusText}>Verified</Text>
               <ChevronRight size={16} color="#94A3B8" />
             </View>
           </TouchableOpacity>

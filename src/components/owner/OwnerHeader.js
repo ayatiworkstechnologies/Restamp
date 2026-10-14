@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
-import { Bell, ArrowLeft } from "lucide-react-native";
+import { Bell, ArrowLeft, User } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
 import { useNavigation } from "@react-navigation/native";
@@ -56,7 +56,7 @@ export default function OwnerHeader({
           {greeting ? (
             <>
               <Text style={styles.greetingText}>
-                Good Morning, {ownerProfile.firstName || "Raj"} 👋
+                Good Morning{ownerProfile.firstName ? `, ${ownerProfile.firstName}` : ""} 👋
               </Text>
               <Text style={styles.subGreetingText}>RESTAMP Owner Partner</Text>
             </>
@@ -87,17 +87,23 @@ export default function OwnerHeader({
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.avatarBtn}
-              activeOpacity={0.8}
-              onPress={handleProfilePress}
-            >
-              <Image
-                source={{ uri: ownerProfile.avatar }}
-                style={styles.avatarImg}
-              />
-              <View style={styles.onlineDot} />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.avatarBtn}
+                activeOpacity={0.8}
+                onPress={handleProfilePress}
+              >
+                {ownerProfile.avatar ? (
+                  <Image
+                    source={{ uri: ownerProfile.avatar }}
+                    style={styles.avatarImg}
+                  />
+                ) : (
+                  <View style={[styles.avatarImg, { alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" }]}>
+                    <User size={18} color="#64748B" />
+                  </View>
+                )}
+                <View style={styles.onlineDot} />
+              </TouchableOpacity>
           </View>
         )}
       </View>

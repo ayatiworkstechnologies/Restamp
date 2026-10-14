@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useMemo } from "react";
+import { useAuth } from "./AuthContext";
 
 const OwnerContext = createContext();
 
@@ -23,20 +24,25 @@ export function OwnerProvider({ children }) {
     usedListings: 0,
   });
 
-  // Owner Profile
-  // NOTE (Edit phase): phone/email default to blank — never demo values.
-  // New listings prefill the authenticated user's phone (see
-  // OwnerAddPropertyScreen); Edit restores the listing's saved contact.
-  const [ownerProfile, setOwnerProfile] = useState({
-    name: "Arunavo Mukherjee",
-    firstName: "Arunavo",
-    phone: "",
-    email: "",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80",
-    verified: true,
-    kycStatus: "Verified",
-    memberSince: "June 2025",
-  });
+  // Owner Profile — derived from the authenticated user (same source of
+  // truth as Buyer Profile). No request is made here: AuthContext already
+  // holds the /auth/me user, so identity updates on login and role switch
+  // with zero extra calls. Absent fields stay blank/generic — never another
+  // mock person's identity. No KYC or membership claims: no backend source
+  // exists for them. Listing/lead/plan state below is Owner business data
+  // and is intentionally separate from user identity.
+  const { user: authUser } = useAuth();
+  const ownerProfile = useMemo(
+    () => ({
+      name: authUser?.name || "Owner",
+      firstName: authUser?.firstName || "",
+      phone: authUser?.phone || "",
+      email: authUser?.email || "",
+      avatar: authUser?.avatar || null,
+      verified: authUser?.verified || false,
+    }),
+    [authUser]
+  );
 
   // Properties State
   const [properties, setProperties] = useState(INITIAL_PROPERTIES);
@@ -170,7 +176,6 @@ export function OwnerProvider({ children }) {
     setSubscription,
     activateSubscription,
     ownerProfile,
-    setOwnerProfile,
     properties,
     setProperties,
     addProperty,

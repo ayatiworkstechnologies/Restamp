@@ -89,6 +89,7 @@ export default function LoginScreen({ navigation }) {
     if (e.kind === "validation") return "Enter a valid phone number with country code.";
     if (e.status === 429 || e.kind === "retry_later")
       return "Too many attempts. Please wait a while and try again.";
+    if (e.kind === "timeout") return "The request timed out. Please check your connection and try again.";
     if (e.kind === "offline") return "No connection. Check your internet and try again.";
     return "Could not reach the server. Please try again.";
   };

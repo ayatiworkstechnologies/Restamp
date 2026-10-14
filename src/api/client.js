@@ -82,6 +82,79 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Bounded request timeout (25s). Without it a slow/unreachable backend
+ * (e.g. a cold hosted instance) hangs `await fetch` indefinitely, leaving
+ * login and other flows stuck on a spinner with no recovery. Timeouts map
+ * to kind "timeout" (status 0) — recoverable and retryable, never confused
+ * with auth/validation failures. Caller-provided AbortSignals keep working:
+ * only our own timer maps to "timeout"; a caller abort rethrows untouched.
+ */
+export const REQUEST_TIMEOUT_MS = 25000;
+
+// Test-only override for the timeout above (plain-node suites cannot wait
+// 25s). Production code never calls this.
+let requestTimeoutMs = REQUEST_TIMEOUT_MS;
+export function __setRequestTimeoutMs(ms) {
+  requestTimeoutMs = ms;
+}
+
+function fetchWithTimeout(url, options = {}) {
+  if (typeof AbortController === "undefined") {
+    return fetch(url, options);
+  }
+  const { signal: callerSignal, ...rest } = options;
+  const controller = new AbortController();
+  let timedOut = false;
+  const onCallerAbort = () => controller.abort();
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      const early = new Error("The operation was aborted.");
+      early.name = "AbortError";
+      return Promise.reject(early);
+    }
+    callerSignal.addEventListener("abort", onCallerAbort, { once: true });
+  }
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, requestTimeoutMs);
+  const done = () => {
+    clearTimeout(timer);
+    if (callerSignal) callerSignal.removeEventListener("abort", onCallerAbort);
+  };
+  return fetch(url, { ...rest, signal: controller.signal }).then(
+    (response) => {
+      done();
+      return response;
+    },
+    (error) => {
+      done();
+      if (timedOut) {
+        throw new ApiError(
+          "timeout",
+          0,
+          "The request timed out. Please check your connection and try again."
+        );
+      }
+      throw error;
+    }
+  );
+}
+
+function toNetworkError(e) {
+  // Our own timeout already carries the right shape; a caller abort is
+  // rethrown untouched so cancellation is never misclassified; anything
+  // else is an unreachable-backend failure as before.
+  if (e instanceof ApiError) return e;
+  if (e && e.name === "AbortError") throw e;
+  throw new ApiError(
+    "offline",
+    0,
+    "No connection. Make sure the backend is running and reachable."
+  );
+}
+
 function mapStatus(status) {
   if (status === 401) return "login";
   if (status === 403) return "denied";
@@ -100,13 +173,9 @@ export async function apiGet(path, params = {}) {
   const url = `${API_BASE_URL}${path}${qs ? `?${qs}` : ""}`;
   let response;
   try {
-    response = await fetch(url, { headers: { Accept: "application/json" } });
-  } catch {
-    throw new ApiError(
-      "offline",
-      0,
-      "No connection. Make sure the backend is running and reachable.",
-    );
+    response = await fetchWithTimeout(url, { headers: { Accept: "application/json" } });
+  } catch (e) {
+    throw toNetworkError(e);
   }
   if (response.ok) return response.json();
   throw new ApiError(
@@ -178,13 +247,9 @@ async function authedFetch(url, options = {}) {
   };
   let response;
   try {
-    response = await fetch(url, { ...options, headers });
-  } catch {
-    throw new ApiError(
-      "offline",
-      0,
-      "No connection. Make sure the backend is running and reachable.",
-    );
+    response = await fetchWithTimeout(url, { ...options, headers });
+  } catch (e) {
+    throw toNetworkError(e);
   }
   if (response.ok) {
     if (response.status === 204) return null;

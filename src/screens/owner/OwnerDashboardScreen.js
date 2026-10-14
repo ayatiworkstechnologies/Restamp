@@ -126,7 +126,7 @@ export default function OwnerDashboardScreen({ navigation }) {
       ? "Good afternoon"
       : "Good evening";
 
-  const ownerName = ownerProfile?.firstName || "Arunavo";
+  const ownerName = ownerProfile?.firstName || ownerProfile?.name || "there";
 
   const handleAddProperty = () => {
     navigation.navigate("Add", freshAddParams());
