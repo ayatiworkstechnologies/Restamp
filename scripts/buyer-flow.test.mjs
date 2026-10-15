@@ -39,7 +39,7 @@ for (const f of ["contact.js", "enquiries.js"]) {
     )
   );
 }
-const { buildListingParams } = await import(join(tmp, "mappers.js"));
+const { buildListingParams, parseSmartQuery } = await import(join(tmp, "mappers.js"));
 const { revealContactPhone } = await import(join(tmp, "contact.js"));
 const { createEnquiry } = await import(join(tmp, "enquiries.js"));
 
@@ -50,6 +50,7 @@ const homeSrc = src("src/screens/buyer/HomeScreen.js");
 const searchSrc = src("src/screens/buyer/SearchScreen.js");
 const detailSrc = src("src/components/PropertyDetailModal.js");
 const exploreSrc = src("src/screens/buyer/ExploreScreen.js");
+const modalSrc = src("src/components/SearchPropertyModal.js");
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -81,8 +82,9 @@ check(
     !("property_type" in P({}))
 );
 check(
-  "M4 query/locality contract (q wins, locality fallback)",
+  "M4 query/locality contract (q wins, locality fallback, whitespace collapsed)",
   P({ searchQuery: " Anna Nagar " }).q === "Anna Nagar" &&
+    P({ searchQuery: "  villa   anna  " }).q === "villa anna" &&
     !("locality" in P({ searchQuery: "x", locality: "OMR" })) &&
     P({ locality: "OMR" }).locality === "OMR" &&
     !("q" in P({ searchQuery: "   " }))
@@ -260,6 +262,117 @@ check(
     longBody.property_listing_id === 78 && longBody.message.length === 2000
   );
   globalThis.fetch = realFetch;
+}
+
+if (false) {
+  console.log("placeholder-never");
+}
+
+// --- 7. Smart query parsing (deterministic, no AI) ---
+{
+  const t1 = parseSmartQuery("2 BHK in Anna Nagar");
+  check(
+    "Q1 BHK + locality split (stopword dropped)",
+    t1.bedrooms === 2 && t1.q === "anna nagar" && t1.property_type == null
+  );
+  const t2 = parseSmartQuery("villa near ECR");
+  check(
+    "Q2 type + locality split",
+    t2.property_type === "VILLA" && t2.q === "ecr"
+  );
+  const t3 = parseSmartQuery("apartment under 80 lakhs");
+  check(
+    "Q3 price bound parsed (80L -> paise)",
+    t3.property_type === "APARTMENT" &&
+      t3.max_price_paise === 8000000 * 100 &&
+      t3.q === ""
+  );
+  const t4 = parseSmartQuery("Home ECR starter 1BHK");
+  check(
+    "Q4 ambiguous home kept as text, 1BHK extracted",
+    t4.property_type == null && t4.bedrooms === 1 && t4.q === "home ecr starter"
+  );
+  const t5 = parseSmartQuery("under 80");
+  check(
+    "Q5 unit-less price stays text (ambiguous, no filter)",
+    t5.max_price_paise == null && t5.q === "under 80"
+  );
+  const t6 = parseSmartQuery("   ");
+  check(
+    "Q6 blank query yields no filters",
+    t6.q === "" && t6.bedrooms == null && t6.property_type == null &&
+      t6.min_price_paise == null && t6.max_price_paise == null
+  );
+  const t7 = parseSmartQuery("above 1 cr commercial");
+  check(
+    "Q7 lower bound + type",
+    t7.min_price_paise === 10000000 * 100 && t7.property_type === "COMMERCIAL" && t7.q === ""
+  );
+  check(
+    "Q8 suggestions use the existing endpoint (no new API)",
+    modalSrc.includes('apiGet("/buyer/listings"') &&
+      modalSrc.includes("suggReqId") &&
+      modalSrc.includes("Matching Properties") &&
+      !modalSrc.includes("/buyer/suggest")
+  );
+}
+
+// --- 8. Suggestion tap opens the real detail screen ---
+{
+  const modalBlock = modalSrc.slice(modalSrc.indexOf("liveSuggestions.map"));
+  check(
+    "D1 tap opens detail with the real listing id (no fabrication)",
+    modalSrc.includes("onSelectProperty") &&
+      modalBlock.includes("typeof s.backendId") &&
+      modalBlock.includes("onSelectProperty(s)")
+  );
+  check(
+    "D2 missing id falls back to query text (never invented)",
+    modalBlock.includes("setSelectedLocality(s.title)")
+  );
+  check(
+    "D3 parent opens detail and dismisses modal (close cannot cancel open)",
+    searchSrc.includes("onSelectProperty={(suggestion)") &&
+      searchSrc.includes("openProperty(suggestion)") &&
+      searchSrc.includes("setIsSearchModalOpen(false)")
+  );
+  check(
+    "D4 suggestions respect the selected property type",
+    modalSrc.includes("params.property_type") &&
+      modalSrc.includes("modalType") &&
+      modalSrc.indexOf("property_type", modalSrc.indexOf("suggReqId")) !== -1
+  );
+  check(
+    "D5 clearing the query clears stale suggestions",
+    modalSrc.includes("setLiveSuggestions([])")
+  );
+}
+
+// --- 9. Modal count consistency (live backend count, conflict honesty) ---
+{
+  check(
+    "E1 Show-count uses the live count_only endpoint (never mock catalog)",
+    modalSrc.includes("count_only") &&
+      modalSrc.includes("liveMatchedCount") &&
+      !modalSrc.includes("ALL_PROPERTIES") &&
+      !modalSrc.includes("matchedCount")
+  );
+  check(
+    "E2 count reuses Apply's exact filters (buildListingParams)",
+    modalSrc.includes("buildListingParams(") &&
+      modalSrc.includes("propertyType: modalType")
+  );
+  check(
+    "E3 conflicting query/filter explained, selections win",
+    modalSrc.includes("filterConflictNote") &&
+      modalSrc.includes("selected filters will be used") &&
+      modalSrc.includes("parseSmartQuery(")
+  );
+  check(
+    "E4 count failures hide the number (never invented)",
+    modalSrc.includes("Show Properties") &&
+      modalSrc.includes("setCountFailed(true)")
+  );
 }
 
 if (failures > 0) {

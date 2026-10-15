@@ -406,7 +406,7 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
                   ? "Start a listing and tap Save Draft to resume it here later."
                   : `You currently have zero properties under the ${activeTab} category.`
             }
-            buttonTitle="+ Add Property"
+            buttonTitle="Add Property"
             onButtonPress={() => navigation.navigate("Add", freshAddParams())}
           />
         ) : (

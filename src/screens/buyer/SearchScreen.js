@@ -37,6 +37,7 @@ import {
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import { useListings } from "../../api/useListings";
+import { parseSmartQuery } from "../../api/mappers";
 import { fetchListingDetail } from "../../api/listings";
 import { revealContactPhone } from "../../api/contact";
 import { getAuthTokenSync } from "../../api/client";
@@ -83,6 +84,12 @@ const BHK_OPTIONS = ["All BHK", "1 BHK", "2 BHK", "3 BHK", "4+ BHK"];
 const PROPERTY_TYPES = ["All Types", "Home", "Plot", "Villa", "Apartment", "Commercial"];
 
 const STATUS_OPTIONS = ["All Status", "Ready to move", "Under Construction", "New Launch"];
+
+function formatShortRupees(rupees) {
+  if (rupees >= 10000000) return `₹${(rupees / 10000000).toFixed(2)} Cr`;
+  if (rupees >= 100000) return `₹${(rupees / 100000).toFixed(2)} L`;
+  return `₹${Math.round(rupees).toLocaleString("en-IN")}`;
+}
 
 export default function SearchScreen({ navigation, route }) {
   // Initial parameters passed from HomeScreen or default to Anna Nagar
@@ -214,6 +221,46 @@ export default function SearchScreen({ navigation, route }) {
   // backend equivalent and are applied client-side below; verified-only is
   // guaranteed server-side.
   const budgetPreset = BUDGET_OPTIONS.find((b) => b.label === selectedBudget);
+  // Smart query parsing (deterministic, no AI): confident BHK / type /
+  // price tokens in the query become real backend filters; everything else
+  // stays text for the multi-term matcher. Explicit UI selections always
+  // win — parsed values fill only untouched defaults.
+  const smartQuery = useMemo(() => parseSmartQuery(searchQuery), [searchQuery]);
+  const effectiveBhk =
+    selectedBhk !== "All BHK"
+      ? selectedBhk
+      : smartQuery.bedrooms != null
+        ? `${smartQuery.bedrooms} BHK`
+        : selectedBhk;
+  const effectiveType =
+    selectedType !== "All Types" ? selectedType : smartQuery.property_type || selectedType;
+  const budgetsCustomized = minBudget > 0 || maxBudget < Infinity;
+  const effectiveMinRupees = budgetsCustomized
+    ? minBudget
+    : smartQuery.min_price_paise != null
+      ? smartQuery.min_price_paise / 100
+      : minBudget;
+  const effectiveMaxRupees = budgetsCustomized
+    ? maxBudget
+    : smartQuery.max_price_paise != null
+      ? smartQuery.max_price_paise / 100
+      : maxBudget;
+  const smartLabels = useMemo(() => {
+    const labels = [];
+    if (selectedBhk === "All BHK" && smartQuery.bedrooms != null) {
+      labels.push(`${smartQuery.bedrooms} BHK`);
+    }
+    if (selectedType === "All Types" && smartQuery.property_type) {
+      labels.push(smartQuery.property_type.charAt(0) + smartQuery.property_type.slice(1).toLowerCase());
+    }
+    if (!budgetsCustomized && smartQuery.min_price_paise != null) {
+      labels.push(`above ${formatShortRupees(smartQuery.min_price_paise / 100)}`);
+    }
+    if (!budgetsCustomized && smartQuery.max_price_paise != null) {
+      labels.push(`under ${formatShortRupees(smartQuery.max_price_paise / 100)}`);
+    }
+    return labels;
+  }, [smartQuery, selectedBhk, selectedType, budgetsCustomized]);
   const {
     items: apiProperties,
     total,
@@ -225,14 +272,14 @@ export default function SearchScreen({ navigation, route }) {
   } = useListings(
     {
       dealTab,
-      selectedType,
-      searchQuery,
+      selectedType: effectiveType,
+      searchQuery: smartQuery.q,
       locality: "",
-      bhk: selectedBhk,
+      bhk: effectiveBhk,
       presetMinRupees: budgetPreset ? budgetPreset.min : 0,
       presetMaxRupees: budgetPreset ? budgetPreset.max : Infinity,
-      minRupees: minBudget,
-      maxRupees: maxBudget,
+      minRupees: effectiveMinRupees,
+      maxRupees: effectiveMaxRupees,
       sort: selectedSort,
       constructionStatus: selectedStatus,
     },
@@ -619,6 +666,20 @@ export default function SearchScreen({ navigation, route }) {
           {searchQuery.trim() ? searchQuery.trim() : "Chennai"} for {dealTab}
         </Text>
       </View>
+      {smartLabels.length > 0 ? (
+        <View style={[styles.resultsCountBar, { paddingTop: 0 }]}>
+          <Text style={styles.resultsCountSubtext}>
+            Smart match: {smartLabels.join(" • ")}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setSearchQuery("")}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{ marginLeft: 8 }}
+          >
+            <X size={14} color="#94A3B8" />
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* ========================================================================= */}
       {/* 5. RESULTS LIST (Exact card design from Image 2 + Details from Image 1)   */}
@@ -1353,6 +1414,16 @@ export default function SearchScreen({ navigation, route }) {
           setSelectedStatus(filters.constructionStatus);
           if (filters.modalBudget) setSelectedBudget(filters.modalBudget);
           if (filters.dealType) setDealTab(filters.dealType);
+        }}
+        onSelectProperty={(suggestion) => {
+          // Open the tapped suggestion's real detail screen, then dismiss
+          // the search modal. Independent states — closing cannot cancel the
+          // detail open. Falls back to query text when no usable record.
+          if (suggestion && typeof suggestion.backendId === "number") {
+            openProperty(suggestion);
+            setIsSearchModalOpen(false);
+            setFromNavbar(false);
+          }
         }}
         dealType={dealTab}
         initialLocality={searchQuery}

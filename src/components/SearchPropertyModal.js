@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, memo } from "react";
+import React, { useState, useMemo, useEffect, useRef, memo } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,14 @@ import {
   ScrollView,
   Modal,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Search, X, XCircle, Check, ChevronDown } from "lucide-react-native";
 import COLORS from "../constants/colors";
 import TYPOGRAPHY from "../constants/typography";
-import { ALL_PROPERTIES } from "../data/properties";
+import { apiGet } from "../api/client";
+import { toUiProperty, buildListingParams, parseSmartQuery } from "../api/mappers";
 
 const LOCALITY_LIST = [
   "Anna Nagar",
@@ -94,6 +96,10 @@ function SearchPropertyModal({
   visible,
   onClose,
   onApply,
+  // Optional: called with the tapped suggestion's UI property (carries a real
+  // numeric backendId). The parent opens the detail screen and dismisses this
+  // modal; without it, taps only fill the query text (legacy behavior).
+  onSelectProperty,
   dealType = "Buy",
   initialLocality = "",
   initialPropertyType = "Apartment",
@@ -113,6 +119,59 @@ function SearchPropertyModal({
   const [modalBudget, setModalBudget] = useState(initialBudgetPreset);
   const [isMinDropdownOpen, setIsMinDropdownOpen] = useState(false);
   const [isMaxDropdownOpen, setIsMaxDropdownOpen] = useState(false);
+
+  // Live suggestions from real backend records (debounced, req-guarded).
+  // Only genuine titles/localities are ever shown — never invented. Empty
+  // or failed lookups simply show no suggestions (static chips stay).
+  const [liveSuggestions, setLiveSuggestions] = useState([]);
+  const [suggLoading, setSuggLoading] = useState(false);
+  const suggReqId = useRef(0);
+
+  useEffect(() => {
+    const text = (localityInput || "").trim().replace(/\s+/g, " ");
+    if (!visible || text.length < 2) {
+      suggReqId.current++;
+      setLiveSuggestions([]);
+      setSuggLoading(false);
+      return undefined;
+    }
+    setSuggLoading(true);
+    const timer = setTimeout(() => {
+      const myReq = ++suggReqId.current;
+      const dealMap = { Buy: "BUY", Resale: "RESALE", Rent: "RENT", Lease: "LEASE" };
+      // Mirror the modal's own type filter so suggestions never contradict
+      // the selected property type (same mapping as buildListingParams).
+      // "All Types" (or unknown) omits the filter, like Apply does.
+      const typeMap = {
+        Apartment: "APARTMENT",
+        Villa: "VILLA",
+        House: "HOUSE",
+        Home: "HOUSE",
+        Commercial: "COMMERCIAL",
+        Plot: "PLOT",
+      };
+      const params = { q: text, page: 1, page_size: 5 };
+      if (dealMap[dealType]) params.deal = dealMap[dealType];
+      if (typeMap[modalType]) params.property_type = typeMap[modalType];
+      apiGet("/buyer/listings", params).then(
+        (data) => {
+          if (suggReqId.current !== myReq) return;
+          const items = Array.isArray(data.items) ? data.items : [];
+          setLiveSuggestions(items.map(toUiProperty).slice(0, 5));
+          setSuggLoading(false);
+        },
+        () => {
+          if (suggReqId.current !== myReq) return;
+          setLiveSuggestions([]);
+          setSuggLoading(false);
+        }
+      );
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      suggReqId.current++;
+    };
+  }, [localityInput, visible, dealType, modalType]);
 
   // Sync with initial props when opened
   useEffect(() => {
@@ -170,71 +229,102 @@ function SearchPropertyModal({
     return "All Budgets";
   }, [minBudget, maxBudget, modalBudget, currentMinList, currentMaxList]);
 
-  // Real-time matched properties count
-  const matchedCount = useMemo(() => {
-    return ALL_PROPERTIES.filter((item) => {
-      // Deal type match
-      if (dealType === "Buy" && item.badgeType !== "sale" && item.badgeType !== "resale") return false;
-      if (dealType === "Resale" && item.badgeType !== "resale" && !item.isResale && item.constructionStatus !== "Ready to move") return false;
-      if (dealType === "Rent" && item.badgeType !== "rent") return false;
-      if (dealType === "Lease" && item.badgeType !== "lease") return false;
+  // Live matched-properties count from the real backend (count_only).
+  // The old mock-catalog count could show 0 while live suggestions showed
+  // real matches, because the catalog lacks those records. Same effective
+  // filters as Apply (via buildListingParams), so the count always agrees
+  // with the results page. Failures hide the count instead of inventing one.
+  const [liveMatchedCount, setLiveMatchedCount] = useState(null);
+  const [countFailed, setCountFailed] = useState(false);
+  const countReqId = useRef(0);
 
-      // Locality match
-      const targetLoc = (selectedLocality || localityInput || "").trim().toLowerCase();
-      if (targetLoc) {
-        const itemLoc = (item.location || "").toLowerCase();
-        const itemAddr = (item.address || "").toLowerCase();
-        const itemTitle = (item.title || "").toLowerCase();
-        if (!itemLoc.includes(targetLoc) && !itemAddr.includes(targetLoc) && !itemTitle.includes(targetLoc)) {
-          return false;
+  useEffect(() => {
+    if (!visible) return undefined;
+    const timer = setTimeout(() => {
+      const myReq = ++countReqId.current;
+      let params;
+      try {
+        params = {
+          ...buildListingParams(
+            {
+              dealType,
+              propertyType: modalType,
+              searchQuery: selectedLocality || localityInput || "",
+              bhk: modalBhk,
+              minRupees: minBudget,
+              maxRupees: maxBudget,
+              constructionStatus,
+            },
+            1,
+            1
+          ),
+          count_only: true,
+        };
+      } catch {
+        if (countReqId.current !== myReq) return;
+        setCountFailed(true);
+        return;
+      }
+      setCountFailed(false);
+      apiGet("/buyer/listings", params).then(
+        (data) => {
+          if (countReqId.current !== myReq) return;
+          setLiveMatchedCount(typeof data.total === "number" ? data.total : null);
+          setCountFailed(false);
+        },
+        () => {
+          if (countReqId.current !== myReq) return;
+          setLiveMatchedCount(null);
+          setCountFailed(true);
         }
-      }
+      );
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      countReqId.current++;
+    };
+  }, [
+    visible,
+    dealType,
+    selectedLocality,
+    localityInput,
+    modalType,
+    modalBhk,
+    minBudget,
+    maxBudget,
+    constructionStatus,
+  ]);
 
-      // Property type match
-      if (modalType && modalType !== "All Types") {
-        const itemType = (item.type || "").toLowerCase();
-        const selType = modalType.toLowerCase();
-        if (selType === "home" || selType === "house") {
-          if (itemType !== "house" && itemType !== "home") {
-            return false;
-          }
-        } else if (selType === "bungalow") {
-          const desc = (item.description || "").toLowerCase();
-          const title = (item.title || "").toLowerCase();
-          if (itemType !== "house" && itemType !== "villa" && !desc.includes("bungalow") && !title.includes("bungalow")) {
-            return false;
-          }
-        } else if (itemType !== selType) {
-          return false;
-        }
+  // Conflict note: when the query text implies filters that contradict the
+  // selected controls, say so plainly — explicit selections always win, on
+  // both this count and the results page.
+  const filterConflictNote = useMemo(() => {
+    const parsed = parseSmartQuery(selectedLocality || localityInput || "");
+    const conflicts = [];
+    if (parsed.bedrooms != null && modalBhk !== "All BHK") {
+      const sel = parseInt(modalBhk, 10);
+      if (modalBhk !== "4+ BHK" && sel !== parsed.bedrooms) {
+        conflicts.push(`“${parsed.bedrooms} BHK” in text but ${modalBhk} selected`);
+      } else if (modalBhk === "4+ BHK" && parsed.bedrooms < 4) {
+        conflicts.push(`“${parsed.bedrooms} BHK” in text but 4+ BHK selected`);
       }
-
-      // BHK match
-      if (modalBhk !== "All BHK") {
-        const beds = item.beds || 0;
-        const targetBeds = parseInt(modalBhk);
-        if (modalBhk === "4+ BHK") {
-          if (beds < 4) return false;
-        } else if (beds !== targetBeds) {
-          return false;
-        }
+    }
+    if (parsed.property_type && modalType && modalType !== "All Types") {
+      const typeNames = {
+        APARTMENT: "Apartment",
+        VILLA: "Villa",
+        HOUSE: "House",
+        COMMERCIAL: "Commercial",
+        PLOT: "Plot",
+      };
+      const implied = typeNames[parsed.property_type];
+      if (implied && implied.toLowerCase() !== String(modalType).toLowerCase()) {
+        conflicts.push(`“${parsed.property_type.charAt(0) + parsed.property_type.slice(1).toLowerCase()}” in text but ${modalType} selected`);
       }
-
-      // Budget match
-      if (item.rawPrice) {
-        if (minBudget > 0 && item.rawPrice < minBudget) return false;
-        if (maxBudget < Infinity && item.rawPrice > maxBudget) return false;
-      }
-
-      // Construction status match
-      if (constructionStatus !== "All Status") {
-        const itemStatus = item.constructionStatus || (item.badge === "Just Added" ? "New Launch" : "Ready to move");
-        if (itemStatus.toLowerCase() !== constructionStatus.toLowerCase()) return false;
-      }
-
-      return true;
-    }).length;
-  }, [dealType, selectedLocality, localityInput, modalType, modalBhk, minBudget, maxBudget, constructionStatus]);
+    }
+    if (conflicts.length === 0) return null;
+    return `Note: ${conflicts.join("; ")} — selected filters will be used.`;
+  }, [selectedLocality, localityInput, modalBhk, modalType]);
 
   const handleClearFilters = () => {
     setSelectedLocality("");
@@ -296,7 +386,7 @@ function SearchPropertyModal({
               <Search size={18} color="#94A3B8" style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.modalTextInput}
-                placeholder="Search locality, project, landmark..."
+                placeholder="Try '1bhk anna nagar' — every word must match"
                 placeholderTextColor="#94A3B8"
                 value={localityInput}
                 underlineColorAndroid="transparent"
@@ -334,6 +424,42 @@ function SearchPropertyModal({
                 );
               })}
             </View>
+
+            {/* Live matching properties (real backend records only) */}
+            {(suggLoading || liveSuggestions.length > 0) && (localityInput || "").trim().length >= 2 ? (
+              <View style={{ marginTop: 10 }}>
+                <Text style={styles.modalSubLabel}>
+                  {suggLoading ? "Searching…" : "Matching Properties"}
+                </Text>
+                {suggLoading && liveSuggestions.length === 0 ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 6 }} />
+                ) : (
+                  liveSuggestions.map((s) => (
+                    <TouchableOpacity
+                      key={String(s.backendId ?? s.id)}
+                      style={[styles.localityChip, { alignSelf: "stretch", marginBottom: 6 }]}
+                      onPress={() => {
+                        // Real backend record: open its detail screen via the
+                        // parent (which also dismisses this modal). Without a
+                        // numeric id there is nothing genuine to open, so fall
+                        // back to filling the query text.
+                        if (typeof s.backendId === "number" && onSelectProperty) {
+                          onSelectProperty(s);
+                        } else {
+                          setSelectedLocality(s.title);
+                          setLocalityInput(s.title);
+                        }
+                      }}
+                    >
+                      <Text style={styles.localityChipText} numberOfLines={1}>
+                        {s.title}
+                        {s.location ? ` • ${s.location}` : ""}
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            ) : null}
           </View>
 
           {/* 2. PROPERTY TYPE */}
@@ -543,10 +669,17 @@ function SearchPropertyModal({
             onPress={handleApply}
           >
             <Text style={styles.modalShowBtnText}>
-              Show {matchedCount} Properties
+              {typeof liveMatchedCount === "number"
+                ? `Show ${liveMatchedCount} Properties`
+                : "Show Properties"}
             </Text>
           </TouchableOpacity>
         </View>
+        {filterConflictNote ? (
+          <Text style={[styles.modalSubLabel, { textAlign: "center", paddingHorizontal: 20, paddingBottom: 12 }]}>
+            {filterConflictNote}
+          </Text>
+        ) : null}
       </SafeAreaView>
     </Modal>
   );

@@ -35,7 +35,7 @@ import {
 
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
-import { fetchOwnerLeads, toOwnerLead, updateOwnerLeadStatus } from "../../api/owner";
+import { fetchOwnerLeads, toOwnerLead, updateOwnerLeadStatus, fetchOwnerListings, toOwnerProperty } from "../../api/owner";
 import StatusBadge from "../../components/owner/StatusBadge";
 import EmptyState from "../../components/owner/EmptyState";
 import OwnerSiteVisitModal from "./OwnerSiteVisitModal";
@@ -52,15 +52,65 @@ const LEAD_FILTERS = [
   "Closed",
 ];
 
-export default function OwnerLeadsScreen({ navigation }) {
-  const { properties, leads, updateLeadStatus, scheduleVisit, closeLead } = useOwner();
+export default function OwnerLeadsScreen({ navigation, route }) {
+  const { properties: localProperties, leads, updateLeadStatus, scheduleVisit, closeLead } = useOwner();
+
+  // Property list comes from the server (P3 leadsMVP fix): the OwnerContext
+  // store holds only local pending properties and is empty on fresh
+  // sessions, so selecting from it alone could never fetch real leads.
+  // Local-only records are merged in below (never fetched, never invented).
+  const [serverProperties, setServerProperties] = useState(null);
+  const [propsLoading, setPropsLoading] = useState(false);
+  const [propsError, setPropsError] = useState(false);
+  const propsReqId = useRef(0);
+
+  const properties = useMemo(() => {
+    const server = Array.isArray(serverProperties) ? serverProperties : [];
+    const serverIds = new Set(server.map((p) => p.id));
+    const localOnly = (localProperties || []).filter((p) => !serverIds.has(p.id));
+    return [...server, ...localOnly];
+  }, [serverProperties, localProperties]);
+
+  const loadProperties = useCallback(() => {
+    const myReq = ++propsReqId.current;
+    setPropsLoading(true);
+    setPropsError(false);
+    fetchOwnerListings(1, 50).then(
+      (resp) => {
+        if (propsReqId.current !== myReq) return;
+        setServerProperties((resp.items || []).map(toOwnerProperty));
+        setPropsError(false);
+        setPropsLoading(false);
+      },
+      () => {
+        if (propsReqId.current !== myReq) return;
+        setPropsError(true);
+        setPropsLoading(false);
+      }
+    );
+  }, []);
+
+  useEffect(() => {
+    loadProperties();
+  }, [loadProperties]);
 
   // Selected property for property-scoped leads (null = none selected yet;
   // the list below then correctly shows no property-scoped leads).
   const [selectedPropertyId, setSelectedPropertyId] = useState(
     properties[0]?.id || null
   );
-  const [activeFilter, setActiveFilter] = useState("All");
+  // Honor the entry-point tab (e.g. Profile Site Visits passes
+  // "Visit Scheduled"); unknown values fall back to the normal default.
+  const [activeFilter, setActiveFilter] = useState(
+    LEAD_FILTERS.includes(route?.params?.initialTab) ? route.params.initialTab : "All"
+  );
+
+  useEffect(() => {
+    const tab = route?.params?.initialTab;
+    if (tab !== undefined) {
+      setActiveFilter(LEAD_FILTERS.includes(tab) ? tab : "All");
+    }
+  }, [route?.params?.initialTab]);
   const [showPropertyPicker, setShowPropertyPicker] = useState(false);
   const [showPropertyDetailModal, setShowPropertyDetailModal] = useState(false);
   const [selectedLeadForVisit, setSelectedLeadForVisit] = useState(null);
@@ -122,15 +172,19 @@ export default function OwnerLeadsScreen({ navigation }) {
   }, [loadLeads]);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", loadLeads);
+    const unsubscribe = navigation.addListener("focus", () => {
+      loadProperties();
+      loadLeads();
+    });
     return unsubscribe;
-  }, [navigation, loadLeads]);
+  }, [navigation, loadProperties, loadLeads]);
 
   // Invalidate in-flight fetches on unmount so late responses never touch
   // state after the screen is gone.
   useEffect(() => {
     return () => {
       leadReqId.current++;
+      propsReqId.current++;
     };
   }, []);
 
@@ -579,10 +633,21 @@ export default function OwnerLeadsScreen({ navigation }) {
         </View>
 
         {/* ================= LEAD CARDS LIST (loading / error / empty / real rows) ================= */}
-        {leadsLoading && serverLeads === null ? (
+        {(leadsLoading && serverLeads === null) || (propsLoading && serverProperties === null) ? (
           <View style={{ alignItems: "center", paddingVertical: 40 }}>
             <ActivityIndicator size="small" color={COLORS.primary} />
           </View>
+        ) : propsError && properties.length === 0 ? (
+          <EmptyState
+            icon={Building2}
+            title="Couldn't load properties"
+            description="Your properties could not be loaded. Please check your connection and try again."
+            buttonTitle="Retry"
+            onButtonPress={() => {
+              loadProperties();
+              loadLeads();
+            }}
+          />
         ) : leadsError && propertyLeads.length === 0 ? (
           <EmptyState
             icon={Users}

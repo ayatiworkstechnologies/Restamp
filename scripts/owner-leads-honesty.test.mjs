@@ -29,7 +29,7 @@ writeFileSync(
     .replace('from "./client"', 'from "./client.js"')
     .replace('from "./mappers"', 'from "./mappers.js"')
 );
-const { fetchOwnerLeads, toOwnerLead, selectPropertyLeads } = await import(
+const { fetchOwnerLeads, toOwnerLead, selectPropertyLeads, toOwnerProperty } = await import(
   join(tmp, "owner.js")
 );
 
@@ -301,6 +301,67 @@ check(
   dashboardSrc.includes("recentLeadsReqId") &&
     dashboardSrc.includes("recentLeadsReqId.current !== myReq")
 );
+
+// --- 6. My Leads server properties + initialTab + badge removal ---
+{
+  const profileSrc = src("src/screens/owner/OwnerProfileScreen.js");
+  check(
+    "S1 selector loads real properties (never context-only)",
+    ownerLeadsSrc.includes("fetchOwnerListings") &&
+      ownerLeadsSrc.includes("toOwnerProperty") &&
+      ownerLeadsSrc.includes("serverProperties") &&
+      ownerLeadsSrc.includes("loadProperties") &&
+      ownerLeadsSrc.includes("propsReqId") &&
+      ownerLeadsSrc.includes("Couldn't load properties")
+  );
+  check(
+    "S2 property fetch never silently empties (error stays error)",
+    ownerLeadsSrc.includes("setPropsError(true)") &&
+      ownerLeadsSrc.includes("propsError && properties.length === 0")
+  );
+  check(
+    "S3 initialTab honored only for supported tabs",
+    ownerLeadsSrc.includes("route?.params?.initialTab") &&
+      ownerLeadsSrc.includes("LEAD_FILTERS.includes(route?.params?.initialTab)") &&
+      ownerLeadsSrc.includes("[route?.params?.initialTab]")
+  );
+  check(
+    "S4 profile numeric badges removed (layout/nav intact)",
+    !profileSrc.includes("countBadge") &&
+      !profileSrc.includes("countText") &&
+      !profileSrc.includes("activePropertiesCount") &&
+      !profileSrc.includes("visitsCount") &&
+      profileSrc.includes("badgeRow") &&
+      profileSrc.includes('navigation.navigate("Leads")')
+  );
+  const mapped = toOwnerProperty({
+    listing_id: 42,
+    title: "T",
+    transaction_type: "RENT",
+    property_type: "APARTMENT",
+    price_paise: 2500000,
+    price_period: "MONTHLY",
+    price_display: "₹25,000/mo",
+    construction_status: null,
+    verification_status: "VERIFIED",
+    listing_status: "AVAILABLE",
+    description: "",
+    locality: "L",
+    city: "C",
+    district: "D",
+    pincode: "600001",
+    address_line: "A",
+    area_value: 100,
+    area_unit: "sqft",
+    bedrooms: 2,
+    bathrooms: 2,
+    cover_image_url: null,
+  });
+  check(
+    "S5 server property maps to selector identity (VERIFIED→active)",
+    mapped.id === "42" && mapped.listing_id === 42 && mapped.status === "active"
+  );
+}
 
 // --- 5. P0/P1/P2/API-URL guards intact ---
 {

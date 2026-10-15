@@ -40,12 +40,9 @@ import ConfirmationModal from "../../components/owner/ConfirmationModal";
 import AppBrandHeader from "../../components/AppBrandHeader";
 
 export default function OwnerProfileScreen({ navigation }) {
-  const { ownerProfile, properties, leads, subscription } = useOwner();
+  const { ownerProfile, subscription } = useOwner();
   const { logout } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-
-  const activePropertiesCount = properties.filter((p) => p.status === "active").length;
-  const visitsCount = leads.filter((l) => l.status === "visit_scheduled" || l.status === "visited").length;
 
   const handleSwitchToBuyer = () => {
     // Switch to Find Property: Returns user to Buyer mode. Do NOT log them out!
@@ -189,9 +186,6 @@ export default function OwnerProfileScreen({ navigation }) {
               <Text style={styles.menuLabel}>My Properties</Text>
             </View>
             <View style={styles.badgeRow}>
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>{properties.length}</Text>
-              </View>
               <ChevronRight size={16} color="#94A3B8" />
             </View>
           </TouchableOpacity>
@@ -206,9 +200,6 @@ export default function OwnerProfileScreen({ navigation }) {
               <Text style={styles.menuLabel}>My Leads</Text>
             </View>
             <View style={styles.badgeRow}>
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>{leads.length}</Text>
-              </View>
               <ChevronRight size={16} color="#94A3B8" />
             </View>
           </TouchableOpacity>
@@ -223,9 +214,6 @@ export default function OwnerProfileScreen({ navigation }) {
               <Text style={styles.menuLabel}>Site Visits</Text>
             </View>
             <View style={styles.badgeRow}>
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>{visitsCount}</Text>
-              </View>
               <ChevronRight size={16} color="#94A3B8" />
             </View>
           </TouchableOpacity>
@@ -565,24 +553,6 @@ const styles = StyleSheet.create({
   badgeRow: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  kycStatusText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: COLORS.success,
-    marginRight: 6,
-  },
-  countBadge: {
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginRight: 6,
-  },
-  countText: {
-    fontSize: 11,
-    fontWeight: "500",
-    color: COLORS.textDark,
   },
   planBadge: {
     fontSize: 12,

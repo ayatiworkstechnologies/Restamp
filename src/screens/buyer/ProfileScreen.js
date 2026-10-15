@@ -94,7 +94,7 @@ export default function ProfileScreen({ navigation }) {
 
   const [userProfile, setUserProfile] = useState({
     name: authUser?.name || "Alex Smith",
-    phone: authUser?.phone || "+91 98765 43210",
+    phone: authUser?.phone || "",
     email: authUser?.email || "alex.smith@restamp.in",
     avatar:
       authUser?.avatar ||
@@ -151,7 +151,7 @@ export default function ProfileScreen({ navigation }) {
       setUserProfile((prev) => ({
         ...prev,
         name: authUser.name || prev.name,
-        phone: authUser.phone || prev.phone,
+        phone: authUser.phone || "",
       }));
     }
   }, [authUser]);
@@ -205,7 +205,11 @@ export default function ProfileScreen({ navigation }) {
               <Pencil size={15} color="#475569" style={styles.pencilIcon} />
             </TouchableOpacity>
 
-            <Text style={styles.phoneText}>{userProfile.phone}</Text>
+            {userProfile.phone ? (
+              <Text style={styles.phoneText}>{userProfile.phone}</Text>
+            ) : (
+              <Text style={styles.phoneText}>Phone not available</Text>
+            )}
             <Text style={styles.emailText}>{userProfile.email}</Text>
 
             {/* Role badge reflects the LIVE backend role (never hardcoded):

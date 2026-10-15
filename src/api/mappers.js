@@ -47,6 +47,77 @@ export function titleCaseType(t) {
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
+// Smart query parsing (deterministic, no AI): extracts structured filters
+// ONLY on confident patterns, leaving everything else as text for the
+// backend multi-term matcher. Rules:
+// - BHK: "<digit> bhk" (1-9) -> bedrooms. Nothing else is inferred.
+// - Price: "under|below|max|up to <number> <unit>" -> max_price_paise,
+//   "above|over|min|more than <number> <unit>" -> min_price_paise, with
+//   lakh(lac)/crore/cr/k units. Unit-less numbers are ambiguous -> kept.
+// - Type: standalone villa/apartment/flat/commercial/plot only. house/home
+//   are ambiguous in titles (e.g. "Home ECR starter") -> kept as text.
+// - Stopwords (in/near/at/for/...) are dropped from the text remainder.
+// - Ambiguous input keeps normal text search; explicit UI selections always
+//   win and are applied by the caller, never here.
+const SMART_STOPWORDS = new Set([
+  "in", "near", "at", "for", "with", "and", "the", "a", "an", "of", "to",
+  "from", "on", "by",
+]);
+const SMART_TYPE_WORDS = {
+  villa: "VILLA",
+  apartment: "APARTMENT",
+  flat: "APARTMENT",
+  commercial: "COMMERCIAL",
+  plot: "PLOT",
+};
+const SMART_PRICE_UNITS = {
+  lakh: 100000, lakhs: 100000, lac: 100000, lacs: 100000, l: 100000,
+  crore: 10000000, crores: 10000000, cr: 10000000, crs: 10000000,
+  k: 1000, thousand: 1000, thousands: 1000,
+};
+
+export function parseSmartQuery(text) {
+  const out = { q: "", bedrooms: null, property_type: null, min_price_paise: null, max_price_paise: null };
+  const cleaned = String(text || "").trim().replace(/\s+/g, " ");
+  if (!cleaned) return out;
+  let working = ` ${cleaned.toLowerCase()} `;
+
+  // Price bounds first (they consume their unit words).
+  const priceRe =
+    /\b(under|below|max|up\s*to|upto|less\s*than|above|over|min|more\s*than)\s*([\d]+(?:\.[\d]+)?)\s*(lakhs|lakh|lacs|lac|crores|crore|crs|cr|thousands|thousand|k|l)\b/g;
+  working = working.replace(priceRe, (m, dir, num, unit) => {
+    const rupees = parseFloat(num) * (SMART_PRICE_UNITS[unit] || 0);
+    if (!Number.isFinite(rupees) || rupees <= 0) return m;
+    const paise = Math.round(rupees * 100);
+    if (/^(under|below|max|up|upto|less)/.test(dir.replace(/\s+/g, ""))) {
+      if (out.max_price_paise == null) out.max_price_paise = paise;
+    } else {
+      if (out.min_price_paise == null) out.min_price_paise = paise;
+    }
+    return " ";
+  });
+
+  // BHK count.
+  working = working.replace(/\b([1-9])\s*bhk\b/g, (m, n) => {
+    if (out.bedrooms == null) out.bedrooms = parseInt(n, 10);
+    return " ";
+  });
+
+  // Property type (conservative word list only).
+  working = working.replace(/\b(villa|apartment|flat|commercial|plot)\b/g, (m, w) => {
+    if (out.property_type == null) out.property_type = SMART_TYPE_WORDS[w];
+    return " ";
+  });
+
+  // Stopwords, then re-join the confident remainder as text.
+  const words = working
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w && !SMART_STOPWORDS.has(w));
+  out.q = words.join(" ");
+  return out;
+}
+
 export function getCleanImageUrl(url, propertyType = "Apartment", seed = 0) {
   if (
     url &&
@@ -127,8 +198,10 @@ export function buildListingParams(ui, page, pageSize) {
     params.property_type = typeMap[typeVal];
   }
   if (ui.searchQuery && ui.searchQuery.trim()) {
-    // Backend searches title/description/locality; locality-only chips also map here.
-    params.q = ui.searchQuery.trim();
+    // Backend searches title/description/locality/address/city; locality-only chips also map here.
+    // Normalized lightly (trim + collapse repeats): the backend splits terms
+    // and requires every term, so "  villa   anna " behaves like "villa anna".
+    params.q = ui.searchQuery.trim().replace(/\s+/g, " ");
   } else if (ui.locality) {
     params.locality = ui.locality;
   }

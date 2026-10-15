@@ -36,6 +36,7 @@ import {
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import { useWishlist } from "../../context/WishlistContext";
+import { useAuth } from "../../context/AuthContext";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import AppBrandHeader from "../../components/AppBrandHeader";
 import SafeImage from "../../components/common/SafeImage";
@@ -87,54 +88,67 @@ export default function SavedScreen({ navigation, route }) {
   // Call history state (P2: honest empty — contact actions do not fabricate records)
   const [callHistory, setCallHistory] = useState([]);
 
-  // User Profile State
-  const [userProfile, setUserProfile] = useState({
-    name: "Jessica Taylor",
-    email: "jessica.taylor@example.com",
-    phone: "+91 98765 43210",
-    city: "Chennai, Tamil Nadu",
-    avatar:
-      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
-    badge: "Verified Buyer",
-  });
+  // Real authenticated identity only (GET /auth/me via AuthContext).
+  // Never sample data: no mock name, phone, email, or avatar. The backend
+  // exposes display_name/role/providers only, so phone shows only when known
+  // from login, and the avatar falls back to a name initial.
+  const { user: authUser, isAuthenticated, saveProfileName } = useAuth();
+  const profileName = isAuthenticated
+    ? (authUser?.name && authUser.name !== "User" ? authUser.name : (authUser?.phone || "My Account"))
+    : "Guest";
+  const profilePhone = isAuthenticated ? (authUser?.phone || "") : "";
+  const profileSub = profilePhone
+    || (isAuthenticated ? (authUser?.verified ? "Verified Buyer" : "Buyer Account") : "Log in to sync your wishlist");
+  const profileAvatar = authUser?.avatar || null;
+  const profileInitial = ((profileName || "?").trim().charAt(0) || "?").toUpperCase();
 
-  // Edit Profile Modal State
+  // Edit Profile Modal State (name only — persisted via PATCH /users/me).
+  // Phone numbers are OTP-bound identities with no update endpoint, so the
+  // number is shown read-only and never edited here.
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-  const [editName, setEditName] = useState(userProfile.name);
-  const [editPhone, setEditPhone] = useState(userProfile.phone);
+  const [editName, setEditName] = useState("");
 
   const openEditModal = () => {
-    setEditName(userProfile.name);
-    setEditPhone(userProfile.phone);
+    if (!isAuthenticated) {
+      navigation.navigate("Login");
+      return;
+    }
+    setEditName(profileName === "My Account" ? "" : profileName);
     setIsEditModalVisible(true);
   };
 
-  const handleSaveProfile = () => {
-    if (!editName.trim()) {
+  const handleSaveProfile = async () => {
+    const trimmed = editName.trim();
+    if (!trimmed) {
       Alert.alert("Required", "Please enter your name.");
       return;
     }
-    setUserProfile((prev) => ({
-      ...prev,
-      name: editName.trim(),
-      phone: editPhone.trim(),
-    }));
-    setIsEditModalVisible(false);
-    Alert.alert("Profile Updated", "Your profile details have been saved.");
+    try {
+      const parts = trimmed.split(/\s+/);
+      await saveProfileName(parts[0], parts.slice(1).join(" "));
+      setIsEditModalVisible(false);
+    } catch (e) {
+      Alert.alert("Could Not Save", "Your session may have expired. Please log in again.");
+    }
   };
 
-  // Helper calculations for cards
+  // Card specs from genuine fields only: unknown bedroom counts, prices,
+  // areas, and construction statuses render as absent — never as invented
+  // "3 BHK" / per-sqft / "Ready to move" fallbacks.
   const getCardSpecs = (property) => {
-    const sqftNum = parseInt(String(property.sqft || 1500).replace(/,/g, "")) || 1500;
+    const sqftNum = parseInt(String(property.sqft || "").replace(/,/g, "")) || null;
     const perSqft =
       property.rawPrice && sqftNum
         ? `₹${Math.round(property.rawPrice / sqftNum).toLocaleString("en-IN")}/sqft`
-        : "₹6,800/sqft";
+        : null;
     const statusText =
       property.constructionStatus ||
-      (property.badge === "Just Added" ? "New Launch" : "Ready to move");
+      (property.badge === "Just Added" ? "New Launch" : null);
+    const specParts = [];
+    if (property.beds > 0) specParts.push(`${property.beds} BHK`);
+    if (property.sqft) specParts.push(`${property.sqft} sq ft`);
 
-    return { perSqft, statusText };
+    return { perSqft, statusText, specsText: specParts.join(" • ") || null };
   };
 
   // Contact Handlers (P2 honesty: only dial/message a genuine number; never
@@ -192,16 +206,22 @@ export default function SavedScreen({ navigation, route }) {
         {/* ================= 1. USER PROFILE SECTION WITH EDIT ICON ================= */}
         <View style={styles.profileCard}>
           <View style={styles.avatarWrap}>
-            <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
+            {profileAvatar ? (
+              <Image source={{ uri: profileAvatar }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback]}>
+                <Text style={styles.avatarInitial}>{profileInitial}</Text>
+              </View>
+            )}
             <View style={styles.onlineBadge} />
           </View>
 
           <View style={styles.profileMeta}>
             <Text style={styles.profileName} numberOfLines={1}>
-              {userProfile.name}
+              {profileName}
             </Text>
             <Text style={styles.profilePhone} numberOfLines={1}>
-              {userProfile.phone}
+              {profileSub}
             </Text>
           </View>
 
@@ -296,7 +316,7 @@ export default function SavedScreen({ navigation, route }) {
             ) : (
               <View style={styles.cardsList}>
                 {wishlist.map((property) => {
-                  const { perSqft, statusText } = getCardSpecs(property);
+                  const { perSqft, statusText, specsText } = getCardSpecs(property);
 
                   return (
                     <TouchableOpacity
@@ -351,15 +371,17 @@ export default function SavedScreen({ navigation, route }) {
                         </Text>
 
                         {/* Specs */}
-                        <Text style={styles.specsText} numberOfLines={1}>
-                          {property.beds > 0 ? `${property.beds} BHK` : "3 BHK"} • {property.sqft} sq ft
-                        </Text>
+                        {specsText ? (
+                          <Text style={styles.specsText} numberOfLines={1}>
+                            {specsText}
+                          </Text>
+                        ) : null}
 
                         {/* Price & Contact Row */}
                         <View style={styles.priceRow}>
                           <Text style={styles.propertyPrice}>
                             {property.price}
-                            <Text style={styles.propertyPriceSub}> • {perSqft}</Text>
+                            {perSqft ? <Text style={styles.propertyPriceSub}> • {perSqft}</Text> : null}
                           </Text>
 
                           <TouchableOpacity
@@ -423,7 +445,7 @@ export default function SavedScreen({ navigation, route }) {
             ) : (
               <View style={styles.cardsList}>
                 {viewedProperties.map((property) => {
-                  const { perSqft } = getCardSpecs(property);
+                  const { perSqft, specsText } = getCardSpecs(property);
                   const isSaved = isWishlisted(property.id);
 
                   return (
@@ -485,15 +507,17 @@ export default function SavedScreen({ navigation, route }) {
                         </Text>
 
                         {/* Specs */}
-                        <Text style={styles.specsText} numberOfLines={1}>
-                          {property.beds > 0 ? `${property.beds} BHK` : "3 BHK"} • {property.sqft} sq ft
-                        </Text>
+                        {specsText ? (
+                          <Text style={styles.specsText} numberOfLines={1}>
+                            {specsText}
+                          </Text>
+                        ) : null}
 
                         {/* Price & Contact Row */}
                         <View style={styles.priceRow}>
                           <Text style={styles.propertyPrice}>
                             {property.price}
-                            <Text style={styles.propertyPriceSub}> • {perSqft}</Text>
+                            {perSqft ? <Text style={styles.propertyPriceSub}> • {perSqft}</Text> : null}
                           </Text>
 
                           <TouchableOpacity
@@ -661,19 +685,15 @@ export default function SavedScreen({ navigation, route }) {
               />
             </View>
 
-            {/* Input: Mobile Number */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mobile Number</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editPhone}
-                onChangeText={setEditPhone}
-                placeholder="Enter mobile number"
-                placeholderTextColor="#94A3B8"
-                keyboardType="phone-pad"
-                underlineColorAndroid="transparent"
-              />
-            </View>
+            {/* Mobile Number (read-only: OTP-bound identity, no update API) */}
+            {profilePhone ? (
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Mobile Number</Text>
+                <View style={[styles.textInput, { justifyContent: "center" }]}>
+                  <Text style={{ fontSize: 16, color: "#0F172A" }}>{profilePhone}</Text>
+                </View>
+              </View>
+            ) : null}
 
             {/* Action Buttons */}
             <View style={styles.editModalButtonsRow}>
@@ -872,6 +892,16 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 26,
     backgroundColor: "#E2E8F0",
+  },
+  avatarFallback: {
+    backgroundColor: "#0F172A",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarInitial: {
+    fontSize: 22,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   onlineBadge: {
     position: "absolute",
