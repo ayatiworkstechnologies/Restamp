@@ -37,6 +37,7 @@ import COLORS from "../../constants/colors";
 import TYPOGRAPHY from "../../constants/typography";
 import ALL_PROPERTIES, { CHENNAI_LOCALITIES } from "../../data/properties";
 import { useWishlist } from "../../context/WishlistContext";
+import { useRequireAuth } from "../../auth/useRequireAuth";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import SafeImage from "../../components/common/SafeImage";
 
@@ -158,6 +159,8 @@ const REGION_TABS = [
 
 export default function ExploreScreen({ navigation }) {
   const { isWishlisted, toggleWishlist } = useWishlist();
+  // Protected modal actions resume here after a guest logs in (Change 2).
+  const requireAuth = useRequireAuth(navigation);
 
   const [selectedRegion, setSelectedRegion] = useState("All Localities");
   const [selectedLocality, setSelectedLocality] = useState(LOCALITY_DATA[0]);
@@ -498,7 +501,7 @@ export default function ExploreScreen({ navigation }) {
         onClose={() => setSelectedProperty(null)}
         isWishlisted={isWishlisted(selectedProperty?.id)}
         onToggleWishlist={toggleWishlist}
-        onLoginRequired={() => navigation.navigate("Login")}
+        onLoginRequired={(resume) => requireAuth(resume)}
       />
 
       {/* ================= CONTACT BOTTOM SHEET ================= */}

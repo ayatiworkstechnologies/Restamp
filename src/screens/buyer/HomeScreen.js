@@ -48,6 +48,7 @@ import {
 import { useWishlist } from "../../context/WishlistContext";
 import { useOwner } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
+import { useRequireAuth } from "../../auth/useRequireAuth";
 import { enterOwnerFlow } from "../../api/users";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import RestampLogo from "../../components/RestampLogo";
@@ -166,12 +167,20 @@ export default function HomeScreen({ navigation }) {
   const { isWishlisted, toggleWishlist } = useWishlist();
   const { subscription } = useOwner();
   const auth = useAuth();
+  // Protected enquiry actions resume here after a guest logs in (Change 2).
+  const requireAuth = useRequireAuth(navigation);
   const [ownerSwitching, setOwnerSwitching] = useState(false);
 
   // P0 fix: the backend requires the OWNER role for /owner/* endpoints.
   // Switch the backend role first (real POST /users/me/role, token
   // preserved), and only then navigate. Never logs out, never touches OTP.
-  const handlePostProperty = async () => {
+  const handlePostProperty = () => {
+    if (ownerSwitching) return;
+    // Guests log in first; the Add-property entry resumes after login.
+    requireAuth(doPostProperty);
+  };
+
+  const doPostProperty = async () => {
     if (ownerSwitching) return;
     setOwnerSwitching(true);
     try {
@@ -181,7 +190,7 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const handleOpenOwnerDashboard = async () => {
+  const doOpenOwnerDashboard = async () => {
     if (ownerSwitching) return;
     setOwnerSwitching(true);
     try {
@@ -189,6 +198,12 @@ export default function HomeScreen({ navigation }) {
     } finally {
       setOwnerSwitching(false);
     }
+  };
+
+  const handleOpenOwnerDashboard = () => {
+    // Guests log in first; the owner entry resumes after login (Change 2).
+    // enterOwnerFlow still enforces the backend OWNER role afterwards.
+    requireAuth(doOpenOwnerDashboard);
   };
 
   // Selected Property for Detail Modal
@@ -476,6 +491,21 @@ export default function HomeScreen({ navigation }) {
               <Building2 size={13} color="#2563EB" style={{ marginRight: 4 }} />
               <Text style={styles.switchOwnerText}>Owner</Text>
             </TouchableOpacity>
+
+            {/* Small Login button (Change 3): logged-out only, hidden once
+                authenticated and while auth state is still resolving (no
+                flash). Opens the existing OTP flow; post-login reset lands
+                back on Home. Same pill language as Owner, plainer fill so
+                Owner stays visually primary. */}
+            {!auth.isLoading && !auth.isAuthenticated ? (
+              <TouchableOpacity
+                style={styles.loginPill}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate("Login")}
+              >
+                <Text style={styles.loginPillText}>Login</Text>
+              </TouchableOpacity>
+            ) : null}
 
             <TouchableOpacity
               style={styles.notificationBtn}
@@ -1122,7 +1152,7 @@ export default function HomeScreen({ navigation }) {
         property={selectedProperty}
         onClose={() => setSelectedProperty(null)}
         onSelectProperty={(property) => setSelectedProperty(property)}
-        onLoginRequired={() => navigation.navigate("Login")}
+        onLoginRequired={(resume) => requireAuth(resume)}
         isWishlisted={isWishlisted}
         onToggleWishlist={toggleWishlist}
       />
@@ -1214,6 +1244,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   switchOwnerText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  loginPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  loginPillText: {
     fontSize: 12.5,
     fontWeight: "700",
     color: "#2563EB",

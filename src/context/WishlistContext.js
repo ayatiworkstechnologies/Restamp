@@ -1,7 +1,9 @@
-import React, { createContext, useCallback, useContext, useState, useMemo } from "react";
+import React, { createContext, useCallback, useContext, useRef, useState, useMemo } from "react";
 import { getAuthTokenSync } from "../api/client";
 import { fetchSavedWishlist, saveListingRemote, unsaveListingRemote } from "../api/saved";
 import { useAuth } from "./AuthContext";
+import { goLogin } from "../navigation/navRef";
+import { planProtectedAction } from "../auth/requireAuth";
 
 const WishlistContext = createContext();
 
@@ -29,8 +31,16 @@ export function WishlistProvider({ children }) {
   // Buyer endpoints 403 for non-BUYER roles (single active role per
   // account), so remote sync only runs for live BUYER accounts. Everyone
   // else keeps the existing local behavior — no request is ever sent.
-  const { user } = useAuth();
+  const { user, isAuthenticated, setPendingAction } = useAuth();
   const isBuyer = user?.role === "BUYER";
+  // Live mirrors (Change 2): the stored post-login continuation may invoke
+  // toggleWishlist from a pre-login render closure, so the guard and the
+  // body read these refs (always current) instead of render-scope values.
+  // setWishlist functional updates are inherently safe across renders.
+  const stateRef = useRef({ isAuthenticated: false, isBuyer: false });
+  stateRef.current = { isAuthenticated: !!isAuthenticated, isBuyer: !!isBuyer };
+  const wishlistRef = useRef([]);
+  wishlistRef.current = wishlist;
 
   const isWishlisted = (id) => {
     return wishlist.some((item) => String(item.id) === String(id));
@@ -38,11 +48,26 @@ export function WishlistProvider({ children }) {
 
   const toggleWishlist = (property) => {
     if (!property) return;
-    const wasSaved = wishlist.some((item) => String(item.id) === String(property.id));
+    // Saving is a protected persistent action (Change 2): guests are sent
+    // to Login with this exact toggle queued; after a successful login the
+    // toggle resumes once on the same property. Authenticated users proceed
+    // immediately and are never redirected. Live refs keep a pre-login
+    // closure correct when it resumes post-login (no login loop).
+    const plan = planProtectedAction({
+      isAuthenticated: stateRef.current.isAuthenticated,
+      hasToken: !!getAuthTokenSync(),
+    });
+    if (plan.status === "defer") {
+      setPendingAction(() => toggleWishlist(property));
+      goLogin();
+      return;
+    }
+    const propKey = String(property.id);
+    const wasSaved = wishlistRef.current.some((item) => String(item.id) === propKey);
     setWishlist((prev) => {
-      const exists = prev.some((item) => String(item.id) === String(property.id));
+      const exists = prev.some((item) => String(item.id) === propKey);
       if (exists) {
-        return prev.filter((item) => String(item.id) !== String(property.id));
+        return prev.filter((item) => String(item.id) !== propKey);
       } else {
         return [property, ...prev];
       }
@@ -50,7 +75,7 @@ export function WishlistProvider({ children }) {
     // Backend sync only when authenticated as BUYER AND the card maps to a
     // real listing. Mock-only cards (no numeric backendId) stay local, and
     // OWNER sessions stay local too (buyer writes would 403), as before.
-    if (getAuthTokenSync() && isBuyer) {
+    if (getAuthTokenSync() && stateRef.current.isBuyer) {
       const backendId = backendIdOf(property);
       if (backendId != null) {
         const promise = wasSaved ? unsaveListingRemote(backendId) : saveListingRemote(backendId);
@@ -58,10 +83,10 @@ export function WishlistProvider({ children }) {
           // Rollback local state on backend failure
           setWishlist((prev) => {
             if (wasSaved) {
-              const exists = prev.some((item) => String(item.id) === String(property.id));
+              const exists = prev.some((item) => String(item.id) === propKey);
               return exists ? prev : [property, ...prev];
             } else {
-              return prev.filter((item) => String(item.id) !== String(property.id));
+              return prev.filter((item) => String(item.id) !== propKey);
             }
           });
         });

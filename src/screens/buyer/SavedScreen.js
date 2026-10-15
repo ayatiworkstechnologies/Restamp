@@ -37,6 +37,7 @@ import {
 import COLORS from "../../constants/colors";
 import { useWishlist } from "../../context/WishlistContext";
 import { useAuth } from "../../context/AuthContext";
+import { useRequireAuth } from "../../auth/useRequireAuth";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import AppBrandHeader from "../../components/AppBrandHeader";
 import SafeImage from "../../components/common/SafeImage";
@@ -55,6 +56,8 @@ function cleanPhoneOrNull(raw) {
 
 export default function SavedScreen({ navigation, route }) {
   const { wishlist, removeFromWishlist, isWishlisted, toggleWishlist, refreshWishlist } = useWishlist();
+  // Protected modal actions resume here after a guest logs in (Change 2).
+  const requireAuth = useRequireAuth(navigation);
 
   // Pull the server wishlist when authenticated; logged-out users have an
   // honest empty wishlist. Refreshed on mount and whenever the screen regains
@@ -110,7 +113,8 @@ export default function SavedScreen({ navigation, route }) {
 
   const openEditModal = () => {
     if (!isAuthenticated) {
-      navigation.navigate("Login");
+      // Guest profile edit: log in first, then reopen this editor on return.
+      requireAuth(() => setIsEditModalVisible(true));
       return;
     }
     setEditName(profileName === "My Account" ? "" : profileName);
@@ -829,7 +833,7 @@ export default function SavedScreen({ navigation, route }) {
         property={selectedProperty}
         onClose={() => setSelectedProperty(null)}
         onSelectProperty={(p) => setSelectedProperty(p)}
-        onLoginRequired={() => navigation.navigate("Login")}
+        onLoginRequired={(resume) => requireAuth(resume)}
         isWishlisted={isWishlisted}
         onToggleWishlist={toggleWishlist}
       />

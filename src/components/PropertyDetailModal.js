@@ -281,15 +281,16 @@ function PropertyDetailModal({
     );
   };
 
-  const handleLoginRequired = (contextMessage) => {
-    // Logged-out buyers go through the existing Login route. Login resets
-    // to MainTabs by design, so buyers re-tap the action after signing in.
+  const handleLoginRequired = (contextMessage, resume) => {
+    // Logged-out buyers go through the existing Login route. The optional
+    // resume thunk re-runs the intended action once after a successful
+    // login (Change 2); Cancel drops it and nothing is submitted.
     Alert.alert("Log In Required", contextMessage, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Log In",
         onPress: () => {
-          if (onLoginRequired) onLoginRequired();
+          if (onLoginRequired) onLoginRequired(resume);
         },
       },
     ]);
@@ -304,7 +305,8 @@ function PropertyDetailModal({
     const backendId = property && property.backendId;
     if (typeof backendId !== "number" || !getAuthTokenSync()) {
       handleLoginRequired(
-        "Log in to send an enquiry for this property. Your interest is only shared after a successful submission."
+        "Log in to send an enquiry for this property. Your interest is only shared after a successful submission.",
+        () => handleSendEnquiry()
       );
       return;
     }
@@ -318,7 +320,15 @@ function PropertyDetailModal({
           [{ text: "Done" }]
         );
       })
-      .catch(() => {
+      .catch((e) => {
+        if (e && e.status === 404) {
+          Alert.alert(
+            "No Longer Available",
+            "This property is no longer available, so the enquiry was not sent.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
         Alert.alert(
           "Couldn't send enquiry",
           "Please check your connection and try again.",

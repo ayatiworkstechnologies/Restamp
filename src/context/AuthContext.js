@@ -2,8 +2,14 @@ import React, { createContext, useCallback, useContext, useEffect, useState, use
 import { fetchMe, updateProfileName } from "../api/auth";
 import { setMyRole } from "../api/users";
 import { getAuthTokenSync, setAuthToken } from "../api/client";
+import { createContinuationStore } from "../auth/continuation";
 
 const AuthContext = createContext();
+
+// Single-shot post-login continuation (Change 2): one shared store for the
+// whole app. Screens queue a protected action before redirecting a guest to
+// Login; LoginScreen consumes it exactly once after a successful login.
+const continuationStore = createContinuationStore();
 
 function parseName(displayName) {
   if (!displayName || displayName.startsWith("+")) {
@@ -151,6 +157,18 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  const setPendingAction = useCallback((fn) => {
+    continuationStore.set(fn);
+  }, []);
+
+  const consumePendingAction = useCallback(() => {
+    return continuationStore.consume();
+  }, []);
+
+  const clearPendingAction = useCallback(() => {
+    continuationStore.clear();
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -161,8 +179,11 @@ export function AuthProvider({ children }) {
       setLocalProfileName,
       refreshMe,
       logout,
+      setPendingAction,
+      consumePendingAction,
+      clearPendingAction,
     }),
-    [user, isLoading, loginWithToken, saveProfileName, setLocalProfileName, refreshMe, logout]
+    [user, isLoading, loginWithToken, saveProfileName, setLocalProfileName, refreshMe, logout, setPendingAction, consumePendingAction, clearPendingAction]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

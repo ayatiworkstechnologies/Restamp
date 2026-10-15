@@ -31,6 +31,7 @@ import AgentPaymentSuccessScreen from "../screens/agent/AgentPaymentSuccessScree
 import AgentLeadDetailScreen from "../screens/agent/AgentLeadDetailScreen";
 import AgentEarningsScreen from "../screens/agent/AgentEarningsScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
+import { navigationRef } from "./navRef";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -155,7 +156,7 @@ const navTheme = {
 
 export default function AppNavigator() {
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer theme={navTheme} ref={navigationRef}>
       <Stack.Navigator
         initialRouteName="Login"
         screenOptions={{

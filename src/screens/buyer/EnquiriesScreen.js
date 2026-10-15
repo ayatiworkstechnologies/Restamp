@@ -30,6 +30,7 @@ import {
 } from "lucide-react-native";
 import COLORS from "../../constants/colors";
 import { useWishlist } from "../../context/WishlistContext";
+import { useRequireAuth } from "../../auth/useRequireAuth";
 import { useAuth } from "../../context/AuthContext";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import { fetchMyEnquiries } from "../../api/enquiries";
@@ -84,6 +85,8 @@ const FILTER_TABS = ["All", "Site Visits", "Negotiating", "Closed"];
 
 export default function EnquiriesScreen({ navigation, route }) {
   const { wishlist, isWishlisted, toggleWishlist } = useWishlist();
+  // Protected modal actions resume here after a guest logs in (Change 2).
+  const requireAuth = useRequireAuth(navigation);
   const { user: authUser } = useAuth();
   // Buyer endpoints 403 for non-BUYER roles: only fetch while the account
   // holds BUYER. Everyone else sees an honest empty list (no sample data).
@@ -560,7 +563,7 @@ export default function EnquiriesScreen({ navigation, route }) {
         property={selectedProperty}
         onClose={() => setSelectedProperty(null)}
         onSelectProperty={(p) => setSelectedProperty(p)}
-        onLoginRequired={() => navigation.navigate("Login")}
+        onLoginRequired={(resume) => requireAuth(resume)}
         isWishlisted={isWishlisted}
         onToggleWishlist={toggleWishlist}
       />

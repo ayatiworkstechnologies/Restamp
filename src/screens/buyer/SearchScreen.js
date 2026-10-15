@@ -42,6 +42,7 @@ import { fetchListingDetail } from "../../api/listings";
 import { revealContactPhone } from "../../api/contact";
 import { getAuthTokenSync } from "../../api/client";
 import { useWishlist } from "../../context/WishlistContext";
+import { useRequireAuth } from "../../auth/useRequireAuth";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import SearchPropertyModal from "../../components/SearchPropertyModal";
 import SafeImage from "../../components/common/SafeImage";
@@ -166,6 +167,8 @@ export default function SearchScreen({ navigation, route }) {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const { wishlist = [], isWishlisted, toggleWishlist } = useWishlist();
+  // Protected enquiry actions resume here after a guest logs in (Change 2).
+  const requireAuth = useRequireAuth(navigation);
 
   // Listen to bottom tab Search icon press
   useEffect(() => {
@@ -405,10 +408,14 @@ export default function SearchScreen({ navigation, route }) {
   };
 
   const handleLoginFromSheet = () => {
-    // The Login flow resets to MainTabs (no return context by design), so
-    // the buyer re-taps View Number after signing in. Auth logic untouched.
+    // Queue the exact reveal so a successful login returns to this listing
+    // and runs it once; the sheet reopens via handleViewNumber. Cancel/Skip
+    // drops the queued action and nothing is requested.
+    const property = viewedNumberProperty;
     setViewedNumberProperty(null);
-    navigation.navigate("Login");
+    requireAuth(() => {
+      if (property) handleViewNumber(property);
+    });
   };
 
   const handleClearAllFilters = () => {
@@ -1446,7 +1453,7 @@ export default function SearchScreen({ navigation, route }) {
           setSelectedProperty(null);
         }}
         onSelectProperty={(p) => openProperty(p)}
-        onLoginRequired={() => navigation.navigate("Login")}        isWishlisted={isWishlisted}
+        onLoginRequired={(resume) => requireAuth(resume)}        isWishlisted={isWishlisted}
         onToggleWishlist={toggleWishlist}
         detailLoading={detailLoading}
       />

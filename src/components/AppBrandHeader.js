@@ -12,6 +12,7 @@ import RestampLogo from "./RestampLogo";
 import COLORS from "../constants/colors";
 import { useAuth } from "../context/AuthContext";
 import { enterBuyerFlow, enterOwnerFlow } from "../api/users";
+import { useRequireAuth } from "../auth/useRequireAuth";
 
 function AppBrandHeader({
   currentRole = "buyer",
@@ -23,8 +24,13 @@ function AppBrandHeader({
   const navigation = useNavigation();
   const auth = useAuth();
   const [switchingRole, setSwitchingRole] = useState(false);
+  // Role switches are protected (Change 2): guests log in first, then the
+  // switch resumes. enterOwnerFlow/enterBuyerFlow still enforce backend
+  // roles afterwards — a stale pre-login auth object can only cost one
+  // redundant role check, never a bypass (token + refreshMe stay live).
+  const requireAuth = useRequireAuth(navigation);
 
-  const handleSwitchPress = async () => {
+  const doSwitch = async () => {
     if (switchingRole) return;
     setSwitchingRole(true);
     try {
@@ -49,6 +55,10 @@ function AppBrandHeader({
     } finally {
       setSwitchingRole(false);
     }
+  };
+
+  const handleSwitchPress = () => {
+    requireAuth(doSwitch);
   };
 
   const isBuyer = currentRole === "buyer";

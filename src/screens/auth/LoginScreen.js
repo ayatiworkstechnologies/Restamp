@@ -35,6 +35,12 @@ import COLORS from "../../constants/colors";
 import { useAuth } from "../../context/AuthContext";
 import { requestOtp, verifyOtp, googleSignIn } from "../../api/auth";
 import GoogleSignInButton from "../../components/GoogleSignInButton";
+import {
+  sanitizePhoneInput,
+  isPhoneValidForCountry,
+  phoneValidationMessage,
+} from "../../auth/phone";
+import { planLoginResume } from "../../auth/requireAuth";
 
 const COUNTRY_CODES = [
   { flag: "🇮🇳", code: "+91", name: "India" },
@@ -60,7 +66,13 @@ const VALID_DEMO_CODES = [
 ];
 
 export default function LoginScreen({ navigation }) {
-  const { loginWithToken, saveProfileName, setLocalProfileName } = useAuth();
+  const {
+    loginWithToken,
+    saveProfileName,
+    setLocalProfileName,
+    consumePendingAction,
+    clearPendingAction,
+  } = useAuth();
 
   // Multi-step: 1 = Phone, 2 = OTP, 3 = Name
   const [step, setStep] = useState(1);
@@ -83,6 +95,72 @@ export default function LoginScreen({ navigation }) {
   const [devCode, setDevCode] = useState(null);
 
   const fullPhone = () => `${selectedCountry.code}${phoneNumber.replace(/[^0-9]/g, "")}`;
+
+  // Phone validation state (Change 1): digits-only, capped at the
+  // country limit (+91 India: exactly 10; the +91 code is never counted).
+  // The inline message appears once the user starts typing.
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const handlePhoneChange = (text) => {
+    setPhoneTouched(true);
+    setPhoneNumber(sanitizePhoneInput(text, selectedCountry.code));
+  };
+  const isPhoneValid = isPhoneValidForCountry(phoneNumber, selectedCountry.code);
+  const showPhoneError = phoneTouched && !isPhoneValid;
+
+  // Post-login continuation (Change 2): resume one queued protected action
+  // on success; drop it when login is skipped or abandoned so it can never
+  // fire later unexpectedly. No tokens or personal data are stored here.
+  const loginSucceededRef = useRef(false);
+  useEffect(() => {
+    return () => {
+      if (!loginSucceededRef.current) {
+        try {
+          clearPendingAction();
+        } catch {
+          // ignore — store may already be empty
+        }
+      }
+    };
+  }, [clearPendingAction]);
+
+  const enterAfterLogin = () => {
+    loginSucceededRef.current = true;
+    let continuation = null;
+    try {
+      continuation = consumePendingAction();
+    } catch {
+      continuation = null;
+    }
+    const plan = planLoginResume({
+      continuation,
+      canGoBack: !!(navigation?.canGoBack && navigation.canGoBack()),
+      loginSucceeded: true,
+    });
+    if (plan.mode === "resume-back") {
+      // Return to the exact origin screen (form state intact), then run the
+      // intended action exactly once.
+      navigation.goBack();
+      plan.action();
+      return;
+    }
+    if (plan.mode === "resume-reset") {
+      if (navigation?.reset) {
+        navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
+      } else {
+        navigation?.navigate("MainTabs");
+      }
+      plan.action();
+      return;
+    }
+    if (navigation?.reset) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "MainTabs" }],
+      });
+    } else {
+      navigation?.navigate("MainTabs");
+    }
+  };
 
   const otpErrorMessage = (e) => {
     if (!e) return "Something went wrong. Please try again.";
@@ -127,11 +205,11 @@ export default function LoginScreen({ navigation }) {
   }, [step, timer]);
 
   const handlePhoneSubmit = async () => {
-    const cleaned = phoneNumber.replace(/[^0-9]/g, "");
-    if (cleaned.length < 8 || busy) {
-      if (cleaned.length < 8) {
-        Alert.alert("Invalid Phone", "Please enter a valid phone number.");
-      }
+    if (busy) return;
+    if (!isPhoneValid) {
+      // Inline message (below the input) explains the exact rule; the
+      // Continue button is disabled until the number is valid.
+      setPhoneTouched(true);
       return;
     }
     setBusy(true);
@@ -229,14 +307,7 @@ export default function LoginScreen({ navigation }) {
       });
       // Returning user whose profile was already completed -> skip Name screen to Common Home
       if (userObj && userObj.isProfileComplete) {
-        if (navigation?.reset) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "MainTabs" }],
-          });
-        } else {
-          navigation?.navigate("MainTabs");
-        }
+        enterAfterLogin();
       } else {
         // New user or incomplete profile -> Name screen
         if (userObj?.firstName) setFirstName(userObj.firstName);
@@ -267,15 +338,8 @@ export default function LoginScreen({ navigation }) {
       // Persist to MySQL via PATCH /users/me
       await saveProfileName(trimmedFirst, trimmedLast);
 
-      // Enter the app
-      if (navigation?.reset) {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "MainTabs" }],
-        });
-      } else {
-        navigation?.navigate("MainTabs");
-      }
+      // Enter the app (or resume the queued protected action)
+      enterAfterLogin();
     } catch (e) {
       Alert.alert("Could Not Save Profile", "Failed to save your profile name. Please try again.");
     } finally {
@@ -284,6 +348,11 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handleSkip = () => {
+    try {
+      clearPendingAction();
+    } catch {
+      // ignore
+    }
     if (navigation?.reset) {
       navigation.reset({
         index: 0,
@@ -304,14 +373,7 @@ export default function LoginScreen({ navigation }) {
       const tokenResp = await googleSignIn(idToken);
       const userObj = await loginWithToken(tokenResp.access_token);
       if (userObj && userObj.isProfileComplete) {
-        if (navigation?.reset) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "MainTabs" }],
-          });
-        } else {
-          navigation?.navigate("MainTabs");
-        }
+        enterAfterLogin();
       } else {
         if (userObj?.firstName) setFirstName(userObj.firstName);
         if (userObj?.lastName) setLastName(userObj.lastName);
@@ -334,7 +396,6 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  const isPhoneValid = phoneNumber.replace(/[^0-9]/g, "").length >= 8;
   const isOtpValid = otp.join("").length === 6 || otp.some((d) => d.length > 0);
   const isNameValid = firstName.trim().length > 0;
 
@@ -395,16 +456,22 @@ export default function LoginScreen({ navigation }) {
                     <TextInput
                       ref={phoneInputRef}
                       style={styles.phoneTextInput}
-                      placeholder="Phone number"
+                      placeholder="10-digit mobile number"
                       placeholderTextColor="#A8A29E"
                       value={phoneNumber}
-                      onChangeText={setPhoneNumber}
+                      onChangeText={handlePhoneChange}
                       keyboardType="phone-pad"
                       underlineColorAndroid="transparent"
                       autoFocus
                     />
                   </Pressable>
                 </View>
+
+                {showPhoneError ? (
+                  <Text style={styles.phoneErrorText}>
+                    {phoneValidationMessage(phoneNumber, selectedCountry.code)}
+                  </Text>
+                ) : null}
 
                 <Text style={styles.disclaimerText}>
                   By continuing, you agree to receive{" "}
@@ -715,6 +782,8 @@ export default function LoginScreen({ navigation }) {
                   ]}
                   onPress={() => {
                     setSelectedCountry(item);
+                    setPhoneTouched(false);
+                    setPhoneNumber((prev) => sanitizePhoneInput(prev, item.code));
                     setShowCountryModal(false);
                   }}
                 >
@@ -815,6 +884,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 58,
     justifyContent: "center",
+  },
+  phoneErrorText: {
+    fontSize: 12.5,
+    color: "#DC2626",
+    lineHeight: 18,
+    marginTop: -8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   phoneTextInput: {
     flex: 1,

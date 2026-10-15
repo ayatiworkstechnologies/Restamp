@@ -40,6 +40,7 @@ import { useOwner } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
 import { getAuthTokenSync } from "../../api/client";
 import { enterOwnerFlow } from "../../api/users";
+import { useRequireAuth } from "../../auth/useRequireAuth";
 import { fetchMyEnquiries } from "../../api/enquiries";
 import { linkGoogleAccount } from "../../api/auth";
 import GoogleSignInButton from "../../components/GoogleSignInButton";
@@ -53,6 +54,8 @@ export default function ProfileScreen({ navigation }) {
   const { user: authUser, logout, refreshMe } = useAuth();
   const authForOwnerEntry = { user: authUser, refreshMe };
   const [switchingOwner, setSwitchingOwner] = useState(false);
+  // Owner entry is protected (Change 2): guests log in first, then resume.
+  const requireAuth = useRequireAuth(nav);
 
   // Real counts + live role, refreshed whenever Profile gains focus.
   // Buyer endpoints (wishlist, enquiries) are only called while the account
@@ -159,7 +162,7 @@ export default function ProfileScreen({ navigation }) {
   // P0 fix: backend requires the OWNER role for /owner/* endpoints.
   // Switch the backend role first (real POST /users/me/role, token
   // preserved), and only then navigate. Never logs out, never touches OTP.
-  const handleSwitchToOwner = async () => {
+  const doSwitchToOwner = async () => {
     if (switchingOwner) return;
     setSwitchingOwner(true);
     try {
@@ -167,6 +170,10 @@ export default function ProfileScreen({ navigation }) {
     } finally {
       setSwitchingOwner(false);
     }
+  };
+
+  const handleSwitchToOwner = () => {
+    requireAuth(doSwitchToOwner);
   };
 
   const handleLogout = () => {
