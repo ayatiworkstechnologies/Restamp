@@ -56,6 +56,7 @@ import SearchPropertyModal from "../../components/SearchPropertyModal";
 import { apiGet } from "../../api/client";
 import { toUiProperty } from "../../api/mappers";
 import SafeImage from "../../components/common/SafeImage";
+import { getUnreadCount, subscribeNotifications } from "../../data/notificationsStore";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.78;
@@ -212,6 +213,13 @@ export default function HomeScreen({ navigation }) {
 
   // Selected Property for Detail Modal
   const [selectedProperty, setSelectedProperty] = useState(null);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(getUnreadCount());
+
+  useEffect(() => {
+    return subscribeNotifications(() => {
+      setUnreadNotifCount(getUnreadCount());
+    });
+  }, []);
 
   // Search & Filter Modal States
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
@@ -514,10 +522,10 @@ export default function HomeScreen({ navigation }) {
             <TouchableOpacity
               style={styles.notificationBtn}
               activeOpacity={0.8}
-              onPress={() => Alert.alert("Notifications", "You have no unread notifications.")}
+              onPress={() => navigation.navigate("Notifications")}
             >
               <Bell size={20} color={COLORS.textDark} />
-              <View style={styles.notificationDot} />
+              {unreadNotifCount > 0 && <View style={styles.notificationDot} />}
             </TouchableOpacity>
           </View>
         </View>
