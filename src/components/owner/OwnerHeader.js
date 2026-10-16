@@ -77,7 +77,7 @@ export default function OwnerHeader({
             <TouchableOpacity
               style={styles.iconBtn}
               activeOpacity={0.75}
-              onPress={() => {}}
+              onPress={() => navigation.navigate("Notifications")}
             >
               <Bell size={20} color={COLORS.textDark} />
               {unreadCount > 0 && (

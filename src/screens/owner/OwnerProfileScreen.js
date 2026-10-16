@@ -293,7 +293,7 @@ export default function OwnerProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => Alert.alert("Notifications", "Push notifications for new leads and visit reminders are ENABLED.")}
+            onPress={() => navigation.navigate("Notifications")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>

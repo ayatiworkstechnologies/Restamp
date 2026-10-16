@@ -695,12 +695,7 @@ export default function ProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() =>
-              Alert.alert(
-                "Notifications",
-                "Push notifications for new properties and price drops are ENABLED."
-              )
-            }
+            onPress={() => navigation.navigate("Notifications")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>

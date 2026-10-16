@@ -1,4 +1,4 @@
-import React, { useState, memo } from "react";
+import React, { useState, useEffect, memo } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import COLORS from "../constants/colors";
 import { useAuth } from "../context/AuthContext";
 import { enterBuyerFlow, enterOwnerFlow } from "../api/users";
 import { useRequireAuth } from "../auth/useRequireAuth";
+import { getUnreadCount, subscribeNotifications } from "../data/notificationsStore";
 
 function AppBrandHeader({
   currentRole = "buyer",
@@ -24,6 +25,13 @@ function AppBrandHeader({
   const navigation = useNavigation();
   const auth = useAuth();
   const [switchingRole, setSwitchingRole] = useState(false);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(getUnreadCount());
+
+  useEffect(() => {
+    return subscribeNotifications(() => {
+      setUnreadNotifCount(getUnreadCount());
+    });
+  }, []);
   // Role switches are protected (Change 2): guests log in first, then the
   // switch resumes. enterOwnerFlow/enterBuyerFlow still enforce backend
   // roles afterwards — a stale pre-login auth object can only cost one
@@ -101,12 +109,10 @@ function AppBrandHeader({
           <TouchableOpacity
             style={styles.notificationBtn}
             activeOpacity={0.8}
-            onPress={() =>
-              Alert.alert("Notifications", "You have no unread notifications.")
-            }
+            onPress={() => navigation.navigate("Notifications")}
           >
             <HugeBell size={20} color="#0F172A" />
-            <View style={styles.notificationDot} />
+            {unreadNotifCount > 0 && <View style={styles.notificationDot} />}
           </TouchableOpacity>
         )}
       </View>

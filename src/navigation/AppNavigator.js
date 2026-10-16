@@ -18,6 +18,7 @@ import ExploreScreen from "../screens/buyer/ExploreScreen";
 import ProfileScreen from "../screens/buyer/ProfileScreen";
 import MenuScreen from "../screens/buyer/MenuScreen";
 import EnquiriesScreen from "../screens/buyer/EnquiriesScreen";
+import NotificationScreen from "../screens/buyer/NotificationScreen";
 
 import OwnerNavigator from "./OwnerNavigator";
 import OwnerPlansScreen from "../screens/owner/OwnerPlansScreen";
@@ -180,6 +181,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Saved" component={SavedScreen} />
         <Stack.Screen name="Enquiries" component={EnquiriesScreen} />
         <Stack.Screen name="Explore" component={ExploreScreen} />
+        <Stack.Screen name="Notifications" component={NotificationScreen} />
+        <Stack.Screen name="Notification" component={NotificationScreen} />
         <Stack.Screen
           name="Menu"
           component={MenuScreen}
