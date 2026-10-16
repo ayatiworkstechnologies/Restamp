@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Pressable,
 } from "react-native";
-import { X, Sparkles } from "lucide-react-native";
+import { X, Sparkles } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import PrimaryButton from "../../components/owner/PrimaryButton";
 import SecondaryButton from "../../components/owner/SecondaryButton";

@@ -27,7 +27,7 @@ import {
   Copy,
   Building,
   ArrowLeft,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useWishlist } from "../../context/WishlistContext";
 import { useRequireAuth } from "../../auth/useRequireAuth";

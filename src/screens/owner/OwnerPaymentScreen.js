@@ -21,7 +21,7 @@ import {
   Smartphone,
   Building,
   X,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
 
@@ -317,7 +317,7 @@ export default function OwnerPaymentScreen({ route, navigation }) {
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Promo-code</Text>
-            <Text style={[styles.summaryVal, { color: "#059669" }]}>-₹300.00</Text>
+            <Text style={[styles.summaryVal, { color: "#16A34A" }]}>-₹300.00</Text>
           </View>
 
           <View style={styles.summaryRow}>

@@ -33,7 +33,7 @@ import {
   RotateCcw,
   Settings as SettingsIcon,
   Wallet,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useAgent } from "../../context/AgentContext";
 import ConfirmationModal from "../../components/owner/ConfirmationModal";

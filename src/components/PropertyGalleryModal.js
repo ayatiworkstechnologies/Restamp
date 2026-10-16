@@ -11,7 +11,7 @@ import {
   Share,
   StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChevronLeft,
   X,
@@ -20,7 +20,7 @@ import {
   ChevronRight,
   Layers,
   Camera,
-} from "lucide-react-native";
+} from "./common/HugeIcon";
 import COLORS from "../constants/colors";
 import SafeImage from "./common/SafeImage";
 
@@ -74,6 +74,7 @@ function PropertyGalleryModal({
   property = null,
   initialCategory = "all",
 }) {
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState(initialCategory || "all");
   const [lightboxIndex, setLightboxIndex] = useState(null); // null = closed, number = open
 
@@ -349,8 +350,13 @@ function PropertyGalleryModal({
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-        {/* 1. TOP HEADER BAR */}
-        <SafeAreaView edges={["top"]} style={styles.safeHeaderArea}>
+        {/* 1. TOP HEADER BAR (STATUS BAR AWARE) */}
+        <View
+          style={[
+            styles.safeHeaderArea,
+            { paddingTop: Math.max(insets.top, Platform.OS === "ios" ? 48 : 20) },
+          ]}
+        >
           <View style={styles.headerBar}>
             <TouchableOpacity
               style={styles.headerIconBtn}
@@ -389,7 +395,7 @@ function PropertyGalleryModal({
               </TouchableOpacity>
             </View>
           </View>
-        </SafeAreaView>
+        </View>
 
         {/* 2. STICKY CATEGORY TAB BAR (Follows Property Page Tab Design Language) */}
         <View style={styles.tabBarContainer}>
@@ -543,7 +549,12 @@ function PropertyGalleryModal({
               <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
 
               {/* Lightbox Top Controls */}
-              <SafeAreaView edges={["top"]} style={styles.lightboxSafeTop}>
+              <View
+                style={[
+                  styles.lightboxSafeTop,
+                  { paddingTop: Math.max(insets.top, Platform.OS === "ios" ? 48 : 20) },
+                ]}
+              >
                 <View style={styles.lightboxHeader}>
                   <TouchableOpacity
                     style={styles.lightboxCircleBtn}
@@ -568,7 +579,7 @@ function PropertyGalleryModal({
                     <Share2 size={18} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
-              </SafeAreaView>
+              </View>
 
               {/* Lightbox Center Image with Prev / Next Tap Zones */}
               <View style={styles.lightboxCenter}>

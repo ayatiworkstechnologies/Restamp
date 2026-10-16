@@ -15,7 +15,7 @@ import {
   Animated,
 } from "react-native";
 import * as Network from "expo-network";
-import { WifiOff, RefreshCw, CheckCircle2 } from "lucide-react-native";
+import { WifiOff, RefreshCw, CheckCircle2 } from "../components/common/HugeIcon";
 import COLORS from "../constants/colors";
 
 const NetworkContext = createContext({

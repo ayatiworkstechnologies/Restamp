@@ -9,7 +9,7 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { CheckCircle2, Building2, Plus, Clock, ArrowLeft } from "lucide-react-native";
+import { CheckCircle2, Building2, Plus, Clock, ArrowLeft } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { freshAddParams } from "../../api/owner";
 import StatusBadge from "../../components/owner/StatusBadge";

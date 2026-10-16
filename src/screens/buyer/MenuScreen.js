@@ -31,7 +31,7 @@ import {
   ChevronDown,
   ArrowUpRight,
   MapPin,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import RestampLogo from "../../components/RestampLogo";
 import { useAgent } from "../../context/AgentContext";
@@ -1735,7 +1735,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#F0F7FF",
+    backgroundColor: "#EFF6FF",
     borderWidth: 1,
     borderColor: "#BFDBFE",
     borderRadius: 16,

@@ -19,7 +19,7 @@ import {
   X,
   MoreVertical,
   Sparkles,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 
 const ALL_LOCALITY_NAMES = [
@@ -84,7 +84,7 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
     {
       limit: 5,
       label: "5 Locations",
-      name: "Starter Agent",
+      name: "Agent Starter Plan",
       titlePrefix: "Starter ",
       titleSuffix: "Agent (5 Locations)",
       price: "₹2,999",
@@ -100,7 +100,7 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
     {
       limit: 10,
       label: "10 Locations",
-      name: "Pro Agent",
+      name: "Agent Pro Plan",
       titlePrefix: "Pro ",
       titleSuffix: "Agent (10 Locations)",
       price: "₹6,999",
@@ -116,7 +116,7 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
     {
       limit: 15,
       label: "15 Locations",
-      name: "Elite Agency",
+      name: "Agent Elite Plan",
       titlePrefix: "Elite ",
       titleSuffix: "Agency (15 Locations)",
       price: "₹14,999",

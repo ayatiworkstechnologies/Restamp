@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
-import { WifiOff, AlertCircle, RefreshCw } from "lucide-react-native";
+import { WifiOff, AlertCircle, RefreshCw } from "../common/HugeIcon";
 import COLORS from "../../constants/colors";
 import EmptyState from "./EmptyState";
 import PrimaryButton from "./PrimaryButton";

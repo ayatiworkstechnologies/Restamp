@@ -7,7 +7,7 @@ import {
   Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { Building2, Search, Bell } from "lucide-react-native";
+import { HugeBuilding, HugeSearch, HugeBell } from "./common/HugeIcon";
 import RestampLogo from "./RestampLogo";
 import COLORS from "../constants/colors";
 import { useAuth } from "../context/AuthContext";
@@ -87,9 +87,9 @@ function AppBrandHeader({
             hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
           >
             {isBuyer ? (
-              <Building2 size={13} color="#2563EB" style={{ marginRight: 4 }} />
+              <HugeBuilding size={13} color="#2563EB" style={{ marginRight: 4 }} />
             ) : (
-              <Search size={13} color="#2563EB" style={{ marginRight: 4 }} />
+              <HugeSearch size={13} color="#2563EB" style={{ marginRight: 4 }} />
             )}
             <Text style={styles.switchRoleText}>
               {isBuyer ? "Owner" : "Buyer"}
@@ -105,7 +105,7 @@ function AppBrandHeader({
               Alert.alert("Notifications", "You have no unread notifications.")
             }
           >
-            <Bell size={20} color="#0F172A" />
+            <HugeBell size={20} color="#0F172A" />
             <View style={styles.notificationDot} />
           </TouchableOpacity>
         )}

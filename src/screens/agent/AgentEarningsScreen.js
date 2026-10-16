@@ -31,7 +31,7 @@ import {
   Sparkles,
   AlertCircle,
   HelpCircle,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 
 import COLORS from "../../constants/colors";
 import { useAgent } from "../../context/AgentContext";
@@ -172,7 +172,7 @@ export default function AgentEarningsScreen({ navigation }) {
             <View style={styles.heroSubStatDivider} />
 
             <View style={styles.heroSubStatItem}>
-              <View style={[styles.statusDot, { backgroundColor: "#38BDF8" }]} />
+              <View style={[styles.statusDot, { backgroundColor: "#2563EB" }]} />
               <View>
                 <Text style={styles.heroSubStatLabel}>Processing</Text>
                 <Text style={styles.heroSubStatVal}>
@@ -196,7 +196,7 @@ export default function AgentEarningsScreen({ navigation }) {
 
           {/* Next Payout Alert Banner */}
           <View style={styles.heroNextPayoutBanner}>
-            <Clock size={14} color="#93C5FD" style={{ marginRight: 6 }} />
+            <Clock size={14} color="#BFDBFE" style={{ marginRight: 6 }} />
             <Text style={styles.heroNextPayoutText}>
               Next scheduled payout: <Text style={styles.heroNextPayoutAccent}>₹24,000</Text> on Oct 10, 2026
             </Text>
@@ -293,7 +293,7 @@ export default function AgentEarningsScreen({ navigation }) {
                     ) : (
                       <Clock
                         size={12}
-                        color={isProcessing ? "#0284C7" : "#D97706"}
+                        color={isProcessing ? "#2563EB" : "#D97706"}
                         style={{ marginRight: 4 }}
                       />
                     )}
@@ -892,7 +892,7 @@ const styles = StyleSheet.create({
     color: "#16A34A",
   },
   payoutBadgeTextProcessing: {
-    color: "#0284C7",
+    color: "#2563EB",
   },
   payoutBadgeTextPending: {
     color: "#D97706",
@@ -1191,7 +1191,7 @@ const styles = StyleSheet.create({
   slipTotalKey: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1E3A8A",
+    color: "#1D4ED8",
   },
   slipTotalVal: {
     fontSize: 16,

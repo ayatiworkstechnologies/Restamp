@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
-import { Bell, ArrowLeft, User } from "lucide-react-native";
+import { Bell, ArrowLeft, User } from "../common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
 import { useNavigation } from "@react-navigation/native";

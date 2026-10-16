@@ -2,12 +2,12 @@ import React from "react";
 import { Platform } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import {
-  LayoutGrid,
-  Building2,
-  PlusCircle,
-  Users,
-  User,
-} from "lucide-react-native";
+  HugeDashboard,
+  HugeBuilding,
+  HugePlus,
+  HugeUsers,
+  HugeUser,
+} from "../components/common/HugeIcon";
 
 import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
 import OwnerPropertiesScreen from "../screens/owner/OwnerPropertiesScreen";
@@ -20,23 +20,23 @@ const Tab = createBottomTabNavigator();
 const ownerTabConfig = {
   Dashboard: {
     label: "Dashboard",
-    Icon: LayoutGrid,
+    Icon: HugeDashboard,
   },
   Properties: {
     label: "Properties",
-    Icon: Building2,
+    Icon: HugeBuilding,
   },
   Add: {
     label: "Add",
-    Icon: PlusCircle,
+    Icon: HugePlus,
   },
   Leads: {
     label: "Leads",
-    Icon: Users,
+    Icon: HugeUsers,
   },
   Profile: {
     label: "Profile",
-    Icon: User,
+    Icon: HugeUser,
   },
 };
 

@@ -26,7 +26,7 @@ import {
   X,
   Sparkles,
   Building2,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useAgent } from "../../context/AgentContext";
 import AppBrandHeader from "../../components/AppBrandHeader";

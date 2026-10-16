@@ -18,13 +18,15 @@ import {
   MapPin,
   Building2,
   Phone,
+  MessageCircle,
+  ShieldCheck,
   CheckCircle2,
   XCircle,
   X,
   User,
   Eye,
   RotateCcw,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useAgent } from "../../context/AgentContext";
 import AppBrandHeader from "../../components/AppBrandHeader";
@@ -58,6 +60,18 @@ export default function AgentVisitsScreen({ navigation }) {
     const raw = phone || "+919876543210";
     Linking.openURL(`tel:${raw.replace(/[^0-9+]/g, "")}`).catch(() => {
       Alert.alert("Call Customer", `Call ${name} at ${raw}`);
+    });
+  };
+
+  const handleMessageCustomer = (phone, name, propTitle) => {
+    const raw = phone || "+919876543210";
+    const digits = raw.replace(/[^0-9]/g, "");
+    const text = encodeURIComponent(
+      `Hello ${name || "there"}, regarding your site visit for "${propTitle || "property"}" via RESTAMP:`
+    );
+    const url = `https://wa.me/${digits}?text=${text}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert("WhatsApp Unavailable", `Could not launch WhatsApp for ${raw}.`);
     });
   };
 
@@ -226,7 +240,7 @@ export default function AgentVisitsScreen({ navigation }) {
                   {/* Divider */}
                   <View style={styles.cardDivider} />
 
-                  {/* Actions: View Details, Call Customer */}
+                  {/* Actions: Call Customer, Message (WhatsApp), View Details */}
                   <View style={styles.cardActionsRow}>
                     <TouchableOpacity
                       style={styles.callCustomerBtn}
@@ -235,8 +249,23 @@ export default function AgentVisitsScreen({ navigation }) {
                       }
                       activeOpacity={0.8}
                     >
-                      <Phone size={14} color="#0F172A" style={{ marginRight: 5 }} />
-                      <Text style={styles.callCustomerBtnText}>Call Customer</Text>
+                      <Phone size={13} color="#0F172A" style={{ marginRight: 4 }} />
+                      <Text style={styles.callCustomerBtnText}>Call</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.messageCustomerBtn}
+                      onPress={() =>
+                        handleMessageCustomer(
+                          item.customerPhone,
+                          item.customerName,
+                          item.propertyTitle
+                        )
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <MessageCircle size={14} color="#16A34A" style={{ marginRight: 4 }} />
+                      <Text style={styles.messageCustomerBtnText}>WhatsApp</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -244,8 +273,8 @@ export default function AgentVisitsScreen({ navigation }) {
                       onPress={() => handleOpenDetails(item)}
                       activeOpacity={0.8}
                     >
-                      <Eye size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
-                      <Text style={styles.viewDetailsBtnText}>View Details</Text>
+                      <Eye size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.viewDetailsBtnText}>Details</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -326,6 +355,71 @@ export default function AgentVisitsScreen({ navigation }) {
                       {selectedVisitForDetails.notes || "Inspection of keys and apartment interior."}
                     </Text>
                   </View>
+                </View>
+
+                {/* Quick Contact Actions: Buyer & Owner */}
+                <View style={styles.modalQuickContactCard}>
+                  <Text style={styles.modalSubheading}>Direct Contact Actions</Text>
+                  <View style={styles.quickContactBtnRow}>
+                    <TouchableOpacity
+                      style={styles.quickCallBtn}
+                      onPress={() =>
+                        handleCallCustomer(
+                          selectedVisitForDetails.customerPhone,
+                          selectedVisitForDetails.customerName
+                        )
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <Phone size={13} color="#0F172A" style={{ marginRight: 4 }} />
+                      <Text style={styles.quickCallBtnText}>Call Buyer</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.quickMsgBtn}
+                      onPress={() =>
+                        handleMessageCustomer(
+                          selectedVisitForDetails.customerPhone,
+                          selectedVisitForDetails.customerName,
+                          selectedVisitForDetails.propertyTitle
+                        )
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <MessageCircle size={13} color="#16A34A" style={{ marginRight: 4 }} />
+                      <Text style={styles.quickMsgBtnText}>WhatsApp</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.quickCallOwnerBtn}
+                      onPress={() =>
+                        handleCallCustomer(
+                          selectedVisitForDetails.ownerPhone,
+                          selectedVisitForDetails.ownerName
+                        )
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <Building2 size={13} color="#2563EB" style={{ marginRight: 4 }} />
+                      <Text style={styles.quickCallOwnerBtnText}>Call Owner</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Assigned Agent / Coordinator Details */}
+                <View style={styles.coordinatorCard}>
+                  <View style={styles.coordHeader}>
+                    <View style={styles.coordAvatar}>
+                      <User size={16} color="#2563EB" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.coordName}>Assigned Area Coordinator</Text>
+                      <Text style={styles.coordRole}>Chennai Certified Property Agent • RESTAMP</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.coordInfoText}>
+                    Coordinator facilitates buyer entry, keys handover, and documentation verification on site.
+                  </Text>
                 </View>
 
                 {/* Actions: Reschedule, Mark Completed, Cancel Visit */}
@@ -575,6 +669,22 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#0F172A",
   },
+  messageCustomerBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  messageCustomerBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
   viewDetailsBtn: {
     flex: 1,
     height: 38,
@@ -588,6 +698,110 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  modalQuickContactCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    marginBottom: 12,
+  },
+  modalSubheading: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  quickContactBtnRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  quickCallBtn: {
+    flex: 1,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickCallBtnText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  quickMsgBtn: {
+    flex: 1,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickMsgBtnText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+  quickCallOwnerBtn: {
+    flex: 1,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickCallOwnerBtnText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  coordinatorCard: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    marginBottom: 16,
+  },
+  coordHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  coordAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  coordName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  coordRole: {
+    fontSize: 11,
+    color: "#2563EB",
+  },
+  coordInfoText: {
+    fontSize: 11.5,
+    color: "#475569",
+    lineHeight: 16,
   },
   modalOverlay: {
     flex: 1,

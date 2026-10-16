@@ -34,7 +34,7 @@ import {
   Star,
   CheckCircle2,
   Copy,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useListings } from "../../api/useListings";
 import { parseSmartQuery } from "../../api/mappers";
@@ -513,8 +513,8 @@ export default function SearchScreen({ navigation, route }) {
         >
           <Heart
             size={19}
-            color={wishlist.length > 0 ? "#FF0000" : "#1E293B"}
-            fill={wishlist.length > 0 ? "#FF0000" : "transparent"}
+            color={wishlist.length > 0 ? "#DC2626" : "#1E293B"}
+            fill={wishlist.length > 0 ? "#DC2626" : "transparent"}
           />
         </TouchableOpacity>
       </View>
@@ -751,8 +751,8 @@ export default function SearchScreen({ navigation, route }) {
                   >
                     <Heart
                       size={20}
-                      color={saved ? "#FF0000" : "#FFFFFF"}
-                      fill={saved ? "#FF0000" : "rgba(0,0,0,0.3)"}
+                      color={saved ? "#DC2626" : "#FFFFFF"}
+                      fill={saved ? "#DC2626" : "rgba(0,0,0,0.3)"}
                     />
                   </TouchableOpacity>
 
@@ -1423,10 +1423,9 @@ export default function SearchScreen({ navigation, route }) {
           if (filters.dealType) setDealTab(filters.dealType);
         }}
         onSelectProperty={(suggestion) => {
-          // Open the tapped suggestion's real detail screen, then dismiss
-          // the search modal. Independent states — closing cannot cancel the
-          // detail open. Falls back to query text when no usable record.
-          if (suggestion && typeof suggestion.backendId === "number") {
+          // Open the tapped suggestion's detail screen, then dismiss
+          // the search modal.
+          if (suggestion) {
             openProperty(suggestion);
             setIsSearchModalOpen(false);
             setFromNavbar(false);
@@ -2205,7 +2204,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.primaryLight || "#EBF4FF",
+    backgroundColor: COLORS.primaryLight || "#EFF6FF",
     justifyContent: "center",
     alignItems: "center",
   },

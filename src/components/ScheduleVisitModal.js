@@ -18,7 +18,7 @@ import {
   Clock,
   Building2,
   CheckCircle2,
-} from "lucide-react-native";
+} from "./common/HugeIcon";
 import COLORS from "../constants/colors";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

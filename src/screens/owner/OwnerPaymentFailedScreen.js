@@ -6,7 +6,7 @@ import {
   StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AlertCircle, RefreshCw, Layers, ArrowLeft } from "lucide-react-native";
+import { AlertCircle, RefreshCw, Layers, ArrowLeft } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import PrimaryButton from "../../components/owner/PrimaryButton";
 import SecondaryButton from "../../components/owner/SecondaryButton";

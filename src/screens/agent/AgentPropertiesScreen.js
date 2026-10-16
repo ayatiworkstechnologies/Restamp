@@ -26,7 +26,7 @@ import {
   Users,
   Eye,
   SlidersHorizontal,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useAgent } from "../../context/AgentContext";
 import PropertyDetailModal from "../../components/PropertyDetailModal";

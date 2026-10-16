@@ -8,7 +8,7 @@ import {
   Dimensions,
   Platform,
 } from "react-native";
-import { WifiOff, RefreshCw, AlertCircle } from "lucide-react-native";
+import { WifiOff, RefreshCw, AlertCircle } from "./HugeIcon";
 import COLORS from "../../constants/colors";
 
 const { width } = Dimensions.get("window");

@@ -48,7 +48,7 @@ import {
   Info,
   Car,
   Clock,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";

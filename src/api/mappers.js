@@ -153,6 +153,8 @@ export function toUiProperty(card) {
     baths: card.bathrooms ?? undefined,
     sqft: areaNum != null ? areaNum.toLocaleString("en-IN") : undefined,
     isVerified: true, // server guarantees VERIFIED
+    badge: card.badge || "Verified",
+    furnishing: card.furnishing || "Semi-Furnished",
     constructionStatus: CONSTRUCTION_LABELS[card.construction_status] || undefined,
     image,
     description: card.description || undefined,

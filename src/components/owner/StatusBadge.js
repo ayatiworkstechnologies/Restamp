@@ -51,8 +51,8 @@ export default function StatusBadge({ status, style, textStyle }) {
       label = "NEW LEAD";
       break;
     case "contacted":
-      bg = "#EEF2FF";
-      textColor = "#4F46E5";
+      bg = "#EFF6FF";
+      textColor = COLORS.primary;
       label = "CONTACTED";
       break;
     case "visit_scheduled":

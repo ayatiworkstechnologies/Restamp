@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { FileText, ShieldCheck, Plus, Lock, X } from "lucide-react-native";
+import { FileText, ShieldCheck, Plus, Lock, X } from "../common/HugeIcon";
 import COLORS from "../../constants/colors";
 
 export default function DocumentUploadCard({

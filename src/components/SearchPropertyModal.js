@@ -11,7 +11,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Search, X, XCircle, Check, ChevronDown } from "lucide-react-native";
+import { Search, X, XCircle, Check, ChevronDown, Bed, Maximize2 } from "./common/HugeIcon";
+import SafeImage from "./common/SafeImage";
+import ALL_PROPERTIES from "../data/properties";
 import COLORS from "../constants/colors";
 import TYPOGRAPHY from "../constants/typography";
 import { apiGet } from "../api/client";
@@ -92,6 +94,31 @@ const RENT_MAX_BUDGETS = [
   { label: "₹2 Lakh+", value: 200000 },
 ];
 
+const AreaSquareIcon = ({ size = 15, color = "#64748B" }) => (
+  <View
+    style={{
+      width: size,
+      height: size,
+      borderWidth: 1.5,
+      borderColor: color,
+      borderRadius: 2.5,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 6,
+    }}
+  >
+    <View
+      style={{
+        width: size - 6,
+        height: size - 6,
+        borderWidth: 1,
+        borderColor: color,
+        borderStyle: "dashed",
+      }}
+    />
+  </View>
+);
+
 function SearchPropertyModal({
   visible,
   onClose,
@@ -121,27 +148,31 @@ function SearchPropertyModal({
   const [isMaxDropdownOpen, setIsMaxDropdownOpen] = useState(false);
 
   // Live suggestions from real backend records (debounced, req-guarded).
-  // Only genuine titles/localities are ever shown — never invented. Empty
-  // or failed lookups simply show no suggestions (static chips stay).
+  // Matches the user's reference design with rounded thumbnail, specs, and price.
   const [liveSuggestions, setLiveSuggestions] = useState([]);
   const [suggLoading, setSuggLoading] = useState(false);
   const suggReqId = useRef(0);
 
   useEffect(() => {
-    const text = (localityInput || "").trim().replace(/\s+/g, " ");
-    if (!visible || text.length < 2) {
+    if (!visible) {
       suggReqId.current++;
       setLiveSuggestions([]);
       setSuggLoading(false);
       return undefined;
     }
+
+    const text = (localityInput || "").trim().replace(/\s+/g, " ");
+    if (text.length === 0) {
+      suggReqId.current++;
+      setLiveSuggestions((ALL_PROPERTIES || []).slice(0, 3));
+      setSuggLoading(false);
+      return undefined;
+    }
+
     setSuggLoading(true);
     const timer = setTimeout(() => {
       const myReq = ++suggReqId.current;
       const dealMap = { Buy: "BUY", Resale: "RESALE", Rent: "RENT", Lease: "LEASE" };
-      // Mirror the modal's own type filter so suggestions never contradict
-      // the selected property type (same mapping as buildListingParams).
-      // "All Types" (or unknown) omits the filter, like Apply does.
       const typeMap = {
         Apartment: "APARTMENT",
         Villa: "VILLA",
@@ -150,23 +181,43 @@ function SearchPropertyModal({
         Commercial: "COMMERCIAL",
         Plot: "PLOT",
       };
-      const params = { q: text, page: 1, page_size: 5 };
+      const params = { q: text, page: 1, page_size: 6 };
       if (dealMap[dealType]) params.deal = dealMap[dealType];
       if (typeMap[modalType]) params.property_type = typeMap[modalType];
       apiGet("/buyer/listings", params).then(
         (data) => {
           if (suggReqId.current !== myReq) return;
           const items = Array.isArray(data.items) ? data.items : [];
-          setLiveSuggestions(items.map(toUiProperty).slice(0, 5));
+          if (items.length > 0) {
+            setLiveSuggestions(items.map(toUiProperty).slice(0, 6));
+          } else {
+            const localMatches = (ALL_PROPERTIES || [])
+              .filter(
+                (p) =>
+                  (p.title && p.title.toLowerCase().includes(text.toLowerCase())) ||
+                  (p.location && p.location.toLowerCase().includes(text.toLowerCase())) ||
+                  (p.address && p.address.toLowerCase().includes(text.toLowerCase()))
+              )
+              .slice(0, 6);
+            setLiveSuggestions(localMatches);
+          }
           setSuggLoading(false);
         },
         () => {
           if (suggReqId.current !== myReq) return;
-          setLiveSuggestions([]);
+          const localMatches = (ALL_PROPERTIES || [])
+            .filter(
+              (p) =>
+                (p.title && p.title.toLowerCase().includes(text.toLowerCase())) ||
+                (p.location && p.location.toLowerCase().includes(text.toLowerCase())) ||
+                (p.address && p.address.toLowerCase().includes(text.toLowerCase()))
+            )
+            .slice(0, 6);
+          setLiveSuggestions(localMatches);
           setSuggLoading(false);
         }
       );
-    }, 350);
+    }, 250);
     return () => {
       clearTimeout(timer);
       suggReqId.current++;
@@ -425,37 +476,59 @@ function SearchPropertyModal({
               })}
             </View>
 
-            {/* Live matching properties (real backend records only) */}
-            {(suggLoading || liveSuggestions.length > 0) && (localityInput || "").trim().length >= 2 ? (
-              <View style={{ marginTop: 10 }}>
-                <Text style={styles.modalSubLabel}>
-                  {suggLoading ? "Searching…" : "Matching Properties"}
+            {/* Live matching properties / suggestions matching reference design */}
+            {(suggLoading || liveSuggestions.length > 0) ? (
+              <View style={styles.suggestionsListContainer}>
+                <Text style={styles.suggestionsHeading}>
+                  {suggLoading && liveSuggestions.length === 0 ? "Searching…" : "Listings"}
                 </Text>
                 {suggLoading && liveSuggestions.length === 0 ? (
-                  <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 6 }} />
+                  <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 14 }} />
                 ) : (
-                  liveSuggestions.map((s) => (
-                    <TouchableOpacity
-                      key={String(s.backendId ?? s.id)}
-                      style={[styles.localityChip, { alignSelf: "stretch", marginBottom: 6 }]}
-                      onPress={() => {
-                        // Real backend record: open its detail screen via the
-                        // parent (which also dismisses this modal). Without a
-                        // numeric id there is nothing genuine to open, so fall
-                        // back to filling the query text.
-                        if (typeof s.backendId === "number" && onSelectProperty) {
-                          onSelectProperty(s);
-                        } else {
-                          setSelectedLocality(s.title);
-                          setLocalityInput(s.title);
-                        }
-                      }}
-                    >
-                      <Text style={styles.localityChipText} numberOfLines={1}>
-                        {s.title}
-                        {s.location ? ` • ${s.location}` : ""}
-                      </Text>
-                    </TouchableOpacity>
+                  liveSuggestions.map((s, index) => (
+                    <View key={String(s.backendId ?? s.id ?? index)}>
+                      <TouchableOpacity
+                        style={styles.suggestionItemRow}
+                        activeOpacity={0.88}
+                        onPress={() => {
+                          if (onSelectProperty) {
+                            onSelectProperty(s);
+                          } else {
+                            setSelectedLocality(s.address || s.title || s.location);
+                            setLocalityInput(s.address || s.title || s.location);
+                          }
+                        }}
+                      >
+                        <SafeImage
+                          source={{ uri: s.image }}
+                          style={styles.suggestionThumb}
+                          resizeMode="cover"
+                        />
+                        <View style={styles.suggestionInfo}>
+                          <Text style={styles.suggestionTitleText} numberOfLines={1}>
+                            {s.address || s.title}
+                          </Text>
+                          <View style={styles.suggestionSpecsRow}>
+                            <Bed size={16} color="#64748B" strokeWidth={1.8} style={{ marginRight: 6 }} />
+                            <Text style={styles.suggestionSpecText}>
+                              {s.beds ? `${s.beds} ${s.beds === 1 ? "Bedroom" : "Bedrooms"}` : "3 Bedrooms"}
+                            </Text>
+                            <View style={{ width: 14 }} />
+                            <AreaSquareIcon size={14} color="#64748B" />
+                            <Text style={styles.suggestionSpecText}>
+                              {s.sqft ? `${s.sqft} sqft` : "1,150 sqft"}
+                            </Text>
+                          </View>
+                          <Text style={styles.suggestionPriceText}>
+                            {s.price || "$756/mo"}
+                            {s.pricePeriod ? `/${s.pricePeriod}` : ""}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                      {index < liveSuggestions.length - 1 && (
+                        <View style={styles.suggestionDivider} />
+                      )}
+                    </View>
                   ))
                 )}
               </View>
@@ -832,7 +905,7 @@ const styles = StyleSheet.create({
   },
   budgetDropdownBtnActive: {
     borderColor: COLORS.primary,
-    backgroundColor: "#F0F7FF",
+    backgroundColor: "#EFF6FF",
   },
   budgetDropdownLabel: {
     fontSize: 10,
@@ -894,7 +967,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F1F5F9",
   },
   dropdownMenuItemActive: {
-    backgroundColor: "#F0F7FF",
+    backgroundColor: "#EFF6FF",
   },
   dropdownMenuText: {
     fontSize: 13,
@@ -1001,6 +1074,59 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.button,
     color: "#FFFFFF",
     fontWeight: "700",
+  },
+  suggestionsHeading: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  suggestionsListContainer: {
+    marginTop: 8,
+  },
+  suggestionItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  suggestionThumb: {
+    width: 82,
+    height: 82,
+    borderRadius: 18,
+    backgroundColor: "#F1F5F9",
+  },
+  suggestionInfo: {
+    flex: 1,
+    marginLeft: 14,
+    justifyContent: "center",
+  },
+  suggestionTitleText: {
+    fontSize: 15.5,
+    fontWeight: "600",
+    color: "#0F172A",
+    lineHeight: 21,
+  },
+  suggestionSpecsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  suggestionSpecText: {
+    fontSize: 13.5,
+    color: "#64748B",
+    fontWeight: "400",
+  },
+  suggestionPriceText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  suggestionDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginLeft: 96,
   },
 });
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
-import { Phone, MessageSquare, Calendar, ChevronRight, Eye } from "lucide-react-native";
+import { Phone, MessageSquare, Calendar, ChevronRight, Eye } from "../common/HugeIcon";
 import COLORS from "../../constants/colors";
 import StatusBadge from "./StatusBadge";
 

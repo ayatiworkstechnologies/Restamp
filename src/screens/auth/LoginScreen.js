@@ -30,7 +30,7 @@ import {
   Lock,
   Check,
   X,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useAuth } from "../../context/AuthContext";
 import { requestOtp, verifyOtp, googleSignIn } from "../../api/auth";

@@ -19,7 +19,7 @@ import {
   Filter,
   ArrowUpRight,
   MoreHorizontal,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
 import { fetchOwnerListings, toOwnerProperty, fetchDrafts, deleteDraft, freshAddParams } from "../../api/owner";

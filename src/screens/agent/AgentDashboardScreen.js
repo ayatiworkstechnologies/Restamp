@@ -32,7 +32,7 @@ import {
   MapPin,
   Check,
   Wallet,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 
 import COLORS from "../../constants/colors";
 import { useAgent } from "../../context/AgentContext";
@@ -648,7 +648,7 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#4F75A8",
+    color: "#64748B",
     letterSpacing: -0.2,
     marginBottom: 6,
   },
@@ -663,14 +663,14 @@ const styles = StyleSheet.create({
   greetingSubName: {
     fontSize: 27,
     fontWeight: "800",
-    color: "#374766",
+    color: "#0F172A",
     letterSpacing: -0.6,
     lineHeight: 33,
   },
 
   // Welcome Back Hero Banner Card (Vibrant Blue Card with 3D isometric building - fixed height)
   welcomeBanner: {
-    backgroundColor: "#024EFA",
+    backgroundColor: "#2563EB",
     borderRadius: 20,
     height: 112, // Fixed height per design requirement (compact & responsive)
     flexDirection: "row",
@@ -680,7 +680,7 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     marginBottom: 16,
     overflow: "hidden",
-    shadowColor: "#024EFA",
+    shadowColor: "#2563EB",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.22,
     shadowRadius: 10,

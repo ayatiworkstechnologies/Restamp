@@ -32,7 +32,7 @@ import {
   Compass,
   X,
   Copy,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import TYPOGRAPHY from "../../constants/typography";
 import ALL_PROPERTIES, { CHENNAI_LOCALITIES } from "../../data/properties";
@@ -436,8 +436,8 @@ export default function ExploreScreen({ navigation }) {
                   >
                     <Heart
                       size={18}
-                      color={saved ? "#FF385C" : "#0F172A"}
-                      fill={saved ? "#FF385C" : "none"}
+                      color={saved ? "#DC2626" : "#0F172A"}
+                      fill={saved ? "#DC2626" : "none"}
                       strokeWidth={2}
                     />
                   </TouchableOpacity>

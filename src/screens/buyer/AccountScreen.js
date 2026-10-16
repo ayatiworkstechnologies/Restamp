@@ -24,7 +24,7 @@ import {
   HelpCircle,
   LogOut,
   ChevronRight,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useWishlist } from "../../context/WishlistContext";
 
@@ -139,7 +139,7 @@ export default function AccountScreen() {
                 )
               }
             >
-              <View style={[styles.iconBox, { backgroundColor: "#E6F4FF" }]}>
+              <View style={[styles.iconBox, { backgroundColor: COLORS.primaryLight }]}>
                 <Building2 size={18} color={COLORS.primary} />
               </View>
               <Text style={styles.rowTitle}>Scheduled Site Visits</Text>
@@ -154,8 +154,8 @@ export default function AccountScreen() {
                 Alert.alert("Property Documents", "No property documents available.")
               }
             >
-              <View style={[styles.iconBox, { backgroundColor: "#FFF7E6" }]}>
-                <FileText size={18} color="#FA8C16" />
+              <View style={[styles.iconBox, { backgroundColor: COLORS.primaryLight }]}>
+                <FileText size={18} color={COLORS.primary} />
               </View>
               <Text style={styles.rowTitle}>Property Documents</Text>
               <ChevronRight size={16} color={COLORS.muted} />
@@ -172,8 +172,8 @@ export default function AccountScreen() {
                 )
               }
             >
-              <View style={[styles.iconBox, { backgroundColor: "#F6FFED" }]}>
-                <Award size={18} color={COLORS.success} />
+              <View style={[styles.iconBox, { backgroundColor: COLORS.primaryLight }]}>
+                <Award size={18} color={COLORS.primary} />
               </View>
               <Text style={styles.rowTitle}>RESTAMP Prime</Text>
               <Text style={styles.rowValue}>Prime Member</Text>
@@ -187,8 +187,8 @@ export default function AccountScreen() {
           <Text style={styles.sectionHeader}>Preferences</Text>
           <View style={styles.cardGroup}>
             <View style={styles.rowItem}>
-              <View style={[styles.iconBox, { backgroundColor: "#F0F5FF" }]}>
-                <Bell size={18} color="#2F54EB" />
+              <View style={[styles.iconBox, { backgroundColor: COLORS.primaryLight }]}>
+                <Bell size={18} color={COLORS.primary} />
               </View>
               <Text style={styles.rowTitle}>Push Notifications</Text>
               <Switch
@@ -202,8 +202,8 @@ export default function AccountScreen() {
             <View style={styles.rowDivider} />
 
             <View style={styles.rowItem}>
-              <View style={[styles.iconBox, { backgroundColor: "#FFF0F6" }]}>
-                <MapPin size={18} color="#EB2F96" />
+              <View style={[styles.iconBox, { backgroundColor: COLORS.primaryLight }]}>
+                <MapPin size={18} color={COLORS.primary} />
               </View>
               <Text style={styles.rowTitle}>Location Services</Text>
               <Switch
@@ -217,8 +217,8 @@ export default function AccountScreen() {
             <View style={styles.rowDivider} />
 
             <Pressable style={styles.rowItem} onPress={handleCurrencyChange}>
-              <View style={[styles.iconBox, { backgroundColor: "#E6FFFB" }]}>
-                <Banknote size={18} color="#13C2C2" />
+              <View style={[styles.iconBox, { backgroundColor: COLORS.primaryLight }]}>
+                <Banknote size={18} color={COLORS.primary} />
               </View>
               <Text style={styles.rowTitle}>Preferred Currency</Text>
               <Text style={styles.rowValue}>{currency}</Text>
@@ -235,8 +235,8 @@ export default function AccountScreen() {
               style={styles.rowItem}
               onPress={() => Alert.alert("Payment Methods", "No payment methods added.")}
             >
-              <View style={[styles.iconBox, { backgroundColor: "#FFF2E8" }]}>
-                <CreditCard size={18} color="#FA541C" />
+              <View style={[styles.iconBox, { backgroundColor: COLORS.primaryLight }]}>
+                <CreditCard size={18} color={COLORS.primary} />
               </View>
               <Text style={styles.rowTitle}>Payment Methods</Text>
               <Text style={styles.rowValue}>–</Text>
@@ -251,8 +251,8 @@ export default function AccountScreen() {
                 Alert.alert("Help Center", "Connecting to RESTAMP 24/7 Property Support...")
               }
             >
-              <View style={[styles.iconBox, { backgroundColor: "#F9F0FF" }]}>
-                <HelpCircle size={18} color="#722ED1" />
+              <View style={[styles.iconBox, { backgroundColor: COLORS.primaryLight }]}>
+                <HelpCircle size={18} color={COLORS.primary} />
               </View>
               <Text style={styles.rowTitle}>Help Center & FAQ</Text>
               <ChevronRight size={16} color={COLORS.muted} />
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: "#F0F7FF",
+    backgroundColor: "#EFF6FF",
     gap: 6,
   },
   editProfileText: {

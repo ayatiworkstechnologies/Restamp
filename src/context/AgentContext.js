@@ -297,11 +297,14 @@ export function AgentProvider({ children }) {
     name: "Agent Pro Plan",
     locationLimit: 10,
     price: "₹6,999",
+    amountPaid: "₹6,999",
     priceNumeric: 6999,
     validity: "30 Days",
     activatedAt: "06 Sep 2026",
+    expiryDate: "06 Oct 2026",
     daysRemaining: 24,
     status: "active",
+    hasPurchased: true,
     invoiceNumber: "INV-2026-AGT-8821",
   });
 
@@ -334,18 +337,34 @@ export function AgentProvider({ children }) {
 
   // Activate Plan handler
   const activatePlan = (plan, localities) => {
+    const now = new Date();
+    const expiryObj = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const formattedPrice =
+      plan?.amountPaid ||
+      plan?.price ||
+      (plan?.priceNumeric ? `₹${plan.priceNumeric.toLocaleString("en-IN")}` : "₹6,999");
+    const locLimit =
+      plan?.locationLimit ||
+      (localities && localities.length > 0 ? localities.length : 10);
+
     setHasActivePlan(true);
     setIsPlanExpired(false);
     setAgentPlan({
-      id: plan.id,
-      name: plan.name,
-      locationLimit: plan.locationLimit || (plan.name.includes("15") ? 15 : plan.name.includes("5") ? 5 : 10),
-      price: plan.price,
-      priceNumeric: plan.priceNumeric || parseInt(plan.price?.replace(/[^0-9]/g, "")) || 6999,
-      validity: plan.validity || "30 Days",
-      activatedAt: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+      id: plan?.id || "agent-pro",
+      name: plan?.name || "Agent Pro Plan",
+      locationLimit: locLimit,
+      price: formattedPrice,
+      amountPaid: formattedPrice,
+      priceNumeric:
+        plan?.priceNumeric ||
+        parseInt(String(formattedPrice).replace(/[^0-9]/g, ""), 10) ||
+        6999,
+      validity: plan?.validity || "30 Days",
+      activatedAt: now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+      expiryDate: expiryObj.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
       daysRemaining: 30,
       status: "active",
+      hasPurchased: true,
       invoiceNumber: `INV-2026-AGT-${Math.floor(1000 + Math.random() * 9000)}`,
     });
     if (localities && localities.length > 0) {

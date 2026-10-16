@@ -21,7 +21,7 @@ import {
   PauseCircle,
   CheckCircle2,
   Trash2,
-} from "lucide-react-native";
+} from "../common/HugeIcon";
 import COLORS from "../../constants/colors";
 import StatusBadge from "./StatusBadge";
 import SafeImage from "../common/SafeImage";

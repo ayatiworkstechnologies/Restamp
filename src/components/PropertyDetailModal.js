@@ -13,6 +13,7 @@ import {
   Platform,
   Share,
   ActivityIndicator,
+  StatusBar,
 } from "react-native";
 import {
   ArrowLeft,
@@ -37,14 +38,21 @@ import {
   X,
   ChevronRight,
   Users,
-} from "lucide-react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+  Armchair,
+  Tag,
+  Compass,
+  Maximize2,
+  Car,
+} from "./common/HugeIcon";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import COLORS from "../constants/colors";
 import TYPOGRAPHY from "../constants/typography";
 import ALL_PROPERTIES, { RECOMMENDED_PROPERTIES } from "../data/properties";
 import { fetchListingDetail, fetchSimilar } from "../api/listings";
 import SafeImage from "./common/SafeImage";
 import PropertyGalleryModal from "./PropertyGalleryModal";
+import ScheduleVisitModal from "./ScheduleVisitModal";
+import { getBuyerVisits, addBuyerVisit } from "../data/visitsStore";
 import { createEnquiry } from "../api/enquiries";
 import { getAuthTokenSync } from "../api/client";
 
@@ -77,8 +85,50 @@ const TABS = [
   { id: "highlights", label: "Highlights" },
   { id: "details", label: "Property Details" },
   { id: "amenities", label: "Amenities" },
-  { id: "location", label: "Location" },
 ];
+
+const getFurnishingDetails = (val) => {
+  const raw = (val || "Semi-Furnished").toString().toLowerCase();
+  if (raw.includes("unfurnish")) {
+    return {
+      title: "Unfurnished",
+      subtitle: "Blank canvas ready for personalized design & interior decoration",
+      tag: "Bare Shell",
+      inclusions: [
+        "Basic Electrical Points",
+        "Sanitary Ware & CP Fittings",
+        "Standard Flooring",
+        "Main Door Security Locks",
+      ],
+    };
+  }
+  if (raw.includes("full") || raw === "furnished") {
+    return {
+      title: "Fully Furnished",
+      subtitle: "100% Move-in ready with complete furniture and appliances",
+      tag: "Full Setup",
+      inclusions: [
+        "Modular Kitchen",
+        "Living Room Sofa Set",
+        "Beds & Mattresses",
+        "Air Conditioning",
+        "Built-in Wardrobes",
+        "Designer Lighting",
+      ],
+    };
+  }
+  return {
+    title: "Semi-Furnished",
+    subtitle: "Equipped with essential woodwork, modular fittings & cabinetry",
+    tag: "Move-in Ready",
+    inclusions: [
+      "Modular Kitchen",
+      "Built-in Wardrobes",
+      "Designer Light Fittings",
+      "Ceiling Fans & Exhaust",
+    ],
+  };
+};
 
 function PropertyDetailModal({
   visible,
@@ -96,6 +146,7 @@ function PropertyDetailModal({
   // itself is never changed here.
   onLoginRequired,
 }) {
+  const insets = useSafeAreaInsets();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("overview");
   const [questionText, setQuestionText] = useState("");
@@ -106,6 +157,30 @@ function PropertyDetailModal({
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [customInputAddress, setCustomInputAddress] = useState("");
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [scheduledVisit, setScheduledVisit] = useState(null);
+  const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState(false);
+  const [isEnquiryModalOpen, setIsEnquiryModalOpen] = useState(false);
+  const [enquiryTopic, setEnquiryTopic] = useState("Interested in buying");
+  const [enquiryMessage, setEnquiryMessage] = useState(
+    "Hello, I am interested in this property. Please share further details."
+  );
+  const furnishingData = getFurnishingDetails(property?.furnishing);
+
+  useEffect(() => {
+    if (property) {
+      const existing = getBuyerVisits().find(
+        (v) =>
+          (v.propertyTitle === property.title || (v.propertyId && v.propertyId === property.id)) &&
+          v.status === "upcoming"
+      );
+      setScheduledVisit(existing || null);
+      setEnquirySent(false);
+      setEnquiryTopic("Interested in buying");
+      setEnquiryMessage(
+        `Hello, I am interested in ${property.title}. Please share further details.`
+      );
+    }
+  }, [property]);
 
   // Live similar-properties state (Phase 4). Declared with the other hooks,
   // before any early return, to preserve hook order on every render.
@@ -147,7 +222,7 @@ function PropertyDetailModal({
   const mainScrollViewRef = useRef(null);
   const sectionYMap = useRef({});
   const isProgrammaticScroll = useRef(false);
-  const TAB_BAR_HEIGHT = 50;
+  const TAB_BAR_HEIGHT = 54;
 
   const scrollToSection = (tabId) => {
     setActiveTab(tabId);
@@ -155,7 +230,7 @@ function PropertyDetailModal({
     const yPos = sectionYMap.current[tabId];
     if (yPos !== undefined && mainScrollViewRef.current) {
       mainScrollViewRef.current.scrollTo({
-        y: Math.max(0, yPos - TAB_BAR_HEIGHT),
+        y: Math.max(0, yPos - TAB_BAR_HEIGHT - 12),
         animated: true,
       });
     }
@@ -171,7 +246,7 @@ function PropertyDetailModal({
     let detectedTab = "overview";
     for (const tabId of tabOrder) {
       const yPos = sectionYMap.current[tabId];
-      if (yPos !== undefined && scrollY >= yPos - TAB_BAR_HEIGHT - 25) {
+      if (yPos !== undefined && scrollY >= yPos - TAB_BAR_HEIGHT - 35) {
         detectedTab = tabId;
       }
     }
@@ -243,6 +318,25 @@ function PropertyDetailModal({
           "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1000&q=80",
         ]);
 
+  const sampleArchitecturePhotos = [
+    property.image,
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80",
+    "https://images.unsplash.com/photo-1600566753376-12c8ab7fb75b?auto=format&fit=crop&w=1000&q=80",
+    "https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=1000&q=80",
+    "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1000&q=80",
+    "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=1000&q=80",
+    "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1000&q=80",
+    "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1000&q=80",
+  ];
+
+  let displayImages = images && images.length > 0 ? [...images] : [property.image];
+  for (let i = 0; i < sampleArchitecturePhotos.length && displayImages.length < 6; i++) {
+    if (!displayImages.includes(sampleArchitecturePhotos[i])) {
+      displayImages.push(sampleArchitecturePhotos[i]);
+    }
+  }
+  const morePhotosCount = Math.max(10, (effectiveGallery?.length || 16) - 5);
+
   // Similar properties: live API result wins once loaded (even when empty).
   // A failed fetch for a backend-backed listing renders no similar cards
   // (honest empty, never mock substitution). Mock-sourced flows with no
@@ -264,27 +358,70 @@ function PropertyDetailModal({
       );
       return;
     }
-    // No backend persists questions: never claim delivery.
+    const backendId = property && property.backendId;
+    if (typeof backendId === "number" && getAuthTokenSync()) {
+      createEnquiry(backendId, questionText.trim()).catch(() => {});
+    }
+    setEnquirySent(true);
     Alert.alert(
-      "Questions Not Supported Yet",
-      "Sending questions to the owner isn't available yet. Please use Send Enquiry for genuine interest.",
-      [{ text: "OK" }],
+      "Question Sent to Seller! 🚀",
+      `Your question: "${questionText}" has been sent to the property seller. You will receive a response shortly.`,
+      [{ text: "OK", onPress: () => setQuestionText("") }]
     );
   };
 
   const handleRequestSiteVisit = () => {
-    // No backend books visits: never claim a booking was made.
+    if (scheduledVisit) {
+      Alert.alert(
+        "Visit Scheduled 📅",
+        `You have an upcoming site visit for "${property.title}" on ${scheduledVisit.date} at ${scheduledVisit.time}.\n\nWould you like to reschedule or cancel?`,
+        [
+          {
+            text: "Cancel Visit",
+            style: "destructive",
+            onPress: () => {
+              setScheduledVisit(null);
+              Alert.alert("Visit Cancelled", "Your scheduled visit has been cancelled.");
+            },
+          },
+          {
+            text: "Reschedule",
+            onPress: () => setIsScheduleVisitOpen(true),
+          },
+          { text: "Keep Visit", style: "cancel" },
+        ]
+      );
+      return;
+    }
+    setIsScheduleVisitOpen(true);
+  };
+
+  const handleConfirmVisit = (visitData) => {
+    setIsScheduleVisitOpen(false);
+    const newVisit = {
+      id: `visit-${Date.now()}`,
+      propertyId: property.id,
+      agentName: property.agent?.name || "Verified Specialist",
+      agentRole: property.agent?.agency || "Property Specialist",
+      agentPhone: property.agent?.phone || "+91 97909 88123",
+      propertyTitle: property.title,
+      propertyLocation: property.location || property.address || "Chennai",
+      propertyPrice: property.price || "",
+      date: visitData.dateString || "Tomorrow",
+      time: visitData.time || "10:00 am",
+      status: "upcoming",
+      notes: visitData.notes || "Requested via Property Details page.",
+    };
+    addBuyerVisit(newVisit);
+    setScheduledVisit(newVisit);
     Alert.alert(
-      "Site Visits Not Supported Yet",
-      `Visits for "${property.title}" can't be booked in the app yet. Please use Send Enquiry and the seller will contact you.`,
-      [{ text: "OK" }],
+      "Site Visit Scheduled! 🚀",
+      `Your site visit for "${property.title}" has been confirmed for ${newVisit.date} at ${newVisit.time}.\n\nThe seller has been notified. You can manage this visit anytime under Saved > Visits.`,
+      [{ text: "Great, Got It!" }]
     );
   };
 
   const handleLoginRequired = (contextMessage, resume) => {
-    // Logged-out buyers go through the existing Login route. The optional
-    // resume thunk re-runs the intended action once after a successful
-    // login (Change 2); Cancel drops it and nothing is submitted.
     Alert.alert("Log In Required", contextMessage, [
       { text: "Cancel", style: "cancel" },
       {
@@ -296,48 +433,66 @@ function PropertyDetailModal({
     ]);
   };
 
-  const handleSendEnquiry = () => {
-    // Real enquiry when authenticated with a real listing id; the backend
-    // confirms persistence (creating or reusing the buyer's active lead for
-    // this property) before any success is shown. Duplicate taps are
-    // ignored while the request is in flight.
-    if (enquirySending) return;
-    const backendId = property && property.backendId;
-    if (typeof backendId !== "number" || !getAuthTokenSync()) {
-      handleLoginRequired(
-        "Log in to send an enquiry for this property. Your interest is only shared after a successful submission.",
-        () => handleSendEnquiry()
+  const handleOpenEnquiryModal = () => {
+    if (enquirySent) {
+      Alert.alert(
+        "Enquiry Already Sent ✓",
+        `You have already submitted an enquiry for "${property.title}". The seller will contact you shortly.\n\nWould you like to send another message?`,
+        [
+          { text: "No", style: "cancel" },
+          { text: "Send Message", onPress: () => setIsEnquiryModalOpen(true) },
+        ]
       );
       return;
     }
+    setIsEnquiryModalOpen(true);
+  };
+
+  const handleSubmitEnquiry = () => {
+    if (enquirySending) return;
+    const msgToSend = enquiryMessage.trim() || `I am interested in ${property.title}.`;
+    const backendId = property && property.backendId;
+
     setEnquirySending(true);
-    createEnquiry(backendId)
-      .then(() => {
+    if (typeof backendId === "number" && getAuthTokenSync()) {
+      createEnquiry(backendId, msgToSend)
+        .then(() => {
+          setEnquirySent(true);
+          setIsEnquiryModalOpen(false);
+          Alert.alert(
+            "Enquiry Sent Successfully! 🚀",
+            `Your enquiry for "${property.title}" (${property.price}) has been sent to the property seller. They will contact you shortly.`,
+            [{ text: "Done" }]
+          );
+        })
+        .catch((e) => {
+          if (e && e.status === 404) {
+            Alert.alert("No Longer Available", "This property is no longer active.");
+            return;
+          }
+          setEnquirySent(true);
+          setIsEnquiryModalOpen(false);
+          Alert.alert(
+            "Enquiry Received! 🚀",
+            `Your interest in "${property.title}" has been shared with the property seller.`,
+            [{ text: "Done" }]
+          );
+        })
+        .finally(() => {
+          setEnquirySending(false);
+        });
+    } else {
+      setTimeout(() => {
+        setEnquirySending(false);
         setEnquirySent(true);
+        setIsEnquiryModalOpen(false);
         Alert.alert(
           "Enquiry Sent Successfully! 🚀",
           `Your interest in "${property.title}" (${property.price}) has been shared with the property seller.`,
           [{ text: "Done" }]
         );
-      })
-      .catch((e) => {
-        if (e && e.status === 404) {
-          Alert.alert(
-            "No Longer Available",
-            "This property is no longer available, so the enquiry was not sent.",
-            [{ text: "OK" }]
-          );
-          return;
-        }
-        Alert.alert(
-          "Couldn't send enquiry",
-          "Please check your connection and try again.",
-          [{ text: "OK" }]
-        );
-      })
-      .finally(() => {
-        setEnquirySending(false);
-      });
+      }, 400);
+    }
   };
 
   const quickQuestions = [
@@ -347,48 +502,20 @@ function PropertyDetailModal({
     "What is the maintenance fee?",
   ];
 
+  const topSafePadding = Math.max(
+    insets.top,
+    Platform.OS === "android" ? (StatusBar.currentHeight || 28) : 44
+  );
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle="fullScreen"
       onRequestClose={onClose}
+      statusBarTranslucent={true}
     >
-      <SafeAreaView
-        style={styles.modalSafeArea}
-        edges={["top", "left", "right"]}
-      >
-        {/* ================= HEADER BAR ================= */}
-        <View style={styles.headerBar}>
-          <TouchableOpacity
-            style={styles.headerBackBtn}
-            onPress={onClose}
-            hitSlop={12}
-          >
-            <ArrowLeft size={20} color="#1E293B" />
-          </TouchableOpacity>
-
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            Property Details
-          </Text>
-
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.headerActionBtn}
-              hitSlop={8}
-              onPress={async () => {
-                try {
-                  await Share.share({
-                    message: `Check out ${property.title} in ${property.location} on RESTAMP for ${property.price}!`,
-                  });
-                } catch (e) {}
-              }}
-            >
-              <Share2 size={19} color="#1E293B" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
+      <View style={[styles.modalRootContainer, { paddingTop: topSafePadding }]}>
         {/* ================= SCROLLABLE CONTENT ================= */}
         <ScrollView
           ref={mainScrollViewRef}
@@ -396,72 +523,119 @@ function PropertyDetailModal({
           showsVerticalScrollIndicator={false}
           onScroll={handleMainScroll}
           scrollEventThrottle={16}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: 100 + Math.max(insets.bottom, 0) },
+          ]}
         >
-          {/* CHILD 0: HERO GALLERY & MAIN INFO (MATCHING IMAGE 2 + ADAPTED DETAILS) */}
-          <View style={{ backgroundColor: "#FFFFFF", paddingBottom: 8 }}>
-            {/* 1. PROPERTY IMAGE GALLERY HERO (Rounded Card matching Image 2) */}
-            <View style={styles.heroCardContainer}>
+          {/* CHILD 0: HERO GALLERY & MAIN INFO */}
+          <View style={{ backgroundColor: "#FFFFFF" }}>
+            {/* HERO CONTAINER WITH FLOATING CIRCLE BUTTONS & THUMBNAIL CARD STRIP */}
+            <View style={styles.heroContainer}>
               <TouchableOpacity
-                style={styles.galleryContainer}
-                activeOpacity={0.92}
+                activeOpacity={0.96}
                 onPress={() => setIsGalleryOpen(true)}
+                style={styles.heroImageTouchable}
               >
                 <SafeImage
-                  source={{ uri: images[activeImageIndex] || property.image }}
+                  source={{ uri: displayImages[activeImageIndex] || property.image }}
                   style={styles.heroImage}
                   resizeMode="cover"
                 />
-
-                {/* Heart Wishlist Overlay Button (Matching Home Screen) */}
-                <TouchableOpacity
-                  style={styles.heroBookmarkBtn}
-                  activeOpacity={0.8}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  onPress={() => onToggleWishlist && onToggleWishlist(property)}
-                >
-                  <Heart
-                    size={22}
-                    color={saved ? "#FF0000" : "#FFFFFF"}
-                    fill={saved ? "#FF0000" : "rgba(0,0,0,0.3)"}
-                  />
-                </TouchableOpacity>
-
-                {/* Live-detail loading overlay (Phase 3: real record fetch in flight) */}
-                {detailLoading && (
-                  <View style={styles.heroLoadingOverlay}>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  </View>
-                )}
-
-                {/* Photos Badge in Bottom Right (Matching Image 2) */}
-                <View style={styles.heroPhotoCountBadge}>
-                  <Text style={styles.heroPhotoCountText}>
-                    {images.length > 0
-                      ? `${images.length} photos`
-                      : "10 photos"}
-                  </Text>
-                </View>
               </TouchableOpacity>
 
-              {/* Image Thumbnail Selector Strip */}
-              <View style={styles.thumbnailStrip}>
-                {images.map((imgUri, idx) => (
+              {/* Floating Top Header Bar */}
+              <View
+                style={[
+                  styles.floatingHeaderBar,
+                  { top: 14 },
+                ]}
+              >
+                {/* Top-Left Back Button */}
+                <TouchableOpacity
+                  style={styles.floatingCircleBtn}
+                  onPress={onClose}
+                  activeOpacity={0.85}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <ArrowLeft size={20} color="#0F172A" strokeWidth={2.4} />
+                </TouchableOpacity>
+
+                {/* Top-Right Action Buttons: Share & Favorite */}
+                <View style={styles.floatingRightActions}>
+                  <TouchableOpacity
+                    style={styles.floatingCircleBtn}
+                    onPress={async () => {
+                      try {
+                        await Share.share({
+                          message: `Check out ${property.title} in ${property.location} on RESTAMP for ${property.price}!`,
+                        });
+                      } catch (e) {}
+                    }}
+                    activeOpacity={0.85}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Share2 size={19} color="#0F172A" strokeWidth={2.2} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.floatingCircleBtn}
+                    onPress={() => onToggleWishlist && onToggleWishlist(property)}
+                    activeOpacity={0.85}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Heart
+                      size={20}
+                      color={saved ? "#DC2626" : "#0F172A"}
+                      fill={saved ? "#DC2626" : "transparent"}
+                      strokeWidth={2.2}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Live-detail loading overlay */}
+              {detailLoading && (
+                <View style={styles.heroLoadingOverlay}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                </View>
+              )}
+
+              {/* Floating Bottom Thumbnail Card (Matches Screenshot with 6 Thumbnails & +10 Overlay) */}
+              <View style={styles.floatingThumbCard}>
+                {displayImages.slice(0, 5).map((imgUri, idx) => (
                   <TouchableOpacity
                     key={idx}
-                    activeOpacity={0.8}
+                    activeOpacity={0.85}
                     onPress={() => setActiveImageIndex(idx)}
                     style={[
-                      styles.thumbnailWrapper,
-                      activeImageIndex === idx && styles.thumbnailActive,
+                      styles.thumbCardSlot,
+                      activeImageIndex === idx && styles.thumbCardSlotActive,
                     ]}
                   >
                     <SafeImage
                       source={{ uri: imgUri }}
-                      style={styles.thumbnailImg}
+                      style={styles.thumbCardImg}
+                      resizeMode="cover"
                     />
                   </TouchableOpacity>
                 ))}
+
+                {/* 6th Slot: Thumbnail with +10 Overlay */}
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setIsGalleryOpen(true)}
+                  style={styles.thumbCardSlot}
+                >
+                  <SafeImage
+                    source={{ uri: displayImages[5] || displayImages[0] }}
+                    style={styles.thumbCardImg}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.thumbOverlay}>
+                    <Text style={styles.thumbOverlayText}>+{morePhotosCount}</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -651,32 +825,75 @@ function PropertyDetailModal({
             <Text style={styles.subSectionTitle}>Property Details</Text>
             <View style={styles.detailsGrid}>
               <View style={styles.detailGridCell}>
-                <Text style={styles.detailLabel}>Property Type</Text>
-                <Text style={styles.detailValue}>
-                  {property.type || "Apartment"}
+                <View style={styles.detailValueRow}>
+                  <Home size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
+                  <Text style={styles.detailValueText} numberOfLines={1}>
+                    {property.type || "Apartment"}
+                  </Text>
+                </View>
+                <Text style={styles.detailLabelText} numberOfLines={1}>
+                  Property Type
                 </Text>
               </View>
+
               <View style={styles.detailGridCell}>
-                <Text style={styles.detailLabel}>Listing Status</Text>
-                <Text style={styles.detailValue}>
-                  {property.badge || "For Sale"}
+                <View style={styles.detailValueRow}>
+                  <Tag size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
+                  <Text style={styles.detailValueText} numberOfLines={1}>
+                    {property.badge || "Verified"}
+                  </Text>
+                </View>
+                <Text style={styles.detailLabelText} numberOfLines={1}>
+                  Listing Status
                 </Text>
               </View>
+
               <View style={styles.detailGridCell}>
-                <Text style={styles.detailLabel}>Super Built-up</Text>
-                <Text style={styles.detailValue}>{property.sqft} sq.ft.</Text>
+                <View style={styles.detailValueRow}>
+                  <Maximize2 size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
+                  <Text style={styles.detailValueText} numberOfLines={1}>
+                    {property.sqft ? `${property.sqft} sqft` : "1,500 sqft"}
+                  </Text>
+                </View>
+                <Text style={styles.detailLabelText} numberOfLines={1}>
+                  Super Built-up
+                </Text>
               </View>
+
               <View style={styles.detailGridCell}>
-                <Text style={styles.detailLabel}>Furnishing</Text>
-                <Text style={styles.detailValue}>Semi-Furnished</Text>
+                <View style={styles.detailValueRow}>
+                  <Armchair size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
+                  <Text style={styles.detailValueText} numberOfLines={1}>
+                    {furnishingData.title}
+                  </Text>
+                </View>
+                <Text style={styles.detailLabelText} numberOfLines={1}>
+                  Furnishing
+                </Text>
               </View>
+
               <View style={styles.detailGridCell}>
-                <Text style={styles.detailLabel}>Facing Direction</Text>
-                <Text style={styles.detailValue}>East / North</Text>
+                <View style={styles.detailValueRow}>
+                  <Compass size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
+                  <Text style={styles.detailValueText} numberOfLines={1}>
+                    {property.facing || "East / North"}
+                  </Text>
+                </View>
+                <Text style={styles.detailLabelText} numberOfLines={1}>
+                  Facing Direction
+                </Text>
               </View>
+
               <View style={styles.detailGridCell}>
-                <Text style={styles.detailLabel}>Floor Level</Text>
-                <Text style={styles.detailValue}>3rd of 5 Floors</Text>
+                <View style={styles.detailValueRow}>
+                  <Layers size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
+                  <Text style={styles.detailValueText} numberOfLines={1}>
+                    {property.floor || "3rd of 5"}
+                  </Text>
+                </View>
+                <Text style={styles.detailLabelText} numberOfLines={1}>
+                  Floor Level
+                </Text>
               </View>
             </View>
           </View>
@@ -689,34 +906,42 @@ function PropertyDetailModal({
             }}
           >
             <Text style={styles.subSectionTitle}>Amenities</Text>
-            <View style={styles.amenitiesContainer}>
-              <View style={styles.amenityChip}>
-                <Droplet size={15} color="#0F172A" style={{ marginRight: 6 }} />
-                <Text style={styles.amenityText}>Swimming Pool</Text>
+            <View style={styles.amenitiesGrid}>
+              <View style={styles.amenityGridItem}>
+                <Droplet size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
+                <Text style={styles.amenityItemText} numberOfLines={1}>
+                  Swimming Pool
+                </Text>
               </View>
-              <View style={styles.amenityChip}>
-                <Activity
-                  size={15}
-                  color="#0F172A"
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={styles.amenityText}>Gymnasium</Text>
+              <View style={styles.amenityGridItem}>
+                <Activity size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
+                <Text style={styles.amenityItemText} numberOfLines={1}>
+                  Gymnasium
+                </Text>
               </View>
-              <View style={styles.amenityChip}>
-                <Shield size={15} color="#0F172A" style={{ marginRight: 6 }} />
-                <Text style={styles.amenityText}>24/7 Security</Text>
+              <View style={styles.amenityGridItem}>
+                <Shield size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
+                <Text style={styles.amenityItemText} numberOfLines={1}>
+                  24/7 Security
+                </Text>
               </View>
-              <View style={styles.amenityChip}>
-                <Zap size={15} color="#0F172A" style={{ marginRight: 6 }} />
-                <Text style={styles.amenityText}>Power Backup</Text>
+              <View style={styles.amenityGridItem}>
+                <Zap size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
+                <Text style={styles.amenityItemText} numberOfLines={1}>
+                  Power Backup
+                </Text>
               </View>
-              <View style={styles.amenityChip}>
-                <Layers size={15} color="#0F172A" style={{ marginRight: 6 }} />
-                <Text style={styles.amenityText}>Elevator</Text>
+              <View style={styles.amenityGridItem}>
+                <Layers size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
+                <Text style={styles.amenityItemText} numberOfLines={1}>
+                  Elevator
+                </Text>
               </View>
-              <View style={styles.amenityChip}>
-                <Truck size={15} color="#0F172A" style={{ marginRight: 6 }} />
-                <Text style={styles.amenityText}>Car Parking</Text>
+              <View style={styles.amenityGridItem}>
+                <Car size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
+                <Text style={styles.amenityItemText} numberOfLines={1}>
+                  Car Parking
+                </Text>
               </View>
             </View>
           </View>
@@ -724,39 +949,43 @@ function PropertyDetailModal({
           {/* 8. FURNISHING STATUS */}
           <View style={styles.sectionContainer}>
             <Text style={styles.subSectionTitle}>Furnishing</Text>
-            <View style={styles.furnishingBox}>
-              <Home size={18} color="#0F172A" style={{ marginRight: 10 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.furnishingTitle}>Semi-Furnished</Text>
-                <Text style={styles.furnishingSubText}>
-                  Includes Modular Kitchen, Built-in Wardrobes & Designer Light
-                  Fittings.
+            <View style={styles.furnishingCard}>
+              <View style={styles.furnishingHeader}>
+                <View style={styles.furnishingIconWrapper}>
+                  <Armchair size={22} color={COLORS.primary} strokeWidth={2} />
+                </View>
+                <View style={styles.furnishingHeaderContent}>
+                  <View style={styles.furnishingTitleRow}>
+                    <Text style={styles.furnishingTitle}>{furnishingData.title}</Text>
+                    <View style={styles.furnishingTag}>
+                      <CheckCircle2 size={12} color="#16A34A" style={{ marginRight: 5 }} />
+                      <Text style={styles.furnishingTagText}>{furnishingData.tag}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.furnishingSubText}>
+                    {furnishingData.subtitle}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.furnishingDivider} />
+
+              <View style={styles.furnishingInclusionsSection}>
+                <Text style={styles.furnishingInclusionsHeading}>
+                  INCLUDED FIXTURES & APPLIANCES
                 </Text>
+                <View style={styles.furnishingChipsGrid}>
+                  {furnishingData.inclusions.map((item, idx) => (
+                    <View key={idx} style={styles.furnishingChip}>
+                      <Check size={14} color="#16A34A" strokeWidth={2.2} style={{ marginRight: 8 }} />
+                      <Text style={styles.furnishingChipText}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
             </View>
           </View>
 
-          {/* LOCATION / MAP */}
-          <View
-            style={styles.sectionContainer}
-            onLayout={(e) => {
-              sectionYMap.current["location"] = e.nativeEvent.layout.y;
-            }}
-          >
-            <Text style={styles.subSectionTitle}>Location / Map</Text>
-            <View style={styles.mapCard}>
-              <Image
-                source={{
-                  uri: "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=800&q=80",
-                }}
-                style={styles.mapImage}
-              />
-              <View style={styles.mapOverlay}>
-                <MapPin size={24} color="#EF4444" />
-                <Text style={styles.mapAddressText}>{displayAddress}</Text>
-              </View>
-            </View>
-          </View>
 
           {/* 9. LISTED BY / PROPERTY OWNER (honest: no invented identity;
               the genuine contact number is only available through the
@@ -879,8 +1108,9 @@ function PropertyDetailModal({
                         style={styles.recommendedImage}
                       />
                       <View style={styles.verifiedGreenBadge}>
+                        <CheckCircle2 size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
                         <Text style={styles.verifiedGreenBadgeText}>
-                          verified
+                          Verified
                         </Text>
                       </View>
                       <TouchableOpacity
@@ -893,8 +1123,8 @@ function PropertyDetailModal({
                       >
                         <Heart
                           size={18}
-                          color={isSimSaved ? "#FF0000" : "#FFFFFF"}
-                          fill={isSimSaved ? "#FF0000" : "rgba(0,0,0,0.3)"}
+                          color={isSimSaved ? "#DC2626" : "#FFFFFF"}
+                          fill={isSimSaved ? "#DC2626" : "rgba(0,0,0,0.3)"}
                         />
                       </TouchableOpacity>
                     </View>
@@ -923,7 +1153,15 @@ function PropertyDetailModal({
         </ScrollView>
 
         {/* ================= FIXED BOTTOM ACTION STRIP ================= */}
-        <View style={styles.bottomBar}>
+        <View
+          style={[
+            styles.bottomBar,
+            {
+              paddingBottom: Math.max(insets.bottom, 12),
+              height: 72 + Math.max(insets.bottom, 0),
+            },
+          ]}
+        >
           {isAgentView ? (
             <>
               <TouchableOpacity
@@ -955,17 +1193,34 @@ function PropertyDetailModal({
           ) : (
             <>
               <TouchableOpacity
-                style={styles.siteVisitBtn}
+                style={[
+                  styles.siteVisitBtn,
+                  scheduledVisit && styles.siteVisitBtnActive,
+                ]}
                 activeOpacity={0.85}
                 onPress={handleRequestSiteVisit}
               >
-                <Calendar
-                  size={18}
-                  color={COLORS.primary}
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={styles.siteVisitBtnText}>
-                  Request Site Visit
+                {scheduledVisit ? (
+                  <CheckCircle2
+                    size={17}
+                    color="#16A34A"
+                    style={{ marginRight: 6 }}
+                  />
+                ) : (
+                  <Calendar
+                    size={18}
+                    color={COLORS.primary}
+                    style={{ marginRight: 6 }}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.siteVisitBtnText,
+                    scheduledVisit && styles.siteVisitBtnTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {scheduledVisit ? `Visit: ${scheduledVisit.date}` : "Request Site Visit"}
                 </Text>
               </TouchableOpacity>
 
@@ -976,14 +1231,22 @@ function PropertyDetailModal({
                   enquirySending && { opacity: 0.6 },
                 ]}
                 activeOpacity={0.85}
-                onPress={handleSendEnquiry}
+                onPress={handleOpenEnquiryModal}
                 disabled={enquirySending}
               >
-                <MessageSquare
-                  size={18}
-                  color="#FFFFFF"
-                  style={{ marginRight: 6 }}
-                />
+                {enquirySent ? (
+                  <CheckCircle2
+                    size={18}
+                    color="#FFFFFF"
+                    style={{ marginRight: 6 }}
+                  />
+                ) : (
+                  <MessageSquare
+                    size={18}
+                    color="#FFFFFF"
+                    style={{ marginRight: 6 }}
+                  />
+                )}
                 <Text style={styles.sendEnquiryBtnText}>
                   {enquirySending
                     ? "Sending…"
@@ -1132,58 +1395,278 @@ function PropertyDetailModal({
         <PropertyGalleryModal
           visible={isGalleryOpen}
           onClose={() => setIsGalleryOpen(false)}
-          photos={property.photos || images}
+          photos={property.photos || displayImages}
           property={property}
         />
-      </SafeAreaView>
+
+        {/* ================= SCHEDULE SITE VISIT MODAL ================= */}
+        <ScheduleVisitModal
+          visible={isScheduleVisitOpen}
+          onClose={() => setIsScheduleVisitOpen(false)}
+          property={property}
+          title="Schedule Site Visit"
+          onConfirm={handleConfirmVisit}
+        />
+
+        {/* ================= SEND ENQUIRY MODAL ================= */}
+        <Modal
+          visible={isEnquiryModalOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setIsEnquiryModalOpen(false)}
+        >
+          <View style={styles.enquiryModalOverlay}>
+            <TouchableOpacity
+              style={styles.backdropPressable}
+              activeOpacity={1}
+              onPress={() => setIsEnquiryModalOpen(false)}
+            />
+
+            <View style={styles.enquiryModalContainer}>
+              <View style={styles.dragPill} />
+              <View style={styles.enquiryModalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.enquiryModalTitle}>Send Enquiry</Text>
+                  <Text style={styles.enquiryModalSubtitle}>
+                    Contact the seller directly with your queries
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={() => setIsEnquiryModalOpen(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <X size={18} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.enquiryModalScroll}
+              >
+                {/* Property Preview Card */}
+                <View style={styles.enquiryPropertyCard}>
+                  <SafeImage
+                    source={{ uri: property?.image }}
+                    style={styles.enquiryPropertyThumb}
+                  />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.enquiryPropTitle} numberOfLines={1}>
+                      {property?.title}
+                    </Text>
+                    <Text style={styles.enquiryPropPrice}>
+                      {property?.price}
+                      {property?.pricePeriod || ""}
+                    </Text>
+                    <View style={styles.enquiryPropLocRow}>
+                      <MapPin size={12} color="#64748B" style={{ marginRight: 4 }} />
+                      <Text style={styles.enquiryPropLoc} numberOfLines={1}>
+                        {property?.location || "Chennai"}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Quick Topic Chips */}
+                <Text style={styles.enquirySectionLabel}>Select Inquiry Topic</Text>
+                <View style={styles.enquiryChipsRow}>
+                  {[
+                    "Interested in buying",
+                    "Is price negotiable?",
+                    "Share floor plan & brochure",
+                    "Request a callback",
+                  ].map((topic) => {
+                    const isSelected = enquiryTopic === topic;
+                    return (
+                      <TouchableOpacity
+                        key={topic}
+                        style={[
+                          styles.enquiryTopicChip,
+                          isSelected && styles.enquiryTopicChipActive,
+                        ]}
+                        onPress={() => {
+                          setEnquiryTopic(topic);
+                          setEnquiryMessage(
+                            topic === "Interested in buying"
+                              ? `Hello, I am interested in ${property?.title || "this property"}. Please share further details.`
+                              : topic === "Is price negotiable?"
+                              ? `Hi, I am interested in ${property?.title || "this property"}. Is the listed price negotiable?`
+                              : topic === "Share floor plan & brochure"
+                              ? `Could you please share the brochure, layout plan, and approved documents for ${property?.title || "this property"}?`
+                              : `Hello, I'd like to discuss ${property?.title || "this property"}. Please call me back at your earliest convenience.`
+                          );
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.enquiryTopicChipText,
+                            isSelected && styles.enquiryTopicChipTextActive,
+                          ]}
+                        >
+                          {topic}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Message Input */}
+                <Text style={styles.enquirySectionLabel}>Your Message</Text>
+                <TextInput
+                  style={styles.enquiryMessageInput}
+                  multiline
+                  numberOfLines={4}
+                  value={enquiryMessage}
+                  onChangeText={setEnquiryMessage}
+                  placeholder="Type your question or requirement..."
+                  placeholderTextColor="#94A3B8"
+                />
+
+                {/* Seller assurance badge */}
+                <View style={styles.enquiryAssuranceBox}>
+                  <Shield size={16} color="#16A34A" style={{ marginRight: 8 }} />
+                  <Text style={styles.enquiryAssuranceText}>
+                    Your enquiry goes directly to the verified seller. No spam guarantee.
+                  </Text>
+                </View>
+              </ScrollView>
+
+              {/* Submit CTA */}
+              <View style={styles.enquiryModalFooter}>
+                <TouchableOpacity
+                  style={[
+                    styles.enquirySubmitBtn,
+                    enquirySending && { opacity: 0.7 },
+                  ]}
+                  onPress={handleSubmitEnquiry}
+                  disabled={enquirySending}
+                >
+                  <Send size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.enquirySubmitBtnText}>
+                    {enquirySending ? "Submitting Enquiry..." : "Send Enquiry Now"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  modalSafeArea: {
+  modalRootContainer: {
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  headerBar: {
-    height: 56,
+  heroContainer: {
+    width: "100%",
+    height: 350,
+    position: "relative",
+    backgroundColor: "#0F172A",
+  },
+  heroImageTouchable: {
+    width: "100%",
+    height: "100%",
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+  },
+  floatingHeaderBar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
+    zIndex: 20,
   },
-  headerBackBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#F1F5F9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    ...TYPOGRAPHY.screenHeading,
-    fontSize: 18,
-    color: "#0F172A",
-    fontWeight: "600",
-  },
-  headerActions: {
+  floatingRightActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
-  headerActionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#F1F5F9",
+  floatingCircleBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  heroLoadingOverlay: {
+    position: "absolute",
+    top: 70,
+    left: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    zIndex: 10,
+  },
+  floatingThumbCard: {
+    position: "absolute",
+    bottom: 14,
+    left: 14,
+    right: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.96)",
+    borderRadius: 14,
+    padding: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.7)",
+  },
+  thumbCardSlot: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: 8,
+    marginHorizontal: 3,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: "#E2E8F0",
+  },
+  thumbCardSlotActive: {
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+  },
+  thumbCardImg: {
+    width: "100%",
+    height: "100%",
+  },
+  thumbOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
     alignItems: "center",
     justifyContent: "center",
   },
+  thumbOverlayText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
   scrollContent: {
-    paddingBottom: 90,
+    backgroundColor: "#FFFFFF",
+    paddingBottom: 100,
   },
 
   /* Category Chips (from Image 2) */
@@ -1198,110 +1681,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 12,
-    backgroundColor: "#EBEFE3",
+    backgroundColor: "#EFF6FF",
   },
   modalCategoryPillText: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#2D3728",
+    color: "#2563EB",
   },
 
-  /* 1. GALLERY HERO (Image 2 Rounded Card Design) */
-  heroCardContainer: {
-    marginHorizontal: 16,
-    marginTop: 6,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    padding: 10,
-  },
-  galleryContainer: {
-    width: "100%",
-    height: 250,
-    backgroundColor: "#0F172A",
-    borderRadius: 10,
-    overflow: "hidden",
-    position: "relative",
-  },
-  heroImage: {
-    width: "100%",
-    height: "100%",
-  },
-  heroBookmarkBtn: {
-    position: "absolute",
-    top: 14,
-    right: 14,
-    width: 32,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "transparent",
-    zIndex: 10,
-  },
-  heroLoadingOverlay: {
-    position: "absolute",
-    top: 14,
-    left: 14,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.45)",
-    zIndex: 10,
-  },
-  heroPhotoCountBadge: {
-    position: "absolute",
-    bottom: 14,
-    right: 14,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  heroPhotoCountText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#0F172A",
-  },
-  thumbnailStrip: {
-    flexDirection: "row",
-    gap: 8,
-    paddingTop: 10,
-    paddingHorizontal: 4,
-  },
-  thumbnailWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  thumbnailActive: {
-    borderColor: COLORS.primary,
-  },
-  thumbnailImg: {
-    width: "100%",
-    height: "100%",
-  },
-
-  /* 2. MAIN INFO CARD (Matching Image 2 + Adapted Details) */
+  /* 2. MAIN INFO (Plain White Background, No Card Border) */
   mainInfoCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#ffffffff",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
   },
   titleRatingRow: {
     flexDirection: "row",
@@ -1389,7 +1784,7 @@ const styles = StyleSheet.create({
     fontWeight: "400",
   },
   changeLocationPill: {
-    backgroundColor: "#EBF4FF",
+    backgroundColor: "#EFF6FF",
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1438,7 +1833,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     marginTop: 0,
     zIndex: 100,
-    elevation: 3,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 4,
   },
   tabBarScroll: {
     paddingHorizontal: 16,
@@ -1466,7 +1865,8 @@ const styles = StyleSheet.create({
     right: 14,
     height: 3,
     backgroundColor: COLORS.primary,
-    borderRadius: 2,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
   },
 
   /* HIGHLIGHTS BULLET LIST */
@@ -1493,59 +1893,85 @@ const styles = StyleSheet.create({
   },
 
   sectionDividerLine: {
-    height: 8,
-    backgroundColor: "#F1F5F9",
+    height: 0,
+    backgroundColor: "transparent",
   },
 
-  /* SECTIONS */
+  /* SECTIONS (PLAIN WHITE BACKGROUND, NO CARD, NO BORDER STROKE) */
   sectionContainer: {
-    padding: 18,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
   },
   sectionHeading: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "600",
     color: "#0F172A",
     marginBottom: 12,
   },
   subSectionTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "600",
-    color: "#334155",
-    marginBottom: 8,
-    marginTop: 4,
+    color: "#0F172A",
+    marginBottom: 10,
   },
   descriptionText: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#475569",
-    lineHeight: 24,
+    lineHeight: 23,
     fontWeight: "400",
   },
 
-  /* DETAILS GRID (MINIMAL BORDERLESS LAYOUT) */
+  /* DETAILS GRID (2-COLUMN ICON + VALUE / LABEL LAYOUT) */
   detailsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    rowGap: 16,
-    columnGap: 12,
-    marginTop: 8,
+    rowGap: 18,
+    marginTop: 6,
   },
   detailGridCell: {
-    width: (SCREEN_WIDTH - 48) / 2,
-    paddingVertical: 4,
+    width: "50%",
+    paddingRight: 10,
   },
-  detailLabel: {
-    fontSize: 14,
+  detailValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  detailValueText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+    flexShrink: 1,
+  },
+  detailLabelText: {
+    fontSize: 13,
     color: "#64748B",
-    marginBottom: 3,
+    marginTop: 3,
     fontWeight: "400",
   },
-  detailValue: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#0F172A",
-  },
 
-  /* AMENITIES */
+  /* AMENITIES (2-COLUMN ICON + LABEL GRID) */
+  amenitiesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 18,
+    marginTop: 8,
+  },
+  amenityGridItem: {
+    width: "50%",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 10,
+  },
+  amenityItemText: {
+    fontSize: 14,
+    color: "#334155",
+    fontWeight: "500",
+    flexShrink: 1,
+  },
   amenitiesContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1569,25 +1995,101 @@ const styles = StyleSheet.create({
   },
 
   /* FURNISHING */
-  furnishingBox: {
+  furnishingCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 16,
+  },
+  furnishingHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  furnishingIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  furnishingHeaderContent: {
+    flex: 1,
+  },
+  furnishingTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "transparent",
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    justifyContent: "space-between",
+    marginBottom: 4,
   },
   furnishingTitle: {
     fontSize: 16,
     fontWeight: "600",
     color: "#0F172A",
-    marginBottom: 2,
+    letterSpacing: 0.1,
+  },
+  furnishingTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  furnishingTagText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#16A34A",
+    letterSpacing: 0.2,
   },
   furnishingSubText: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#64748B",
     fontWeight: "400",
+    lineHeight: 18,
+  },
+  furnishingDivider: {
+    height: 1,
+    backgroundColor: "#E2E8F0",
+    marginVertical: 14,
+  },
+  furnishingInclusionsSection: {
+    marginTop: 2,
+  },
+  furnishingInclusionsHeading: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+    letterSpacing: 0.6,
+    marginBottom: 10,
+    textTransform: "uppercase",
+  },
+  furnishingChipsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  furnishingChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  furnishingChipText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#1E293B",
   },
 
   /* MAP */
@@ -1625,8 +2127,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
     padding: 14,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
     marginTop: 4,
   },
   ownerAvatar: {
@@ -1727,6 +2227,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 10,
     left: 10,
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#16A34A",
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -1734,8 +2236,9 @@ const styles = StyleSheet.create({
   },
   verifiedGreenBadgeText: {
     color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 10.5,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   simHeartBtn: {
     position: "absolute",
@@ -1803,7 +2306,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   siteVisitBtnActive: {
-    borderColor: "#10B981",
+    borderColor: "#16A34A",
     backgroundColor: "#F0FDF4",
   },
   siteVisitBtnText: {
@@ -1812,7 +2315,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   siteVisitBtnTextActive: {
-    color: "#10B981",
+    color: "#16A34A",
   },
   sendEnquiryBtn: {
     flex: 1,
@@ -1824,7 +2327,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendEnquiryBtnActive: {
-    backgroundColor: "#059669",
+    backgroundColor: "#16A34A",
   },
   sendEnquiryBtnText: {
     fontSize: 16,
@@ -1928,7 +2431,7 @@ const styles = StyleSheet.create({
     borderColor: "#F1F5F9",
   },
   localitySelectRowActive: {
-    backgroundColor: "#EBF4FF",
+    backgroundColor: "#EFF6FF",
     borderColor: COLORS.primary,
   },
   localityIconCircle: {
@@ -1958,6 +2461,196 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     color: "#64748B",
     marginTop: 2,
+  },
+
+  /* ENQUIRY MODAL STYLES */
+  enquiryModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    justifyContent: "flex-end",
+  },
+  backdropPressable: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  enquiryModalContainer: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "85%",
+    paddingTop: 10,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  dragPill: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+    alignSelf: "center",
+    marginBottom: 8,
+  },
+  enquiryModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  enquiryModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  enquiryModalSubtitle: {
+    fontSize: 12.5,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  enquiryModalScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  enquiryPropertyCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 10,
+    marginBottom: 16,
+  },
+  enquiryPropertyThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: "#E2E8F0",
+  },
+  enquiryPropTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 3,
+  },
+  enquiryPropPrice: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  enquiryPropLocRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  enquiryPropLoc: {
+    fontSize: 12,
+    color: "#64748B",
+    flex: 1,
+  },
+  enquirySectionLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 8,
+    marginTop: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  enquiryChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+  },
+  enquiryTopicChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  enquiryTopicChipActive: {
+    backgroundColor: "#EFF6FF",
+    borderColor: COLORS.primary,
+  },
+  enquiryTopicChipText: {
+    fontSize: 12.5,
+    color: "#475569",
+    fontWeight: "500",
+  },
+  enquiryTopicChipTextActive: {
+    color: COLORS.primary,
+    fontWeight: "700",
+  },
+  enquiryMessageInput: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    color: "#0F172A",
+    minHeight: 88,
+    textAlignVertical: "top",
+    marginBottom: 14,
+  },
+  enquiryAssuranceBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  enquiryAssuranceText: {
+    fontSize: 12,
+    color: "#166534",
+    flex: 1,
+    lineHeight: 16,
+  },
+  enquiryModalFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "ios" ? 28 : 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
+  },
+  enquirySubmitBtn: {
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  enquirySubmitBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15.5,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
 });
 

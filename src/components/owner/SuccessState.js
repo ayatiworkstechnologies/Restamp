@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { CheckCircle2 } from "lucide-react-native";
+import { CheckCircle2 } from "../common/HugeIcon";
 import COLORS from "../../constants/colors";
 import PrimaryButton from "./PrimaryButton";
 import SecondaryButton from "./SecondaryButton";

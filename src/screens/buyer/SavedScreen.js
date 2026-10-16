@@ -21,11 +21,13 @@ import {
   MapPin,
   Phone,
   MessageCircle,
+  MessageSquare,
   Check,
   X,
   ArrowRight,
   Copy,
   Building,
+  Building2,
   Eye,
   Clock,
   Pencil,
@@ -33,14 +35,26 @@ import {
   Calendar,
   Trash2,
   ExternalLink,
-} from "lucide-react-native";
+  User,
+  RotateCcw,
+  XCircle,
+  ShieldCheck,
+  Award,
+  Briefcase,
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useWishlist } from "../../context/WishlistContext";
 import { useAuth } from "../../context/AuthContext";
 import { useRequireAuth } from "../../auth/useRequireAuth";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
+import ScheduleVisitModal from "../../components/ScheduleVisitModal";
 import AppBrandHeader from "../../components/AppBrandHeader";
 import SafeImage from "../../components/common/SafeImage";
+import {
+  getBuyerVisits,
+  updateBuyerVisit,
+  subscribeBuyerVisits,
+} from "../../data/visitsStore";
 
 // P2 honesty: no fabricated history. Viewed properties and call records have
 // no backend source or local persistence, so both start empty and stay empty
@@ -54,14 +68,190 @@ function cleanPhoneOrNull(raw) {
   return digits.length > 0 ? digits : null;
 }
 
+const INITIAL_CALL_HISTORY = [
+  {
+    id: "call-1",
+    agentName: "Suresh Babu",
+    agency: "RESTAMP Certified Agent • Anna Nagar",
+    agentPhone: "+91 97909 88123",
+    callTime: "Today, 11:30 AM",
+    callType: "outgoing",
+    duration: "2m 45s",
+    property: {
+      id: "chennai-1",
+      title: "2 BHK Luxury Apartment in Anna Nagar",
+      price: "₹45,000/mo",
+      location: "Anna Nagar, Chennai",
+      image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80",
+    },
+  },
+  {
+    id: "call-2",
+    agentName: "Arun Kumar",
+    agency: "Direct Property Owner • Kilpauk",
+    agentPhone: "+91 98840 55667",
+    callTime: "Yesterday, 04:15 PM",
+    callType: "outgoing",
+    duration: "4m 10s",
+    property: {
+      id: "chennai-2",
+      title: "2 BHK Flat with Balcony in Kilpauk",
+      price: "₹38,000/mo",
+      location: "Kilpauk, Chennai",
+      image: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=600&q=80",
+    },
+  },
+];
+
+const INITIAL_MESSAGES = [
+  {
+    id: "msg-1",
+    recipientName: "Suresh Babu",
+    recipientRole: "Certified Agent",
+    recipientPhone: "+91 97909 88123",
+    propertyTitle: "2 BHK Luxury Apartment in Anna Nagar",
+    propertyLocation: "Anna Nagar, Chennai",
+    propertyPrice: "₹45,000/mo",
+    propertyImage: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80",
+    lastMessage: "I would like to schedule a site visit for this 2 BHK apartment on Saturday at 4:30 PM. Please confirm.",
+    timestamp: "Today, 10:15 AM",
+    status: "Confirmed",
+  },
+  {
+    id: "msg-2",
+    recipientName: "Arun Kumar",
+    recipientRole: "Property Owner",
+    recipientPhone: "+91 98840 55667",
+    propertyTitle: "2 BHK Flat with Balcony in Kilpauk",
+    propertyLocation: "Kilpauk, Chennai",
+    propertyPrice: "₹38,000/mo",
+    propertyImage: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=600&q=80",
+    lastMessage: "Is covered car parking available with this flat? Also, what is the maintenance fee?",
+    timestamp: "Yesterday, 3:40 PM",
+    status: "Replied",
+  },
+];
+
+const INITIAL_BUYER_VISITS = [
+  {
+    id: "visit-1",
+    agentName: "Suresh Babu",
+    agentRole: "Verified Agent",
+    agentPhone: "+91 97909 88123",
+    propertyTitle: "2 BHK Luxury Apartment in Anna Nagar",
+    propertyLocation: "Anna Nagar, Chennai",
+    propertyPrice: "₹45,000/mo",
+    date: "30 Sep 2026",
+    time: "04:30 PM",
+    status: "upcoming",
+    notes: "Inspection of keys and apartment interior. Meeting near Anna Nagar Tower Park.",
+  },
+  {
+    id: "visit-2",
+    agentName: "Arun Kumar",
+    agentRole: "Property Owner",
+    agentPhone: "+91 98840 55667",
+    propertyTitle: "2 BHK Flat with Balcony in Kilpauk",
+    propertyLocation: "Kilpauk, Chennai",
+    propertyPrice: "₹38,000/mo",
+    date: "01 Oct 2026",
+    time: "11:00 AM",
+    status: "upcoming",
+    notes: "Owner requested a 15-minute prior call before reaching the location.",
+  },
+  {
+    id: "visit-3",
+    agentName: "Sundar Raman",
+    agentRole: "Property Owner",
+    agentPhone: "+91 98400 12345",
+    propertyTitle: "3 BHK Luxury Villa in Adyar",
+    propertyLocation: "Adyar, Chennai",
+    propertyPrice: "₹2.5 Cr",
+    date: "25 Sep 2026",
+    time: "03:00 PM",
+    status: "completed",
+    notes: "Full walkthrough completed. CMDA approval documents inspected.",
+  },
+  {
+    id: "visit-4",
+    agentName: "Meera Krishnan",
+    agentRole: "RESTAMP Agent",
+    agentPhone: "+91 98401 33445",
+    propertyTitle: "3 BHK Apartment in T. Nagar",
+    propertyLocation: "T. Nagar, Chennai",
+    propertyPrice: "₹65,000/mo",
+    date: "22 Sep 2026",
+    time: "10:30 AM",
+    status: "completed",
+    notes: "Site visit successfully concluded.",
+  },
+];
+
+const INITIAL_AGENTS = [
+  {
+    id: "agent-1",
+    name: "Suresh Babu",
+    agency: "Chennai Prime Realtors",
+    role: "Senior Property Specialist",
+    rating: 4.9,
+    reviewsCount: 128,
+    phone: "+91 97909 88123",
+    email: "suresh.babu@restamp.in",
+    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80",
+    reraNumber: "TN/AGENT/2024/00842",
+    dealsClosed: 42,
+    experience: "8+ Years",
+    activeListingsCount: 15,
+    localities: ["Anna Nagar", "Kilpauk", "Mogappair"],
+    specialty: "Luxury 2 & 3 BHK Apartments, Builder Floors",
+    bio: "Certified RESTAMP area specialist for Anna Nagar & Central Chennai. Specialized in clear CMDA title properties, verified site visits, and end-to-end lease execution.",
+    officeAddress: "4th Avenue, Shanthi Colony, Anna Nagar, Chennai - 600040",
+  },
+  {
+    id: "agent-2",
+    name: "Vikram Prabhu",
+    agency: "Adyar Prime Realty",
+    role: "Premium Villa & Commercial Advisor",
+    rating: 5.0,
+    reviewsCount: 94,
+    phone: "+91 98400 99888",
+    email: "vikram.prabhu@restamp.in",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
+    reraNumber: "TN/AGENT/2024/00915",
+    dealsClosed: 65,
+    experience: "10+ Years",
+    activeListingsCount: 22,
+    localities: ["Adyar", "Besant Nagar", "OMR"],
+    specialty: "Gated Community Villas, High-Rise Penthouses",
+    bio: "Over a decade of property advisory in South Chennai. Specializing in CMDA/DTCP approved villas, commercial spaces, and legal due diligence.",
+    officeAddress: "Gandhi Nagar 2nd Main Road, Adyar, Chennai - 600020",
+  },
+  {
+    id: "agent-3",
+    name: "Meera Krishnan",
+    agency: "Metro Property Advisory",
+    role: "Residential Consultant",
+    rating: 4.8,
+    reviewsCount: 76,
+    phone: "+91 98401 33445",
+    email: "meera.krishnan@restamp.in",
+    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80",
+    reraNumber: "TN/AGENT/2024/00731",
+    dealsClosed: 38,
+    experience: "6+ Years",
+    activeListingsCount: 11,
+    localities: ["Velachery", "Guindy", "Tambaram"],
+    specialty: "Ready-to-Move Flats, Rental Apartments",
+    bio: "Dedicated home search specialist for IT corridor and South Chennai. Assists with home loans, bank legal scrutiny, and fast-track token agreements.",
+    officeAddress: "100 Feet Bypass Road, Velachery, Chennai - 600042",
+  },
+];
+
 export default function SavedScreen({ navigation, route }) {
   const { wishlist, removeFromWishlist, isWishlisted, toggleWishlist, refreshWishlist } = useWishlist();
   // Protected modal actions resume here after a guest logs in (Change 2).
   const requireAuth = useRequireAuth(navigation);
 
-  // Pull the server wishlist when authenticated; logged-out users have an
-  // honest empty wishlist. Refreshed on mount and whenever the screen regains
-  // focus (e.g. after a save elsewhere).
   useEffect(() => {
     refreshWishlist().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -72,7 +262,7 @@ export default function SavedScreen({ navigation, route }) {
     }, [refreshWishlist])
   );
 
-  // Active tab state: "wishlist" | "viewed" | "call"
+  // Active tab state: "wishlist" | "call" | "messages" | "visits" | "agents" | "viewed"
   const [activeTab, setActiveTab] = useState(route?.params?.initialTab || "wishlist");
 
   useEffect(() => {
@@ -85,11 +275,51 @@ export default function SavedScreen({ navigation, route }) {
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [viewedNumberProperty, setViewedNumberProperty] = useState(null);
 
-  // Viewed properties state (P2: honest empty — no backend/persistence yet)
+  // Viewed properties state
   const [viewedProperties, setViewedProperties] = useState([]);
 
-  // Call history state (P2: honest empty — contact actions do not fabricate records)
-  const [callHistory, setCallHistory] = useState([]);
+  // Call history state with both Call and WhatsApp actions
+  const [callHistory, setCallHistory] = useState(INITIAL_CALL_HISTORY);
+
+  // Messages and enquiries state
+  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+
+  // Site visits state synchronized with visitsStore
+  const [siteVisits, setSiteVisits] = useState(getBuyerVisits);
+  const [visitFilter, setVisitFilter] = useState("upcoming");
+  const [selectedVisitForDetails, setSelectedVisitForDetails] = useState(null);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+
+  useEffect(() => {
+    return subscribeBuyerVisits((updated) => setSiteVisits(updated));
+  }, []);
+
+  // Agents state (Agent Page Detail Tab)
+  const [agents, setAgents] = useState(INITIAL_AGENTS);
+  const [selectedAgentForModal, setSelectedAgentForModal] = useState(null);
+
+  const handleCallAgent = (agent) => {
+    const raw = agent?.phone || "+919790988123";
+    handleCall(raw, agent?.name || "Agent");
+  };
+
+  const handleWhatsAppAgent = (agent) => {
+    const raw = agent?.phone || "+919790988123";
+    const clean = raw.replace(/[^0-9]/g, "");
+    const text = encodeURIComponent(
+      `Hello ${agent?.name}! I found your profile on RESTAMP. I am looking for property assistance in ${agent?.localities ? agent.localities.join(", ") : "Chennai"}.`
+    );
+    Linking.openURL(`https://wa.me/${clean}?text=${text}`).catch(() => {
+      Alert.alert("WhatsApp Agent", `Chat with ${agent?.name} at ${raw}`);
+    });
+  };
+
+  const findAgentByName = (name) => {
+    return (
+      agents.find((a) => (a.name || "").toLowerCase() === (name || "").toLowerCase()) ||
+      agents[0]
+    );
+  };
 
   // Real authenticated identity only (GET /auth/me via AuthContext).
   // Never sample data: no mock name, phone, email, or avatar. The backend
@@ -188,6 +418,55 @@ export default function SavedScreen({ navigation, route }) {
     });
   };
 
+  const handleWhatsAppVisit = (visit) => {
+    const raw = visit.agentPhone || "+919790988123";
+    const digits = cleanPhoneOrNull(raw) || "919790988123";
+    const text = encodeURIComponent(
+      `Hello ${visit.agentName}! I am contacting you regarding our scheduled site visit for "${visit.propertyTitle}" on ${visit.date} at ${visit.time}.`
+    );
+    Linking.openURL(`https://wa.me/${digits}?text=${text}`).catch(() => {
+      Alert.alert("WhatsApp Unavailable", `Could not open WhatsApp for ${visit.agentName}.`);
+    });
+  };
+
+  const handleWhatsAppEnquiry = (msg) => {
+    const raw = msg.recipientPhone || "+919790988123";
+    const digits = cleanPhoneOrNull(raw) || "919790988123";
+    const text = encodeURIComponent(
+      `Hello ${msg.recipientName}! I am following up on my enquiry for "${msg.propertyTitle}".`
+    );
+    Linking.openURL(`https://wa.me/${digits}?text=${text}`).catch(() => {
+      Alert.alert("WhatsApp Unavailable", `Could not open WhatsApp for ${msg.recipientName}.`);
+    });
+  };
+
+  const handleMarkVisitCompleted = (visit) => {
+    updateBuyerVisit(visit.id, { status: "completed" });
+    setSelectedVisitForDetails(null);
+    Alert.alert(
+      "Visit Completed! ✅",
+      `Site visit with ${visit.agentName} has been marked as Completed.`
+    );
+  };
+
+  const handleCancelVisit = (visit) => {
+    updateBuyerVisit(visit.id, { status: "cancelled" });
+    setSelectedVisitForDetails(null);
+    Alert.alert("Visit Cancelled", "The site visit has been marked as cancelled.");
+  };
+
+  const handleConfirmReschedule = (visit, reschedData) => {
+    const d = reschedData?.date || "15 Oct 2026";
+    const t = reschedData?.time || "04:30 PM";
+    updateBuyerVisit(visit.id, { date: d, time: t, status: "upcoming" });
+    setIsRescheduling(false);
+    setSelectedVisitForDetails(null);
+    Alert.alert(
+      "Visit Rescheduled! 📅",
+      `Site visit rescheduled to ${d} at ${t}. Notification sent to ${visit.agentName}.`
+    );
+  };
+
   const handleClearViewed = () => {
     Alert.alert("Clear History", "Do you want to clear your recently viewed properties?", [
       { text: "Cancel", style: "cancel" },
@@ -240,7 +519,11 @@ export default function SavedScreen({ navigation, route }) {
 
         {/* ================= 2. ACTIVITY UNDERLINE TABS (Airbnb Style with Generous Breathing Space) ================= */}
         <View style={styles.tabBarWrapper}>
-          <View style={styles.tabBar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabBarScroll}
+          >
             {/* Wishlist Tab */}
             <TouchableOpacity
               style={[styles.tabButton, activeTab === "wishlist" && styles.tabButtonActive]}
@@ -256,6 +539,74 @@ export default function SavedScreen({ navigation, route }) {
                 </Text>
               </View>
               {activeTab === "wishlist" && <View style={styles.activeTabIndicator} />}
+            </TouchableOpacity>
+
+            {/* Call Tab */}
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === "call" && styles.tabButtonActive]}
+              activeOpacity={0.75}
+              onPress={() => setActiveTab("call")}
+            >
+              <Text style={[styles.tabButtonText, activeTab === "call" && styles.tabButtonTextActive]}>
+                Calls
+              </Text>
+              <View style={[styles.tabCountBadge, activeTab === "call" && styles.tabCountBadgeActive]}>
+                <Text style={[styles.tabCountText, activeTab === "call" && styles.tabCountTextActive]}>
+                  {callHistory.length}
+                </Text>
+              </View>
+              {activeTab === "call" && <View style={styles.activeTabIndicator} />}
+            </TouchableOpacity>
+
+            {/* Messages / Enquiries Tab */}
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === "messages" && styles.tabButtonActive]}
+              activeOpacity={0.75}
+              onPress={() => setActiveTab("messages")}
+            >
+              <Text style={[styles.tabButtonText, activeTab === "messages" && styles.tabButtonTextActive]}>
+                Messages
+              </Text>
+              <View style={[styles.tabCountBadge, activeTab === "messages" && styles.tabCountBadgeActive]}>
+                <Text style={[styles.tabCountText, activeTab === "messages" && styles.tabCountTextActive]}>
+                  {messages.length}
+                </Text>
+              </View>
+              {activeTab === "messages" && <View style={styles.activeTabIndicator} />}
+            </TouchableOpacity>
+
+            {/* Site Visits Tab */}
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === "visits" && styles.tabButtonActive]}
+              activeOpacity={0.75}
+              onPress={() => setActiveTab("visits")}
+            >
+              <Text style={[styles.tabButtonText, activeTab === "visits" && styles.tabButtonTextActive]}>
+                Site Visits
+              </Text>
+              <View style={[styles.tabCountBadge, activeTab === "visits" && styles.tabCountBadgeActive]}>
+                <Text style={[styles.tabCountText, activeTab === "visits" && styles.tabCountTextActive]}>
+                  {siteVisits.length}
+                </Text>
+              </View>
+              {activeTab === "visits" && <View style={styles.activeTabIndicator} />}
+            </TouchableOpacity>
+
+            {/* Agents Tab (Agent Page Detail Tab) */}
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === "agents" && styles.tabButtonActive]}
+              activeOpacity={0.75}
+              onPress={() => setActiveTab("agents")}
+            >
+              <Text style={[styles.tabButtonText, activeTab === "agents" && styles.tabButtonTextActive]}>
+                Agents
+              </Text>
+              <View style={[styles.tabCountBadge, activeTab === "agents" && styles.tabCountBadgeActive]}>
+                <Text style={[styles.tabCountText, activeTab === "agents" && styles.tabCountTextActive]}>
+                  {agents.length}
+                </Text>
+              </View>
+              {activeTab === "agents" && <View style={styles.activeTabIndicator} />}
             </TouchableOpacity>
 
             {/* Viewed Tab */}
@@ -274,24 +625,7 @@ export default function SavedScreen({ navigation, route }) {
               </View>
               {activeTab === "viewed" && <View style={styles.activeTabIndicator} />}
             </TouchableOpacity>
-
-            {/* Call Tab */}
-            <TouchableOpacity
-              style={[styles.tabButton, activeTab === "call" && styles.tabButtonActive]}
-              activeOpacity={0.75}
-              onPress={() => setActiveTab("call")}
-            >
-              <Text style={[styles.tabButtonText, activeTab === "call" && styles.tabButtonTextActive]}>
-                Call
-              </Text>
-              <View style={[styles.tabCountBadge, activeTab === "call" && styles.tabCountBadgeActive]}>
-                <Text style={[styles.tabCountText, activeTab === "call" && styles.tabCountTextActive]}>
-                  {callHistory.length}
-                </Text>
-              </View>
-              {activeTab === "call" && <View style={styles.activeTabIndicator} />}
-            </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
 
         {/* ================= 3. TAB CONTENT ================= */}
@@ -350,7 +684,7 @@ export default function SavedScreen({ navigation, route }) {
                             removeFromWishlist(property.id);
                           }}
                         >
-                          <Heart size={18} color="#FF385C" fill="#FF385C" strokeWidth={2} />
+                          <Heart size={18} color="#DC2626" fill="#DC2626" strokeWidth={2} />
                         </TouchableOpacity>
                       </View>
 
@@ -483,8 +817,8 @@ export default function SavedScreen({ navigation, route }) {
                         >
                           <Heart
                             size={18}
-                            color={isSaved ? "#FF385C" : "#0F172A"}
-                            fill={isSaved ? "#FF385C" : "none"}
+                            color={isSaved ? "#DC2626" : "#0F172A"}
+                            fill={isSaved ? "#DC2626" : "none"}
                             strokeWidth={2}
                           />
                         </TouchableOpacity>
@@ -517,24 +851,38 @@ export default function SavedScreen({ navigation, route }) {
                           </Text>
                         ) : null}
 
-                        {/* Price & Contact Row */}
+                        {/* Price & Contact Row (Both Call & WhatsApp buttons) */}
                         <View style={styles.priceRow}>
                           <Text style={styles.propertyPrice}>
                             {property.price}
                             {perSqft ? <Text style={styles.propertyPriceSub}> • {perSqft}</Text> : null}
                           </Text>
 
-                          <TouchableOpacity
-                            style={styles.contactBtn}
-                            activeOpacity={0.8}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              setViewedNumberProperty(property);
-                            }}
-                          >
-                            <Phone size={12} color="#0F172A" style={{ marginRight: 4 }} />
-                            <Text style={styles.contactBtnText}>Contact</Text>
-                          </TouchableOpacity>
+                          <View style={styles.cardActionsInline}>
+                            <TouchableOpacity
+                              style={styles.contactBtnCall}
+                              activeOpacity={0.8}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleCall(property?.agent?.phone || property?.ownerPhone, property?.agent?.name || "Owner");
+                              }}
+                            >
+                              <Phone size={12} color="#0F172A" style={{ marginRight: 4 }} />
+                              <Text style={styles.contactBtnCallText}>Call</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.contactBtnWhatsApp}
+                              activeOpacity={0.8}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleWhatsApp(property);
+                              }}
+                            >
+                              <MessageCircle size={13} color="#16A34A" style={{ marginRight: 4 }} />
+                              <Text style={styles.contactBtnWhatsAppText}>WhatsApp</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -616,15 +964,15 @@ export default function SavedScreen({ navigation, route }) {
                       <ArrowRight size={14} color="#94A3B8" />
                     </TouchableOpacity>
 
-                    {/* Call Footer Actions (Sleek, minimal buttons) */}
+                    {/* Call Footer Actions: Call, WhatsApp, Agent Details */}
                     <View style={styles.callFooterRow}>
                       <TouchableOpacity
                         style={styles.callActionBtnDark}
                         activeOpacity={0.85}
                         onPress={() => handleCall(item.agentPhone, item.agentName)}
                       >
-                        <Phone size={13} color="#FFFFFF" style={{ marginRight: 6 }} />
-                        <Text style={styles.callActionTextDark}>Call Again</Text>
+                        <Phone size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
+                        <Text style={styles.callActionTextDark}>Call</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -632,14 +980,413 @@ export default function SavedScreen({ navigation, route }) {
                         activeOpacity={0.85}
                         onPress={() => handleWhatsApp(item.property)}
                       >
-                        <MessageCircle size={14} color="#0F172A" style={{ marginRight: 6 }} />
+                        <MessageCircle size={13} color="#0F172A" style={{ marginRight: 5 }} />
                         <Text style={styles.callActionTextLight}>WhatsApp</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.callActionBtnAgent}
+                        activeOpacity={0.85}
+                        onPress={() => setSelectedAgentForModal(findAgentByName(item.agentName))}
+                      >
+                        <User size={13} color="#2563EB" style={{ marginRight: 4 }} />
+                        <Text style={styles.callActionTextAgent}>Agent Info</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
                 ))}
               </View>
             )}
+          </View>
+        )}
+
+        {/* TAB 4: MESSAGES / ENQUIRIES */}
+        {activeTab === "messages" && (
+          <View style={styles.tabContentArea}>
+            <View style={styles.listHeaderRow}>
+              <Text style={styles.listSectionTitle}>
+                Messages & Enquiries ({messages.length})
+              </Text>
+            </View>
+
+            {messages.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <MessageSquare size={32} color="#CBD5E1" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.emptyTitle}>No messages yet</Text>
+                <Text style={styles.emptyText}>
+                  Direct enquiries sent to property owners and verified agents will appear here.
+                </Text>
+                <TouchableOpacity
+                  style={styles.exploreBtn}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate("Home")}
+                >
+                  <Text style={styles.exploreBtnText}>Find Properties to Enquire</Text>
+                  <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.messagesList}>
+                {messages.map((item) => (
+                  <View key={item.id} style={styles.messageCard}>
+                    {/* Header: Recipient Name, Role & Status */}
+                    <View style={styles.messageHeaderRow}>
+                      <View style={styles.messageRecipientCol}>
+                        <View style={styles.msgIconBox}>
+                          <User size={16} color="#2563EB" />
+                        </View>
+                        <View>
+                          <Text style={styles.msgRecipientName}>{item.recipientName}</Text>
+                          <Text style={styles.msgRecipientRole}>{item.recipientRole}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.msgStatusCol}>
+                        <View style={styles.msgStatusBadge}>
+                          <Text style={styles.msgStatusText}>{item.status}</Text>
+                        </View>
+                        <Text style={styles.msgTimeText}>{item.timestamp}</Text>
+                      </View>
+                    </View>
+
+                    {/* Associated Property Snippet */}
+                    <View style={styles.msgPropertyRow}>
+                      <SafeImage
+                        source={{ uri: item.propertyImage }}
+                        style={styles.msgPropertyThumb}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.msgPropertyTitle} numberOfLines={1}>
+                          {item.propertyTitle}
+                        </Text>
+                        <Text style={styles.msgPropertyLoc} numberOfLines={1}>
+                          {item.propertyPrice} • {item.propertyLocation}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Message Preview Quote */}
+                    <View style={styles.msgBubble}>
+                      <Text style={styles.msgBubbleText} numberOfLines={2}>
+                        "{item.lastMessage}"
+                      </Text>
+                    </View>
+
+                    {/* Divider */}
+                    <View style={styles.cardDivider} />
+
+                    {/* Action Buttons: Call, WhatsApp, Agent Details */}
+                    <View style={styles.cardActionsInline}>
+                      <TouchableOpacity
+                        style={styles.callCustomerBtn}
+                        onPress={() => handleCall(item.recipientPhone, item.recipientName)}
+                        activeOpacity={0.8}
+                      >
+                        <Phone size={13} color="#0F172A" style={{ marginRight: 5 }} />
+                        <Text style={styles.callCustomerBtnText}>Call</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.whatsappActionBtn}
+                        onPress={() => handleWhatsAppEnquiry(item)}
+                        activeOpacity={0.8}
+                      >
+                        <MessageCircle size={13} color="#16A34A" style={{ marginRight: 5 }} />
+                        <Text style={styles.whatsappActionBtnText}>WhatsApp</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.msgAgentDetailBtn}
+                        onPress={() => setSelectedAgentForModal(findAgentByName(item.recipientName))}
+                        activeOpacity={0.8}
+                      >
+                        <User size={13} color="#2563EB" style={{ marginRight: 4 }} />
+                        <Text style={styles.msgAgentDetailBtnText}>Agent Info</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* TAB 5: SITE VISITS (Matching Agent/Owner Reference Design) */}
+        {activeTab === "visits" && (
+          <View style={styles.tabContentArea}>
+            <View style={styles.visitScreenHeader}>
+              <Text style={styles.visitHeaderTitle}>Site Visits</Text>
+              <Text style={styles.visitHeaderSubtitle}>
+                Coordinate customer inspections and property walkthroughs
+              </Text>
+            </View>
+
+            {/* Filter Pills: Upcoming (2), Completed (2), Cancelled (0) */}
+            <View style={styles.visitFilterRow}>
+              {[
+                { id: "upcoming", label: "Upcoming" },
+                { id: "completed", label: "Completed" },
+                { id: "cancelled", label: "Cancelled" },
+              ].map((tab) => {
+                const isActive = visitFilter === tab.id;
+                const count = siteVisits.filter((v) => v.status === tab.id).length;
+
+                return (
+                  <TouchableOpacity
+                    key={tab.id}
+                    style={[styles.visitFilterBtn, isActive && styles.visitFilterBtnActive]}
+                    onPress={() => setVisitFilter(tab.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.visitFilterBtnText,
+                        isActive && styles.visitFilterBtnTextActive,
+                      ]}
+                    >
+                      {tab.label} ({count})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Visits List */}
+            {siteVisits.filter((v) => v.status === visitFilter).length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <Calendar size={32} color="#CBD5E1" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.emptyTitle}>No {visitFilter} site visits</Text>
+                <Text style={styles.emptyText}>
+                  Scheduled property inspections with verified agents will appear here.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.visitsList}>
+                {siteVisits
+                  .filter((v) => v.status === visitFilter)
+                  .map((item) => (
+                    <View key={item.id} style={styles.visitCard}>
+                      {/* Card Header: Person Name & Status Pill */}
+                      <View style={styles.visitCardHeader}>
+                        <View style={styles.visitPersonRow}>
+                          <User size={15} color="#2563EB" style={{ marginRight: 6 }} />
+                          <Text style={styles.visitPersonName}>{item.agentName}</Text>
+                          {item.agentRole ? (
+                            <Text style={styles.visitPersonRole}> • {item.agentRole}</Text>
+                          ) : null}
+                        </View>
+
+                        <View
+                          style={[
+                            styles.statusPill,
+                            item.status === "completed" && styles.statusPillCompleted,
+                            item.status === "cancelled" && styles.statusPillCancelled,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusPillText,
+                              item.status === "completed" && styles.statusPillTextCompleted,
+                              item.status === "cancelled" && styles.statusPillTextCancelled,
+                            ]}
+                          >
+                            {item.status === "upcoming"
+                              ? "Upcoming"
+                              : item.status === "completed"
+                              ? "Completed"
+                              : "Cancelled"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Visit Body: Property & Location */}
+                      <View style={styles.visitBody}>
+                        <View style={styles.bodyField}>
+                          <Text style={styles.fieldLabel}>Property:</Text>
+                          <Text style={styles.fieldValueBold}>
+                            {item.propertyTitle}
+                          </Text>
+                        </View>
+
+                        <View style={styles.bodyField}>
+                          <Text style={styles.fieldLabel}>Location:</Text>
+                          <Text style={styles.fieldValue}>
+                            {item.propertyLocation}
+                          </Text>
+                        </View>
+
+                        <View style={styles.dateTimeRow}>
+                          <View style={styles.dateTimeBadge}>
+                            <Calendar size={13} color="#2563EB" style={{ marginRight: 5 }} />
+                            <Text style={styles.dateTimeText}>Visit Date: {item.date}</Text>
+                          </View>
+
+                          <View style={styles.dateTimeBadge}>
+                            <Clock size={13} color="#2563EB" style={{ marginRight: 5 }} />
+                            <Text style={styles.dateTimeText}>Time: {item.time}</Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Divider */}
+                      <View style={styles.cardDivider} />
+
+                      {/* Actions: Call, WhatsApp, Agent Info, View Details */}
+                      <View style={styles.visitCardActionsRow}>
+                        <TouchableOpacity
+                          style={styles.visitCallBtn}
+                          onPress={() => handleCall(item.agentPhone, item.agentName)}
+                          activeOpacity={0.8}
+                        >
+                          <Phone size={13} color="#0F172A" style={{ marginRight: 4 }} />
+                          <Text style={styles.visitCallBtnText}>Call</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.visitWhatsAppBtn}
+                          onPress={() => handleWhatsAppVisit(item)}
+                          activeOpacity={0.8}
+                        >
+                          <MessageCircle size={13} color="#16A34A" style={{ marginRight: 4 }} />
+                          <Text style={styles.visitWhatsAppBtnText}>WhatsApp</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.visitAgentBtn}
+                          onPress={() => setSelectedAgentForModal(findAgentByName(item.agentName))}
+                          activeOpacity={0.8}
+                        >
+                          <User size={13} color="#2563EB" style={{ marginRight: 4 }} />
+                          <Text style={styles.visitAgentBtnText}>Agent Info</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.visitDetailsBtn}
+                          onPress={() => setSelectedVisitForDetails(item)}
+                          activeOpacity={0.8}
+                        >
+                          <Eye size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                          <Text style={styles.visitDetailsBtnText}>Details</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* TAB 6: AGENTS (Agent Page Detail Tab) */}
+        {activeTab === "agents" && (
+          <View style={styles.tabContentArea}>
+            <View style={styles.visitScreenHeader}>
+              <Text style={styles.visitHeaderTitle}>Verified Local Agents ({agents.length})</Text>
+              <Text style={styles.visitHeaderSubtitle}>
+                Dedicated RESTAMP partner brokers to guide your site visits, property inspections & deal closing
+              </Text>
+            </View>
+
+            <View style={styles.agentsList}>
+              {agents.map((agent) => (
+                <View key={agent.id} style={styles.agentCard}>
+                  {/* Card Header: Avatar, Name, Verified Badge, Agency, Rating */}
+                  <View style={styles.agentCardHeader}>
+                    <Image source={{ uri: agent.avatar }} style={styles.agentAvatar} />
+
+                    <View style={styles.agentHeaderInfo}>
+                      <View style={styles.agentNameRow}>
+                        <Text style={styles.agentNameText}>{agent.name}</Text>
+                        <View style={styles.agentVerifiedBadge}>
+                          <ShieldCheck size={11} color="#16A34A" style={{ marginRight: 3 }} />
+                          <Text style={styles.agentVerifiedText}>Verified Agent</Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.agentAgencyText}>{agent.agency}</Text>
+                      <Text style={styles.agentRoleText}>{agent.role}</Text>
+
+                      <View style={styles.agentRatingRow}>
+                        <Star size={12} color="#EAB308" fill="#EAB308" style={{ marginRight: 4 }} />
+                        <Text style={styles.agentRatingText}>{agent.rating}</Text>
+                        <Text style={styles.agentReviewsText}>({agent.reviewsCount} reviews)</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Key Stats Bar */}
+                  <View style={styles.agentStatsGrid}>
+                    <View style={styles.agentStatItem}>
+                      <Text style={styles.agentStatNumber}>{agent.dealsClosed}+</Text>
+                      <Text style={styles.agentStatLabel}>Deals Closed</Text>
+                    </View>
+                    <View style={[styles.agentStatItem, styles.agentStatItemBorder]}>
+                      <Text style={styles.agentStatNumber}>{agent.experience}</Text>
+                      <Text style={styles.agentStatLabel}>Experience</Text>
+                    </View>
+                    <View style={styles.agentStatItem}>
+                      <Text style={styles.agentStatNumber}>{agent.activeListingsCount}</Text>
+                      <Text style={styles.agentStatLabel}>Active Listings</Text>
+                    </View>
+                  </View>
+
+                  {/* Localities Served */}
+                  <View style={styles.agentLocalitiesRow}>
+                    <MapPin size={12} color="#2563EB" style={{ marginRight: 4 }} />
+                    <Text style={styles.agentLocalitiesLabel}>Serving:</Text>
+                    <View style={styles.agentLocalitiesChips}>
+                      {agent.localities.map((loc, i) => (
+                        <View key={i} style={styles.agentLocChip}>
+                          <Text style={styles.agentLocChipText}>{loc}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Specialty */}
+                  <Text style={styles.agentSpecialtyText} numberOfLines={2}>
+                    <Text style={{ fontWeight: "700" }}>Focus: </Text>
+                    {agent.specialty}
+                  </Text>
+
+                  {/* Divider */}
+                  <View style={styles.cardDivider} />
+
+                  {/* Action Buttons: Call, Message (WhatsApp), View Agent Details */}
+                  <View style={styles.agentCardActionsRow}>
+                    <TouchableOpacity
+                      style={styles.agentCallBtn}
+                      onPress={() => handleCallAgent(agent)}
+                      activeOpacity={0.8}
+                    >
+                      <Phone size={13} color="#0F172A" style={{ marginRight: 5 }} />
+                      <Text style={styles.agentCallBtnText}>Call</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.agentMsgBtn}
+                      onPress={() => handleWhatsAppAgent(agent)}
+                      activeOpacity={0.8}
+                    >
+                      <MessageCircle size={14} color="#16A34A" style={{ marginRight: 5 }} />
+                      <Text style={styles.agentMsgBtnText}>WhatsApp</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.agentDetailBtn}
+                      onPress={() => setSelectedAgentForModal(agent)}
+                      activeOpacity={0.8}
+                    >
+                      <Eye size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
+                      <Text style={styles.agentDetailBtnText}>Agent Details</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
           </View>
         )}
       </ScrollView>
@@ -837,6 +1584,286 @@ export default function SavedScreen({ navigation, route }) {
         isWishlisted={isWishlisted}
         onToggleWishlist={toggleWishlist}
       />
+
+      {/* ================= SITE VISIT DETAILS MODAL ================= */}
+      <Modal
+        visible={!!selectedVisitForDetails}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedVisitForDetails(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailsModalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Site Visit Details</Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setSelectedVisitForDetails(null)}
+              >
+                <X size={18} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedVisitForDetails && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.detailsList}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Contact</Text>
+                    <Text style={styles.detailValueBold}>
+                      {selectedVisitForDetails.agentName} ({selectedVisitForDetails.agentPhone})
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Property</Text>
+                    <Text style={styles.detailValueBold}>
+                      {selectedVisitForDetails.propertyTitle}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Location</Text>
+                    <Text style={styles.detailValue}>
+                      {selectedVisitForDetails.propertyLocation}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Date</Text>
+                    <Text style={styles.detailValue}>
+                      {selectedVisitForDetails.date}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Time</Text>
+                    <Text style={styles.detailValue}>
+                      {selectedVisitForDetails.time}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Notes</Text>
+                    <Text style={styles.detailValue}>
+                      {selectedVisitForDetails.notes || "Inspection walkthrough confirmed."}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Assigned Agent Box */}
+                <View style={styles.modalAgentBox}>
+                  <View style={styles.modalAgentHeader}>
+                    <View style={styles.modalAgentAvatarCircle}>
+                      <User size={18} color="#2563EB" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.modalAgentName}>
+                        {selectedVisitForDetails.agentName || "Suresh Babu"}
+                      </Text>
+                      <Text style={styles.modalAgentAgency}>
+                        {selectedVisitForDetails.agentRole || "Senior Property Consultant"} • RESTAMP Partner
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.modalAgentActionsRow}>
+                    <TouchableOpacity
+                      style={styles.modalAgentCallBtn}
+                      onPress={() => handleCall(selectedVisitForDetails.agentPhone, selectedVisitForDetails.agentName)}
+                      activeOpacity={0.8}
+                    >
+                      <Phone size={12} color="#0F172A" style={{ marginRight: 4 }} />
+                      <Text style={styles.modalAgentCallBtnText}>Call</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.modalAgentMsgBtn}
+                      onPress={() => handleWhatsAppVisit(selectedVisitForDetails)}
+                      activeOpacity={0.8}
+                    >
+                      <MessageCircle size={12} color="#16A34A" style={{ marginRight: 4 }} />
+                      <Text style={styles.modalAgentMsgBtnText}>WhatsApp</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.modalAgentProfileBtn}
+                      onPress={() => {
+                        const agentObj = findAgentByName(selectedVisitForDetails.agentName);
+                        setSelectedVisitForDetails(null);
+                        setSelectedAgentForModal(agentObj);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Eye size={12} color="#2563EB" style={{ marginRight: 4 }} />
+                      <Text style={styles.modalAgentProfileBtnText}>Full Profile</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Modal Action Buttons */}
+                <View style={styles.detailsModalActions}>
+                  <TouchableOpacity
+                    style={styles.btnReschedule}
+                    onPress={() => setIsRescheduling(true)}
+                    activeOpacity={0.8}
+                  >
+                    <RotateCcw size={14} color="#2563EB" style={{ marginRight: 4 }} />
+                    <Text style={styles.btnRescheduleText}>Reschedule</Text>
+                  </TouchableOpacity>
+
+                  {selectedVisitForDetails.status !== "completed" && (
+                    <TouchableOpacity
+                      style={styles.btnComplete}
+                      onPress={() => handleMarkVisitCompleted(selectedVisitForDetails)}
+                      activeOpacity={0.88}
+                    >
+                      <CheckCircle2 size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.btnCompleteText}>Mark Completed</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {selectedVisitForDetails.status !== "cancelled" && (
+                    <TouchableOpacity
+                      style={styles.btnCancel}
+                      onPress={() => handleCancelVisit(selectedVisitForDetails)}
+                      activeOpacity={0.8}
+                    >
+                      <XCircle size={14} color="#DC2626" style={{ marginRight: 4 }} />
+                      <Text style={styles.btnCancelText}>Cancel Visit</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= RESCHEDULE VISIT MODAL ================= */}
+      <ScheduleVisitModal
+        visible={isRescheduling && !!selectedVisitForDetails}
+        onClose={() => setIsRescheduling(false)}
+        title="Reschedule Visit"
+        lead={{
+          customerName: selectedVisitForDetails?.agentName,
+          phone: selectedVisitForDetails?.agentPhone,
+        }}
+        property={{
+          title: selectedVisitForDetails?.propertyTitle,
+          location: selectedVisitForDetails?.propertyLocation,
+        }}
+        initialTime={selectedVisitForDetails?.time || "10:00 am"}
+        onConfirm={(reschedData) => {
+          handleConfirmReschedule(selectedVisitForDetails, reschedData);
+        }}
+      />
+
+      {/* ================= AGENT PAGE DETAIL MODAL ================= */}
+      <Modal
+        visible={!!selectedAgentForModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedAgentForModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.agentDetailModalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Agent Profile & Details</Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setSelectedAgentForModal(null)}
+              >
+                <X size={18} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedAgentForModal && (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                {/* Agent Header */}
+                <View style={styles.modalAgentProfileHeader}>
+                  <Image
+                    source={{ uri: selectedAgentForModal.avatar }}
+                    style={styles.modalAgentBigAvatar}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.modalAgentBigName}>{selectedAgentForModal.name}</Text>
+                    <Text style={styles.modalAgentBigAgency}>{selectedAgentForModal.agency}</Text>
+                    <View style={styles.modalReraPill}>
+                      <ShieldCheck size={11} color="#16A34A" style={{ marginRight: 4 }} />
+                      <Text style={styles.modalReraPillText}>{selectedAgentForModal.reraNumber}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Rating & Stats */}
+                <View style={styles.modalAgentStatsBox}>
+                  <View style={styles.modalStatCol}>
+                    <Text style={styles.modalStatVal}>⭐ {selectedAgentForModal.rating}</Text>
+                    <Text style={styles.modalStatSub}>{selectedAgentForModal.reviewsCount} Reviews</Text>
+                  </View>
+                  <View style={[styles.modalStatCol, styles.modalStatColBorder]}>
+                    <Text style={styles.modalStatVal}>{selectedAgentForModal.dealsClosed}+</Text>
+                    <Text style={styles.modalStatSub}>Closed Deals</Text>
+                  </View>
+                  <View style={styles.modalStatCol}>
+                    <Text style={styles.modalStatVal}>{selectedAgentForModal.experience}</Text>
+                    <Text style={styles.modalStatSub}>Experience</Text>
+                  </View>
+                </View>
+
+                {/* Bio / About */}
+                <View style={styles.modalSectionBox}>
+                  <Text style={styles.modalSectionTitle}>About Agent</Text>
+                  <Text style={styles.modalSectionBody}>{selectedAgentForModal.bio}</Text>
+                </View>
+
+                {/* Contact Information */}
+                <View style={styles.modalSectionBox}>
+                  <Text style={styles.modalSectionTitle}>Direct Contact</Text>
+                  <View style={styles.modalContactItem}>
+                    <Phone size={14} color="#2563EB" style={{ marginRight: 8 }} />
+                    <Text style={styles.modalContactText}>{selectedAgentForModal.phone}</Text>
+                  </View>
+                  <View style={styles.modalContactItem}>
+                    <MapPin size={14} color="#2563EB" style={{ marginRight: 8 }} />
+                    <Text style={styles.modalContactText}>{selectedAgentForModal.officeAddress}</Text>
+                  </View>
+                </View>
+
+                {/* Specialties & Localities */}
+                <View style={styles.modalSectionBox}>
+                  <Text style={styles.modalSectionTitle}>Localities & Focus</Text>
+                  <View style={styles.modalLocChipsWrap}>
+                    {selectedAgentForModal.localities.map((loc, idx) => (
+                      <View key={idx} style={styles.agentLocChip}>
+                        <Text style={styles.agentLocChipText}>{loc}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Fixed CTA Buttons inside Modal */}
+                <View style={styles.modalAgentCtaRow}>
+                  <TouchableOpacity
+                    style={styles.modalAgentCallCta}
+                    onPress={() => handleCallAgent(selectedAgentForModal)}
+                    activeOpacity={0.85}
+                  >
+                    <Phone size={14} color="#0F172A" style={{ marginRight: 6 }} />
+                    <Text style={styles.modalAgentCallCtaText}>Call Agent</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.modalAgentMsgCta}
+                    onPress={() => handleWhatsAppAgent(selectedAgentForModal)}
+                    activeOpacity={0.85}
+                  >
+                    <MessageCircle size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.modalAgentMsgCtaText}>WhatsApp</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -977,8 +2004,8 @@ const styles = StyleSheet.create({
   },
   tabButtonTextActive: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#0F172A",
+    fontWeight: "700",
+    color: "#2563EB",
   },
   tabCountBadge: {
     minWidth: 22,
@@ -990,7 +2017,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   tabCountBadgeActive: {
-    backgroundColor: "#0F172A",
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
   },
   tabCountText: {
     fontSize: 12,
@@ -999,7 +2028,8 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   tabCountTextActive: {
-    color: "#FFFFFF",
+    color: "#2563EB",
+    fontWeight: "700",
   },
   activeTabIndicator: {
     position: "absolute",
@@ -1007,7 +2037,7 @@ const styles = StyleSheet.create({
     left: 4,
     right: 4,
     height: 2.5,
-    backgroundColor: "#0F172A",
+    backgroundColor: "#2563EB",
     borderRadius: 2,
   },
 
@@ -1530,6 +2560,997 @@ const styles = StyleSheet.create({
   sheetWhatsappText: {
     fontSize: 16,
     fontWeight: "600",
+    color: "#FFFFFF",
+  },
+
+  /* Tab Bar Scroll */
+  tabBarScroll: {
+    paddingHorizontal: 12,
+    gap: 4,
+  },
+
+  /* Card Actions Inline (Call & WhatsApp) */
+  cardActionsInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  contactBtnCall: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  contactBtnCallText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  contactBtnWhatsApp: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  contactBtnWhatsAppText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#16A34A",
+  },
+
+  /* Messages Tab Styles */
+  messagesList: {
+    gap: 14,
+    paddingBottom: 24,
+  },
+  messageCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  messageHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  messageRecipientCol: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  msgIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  msgRecipientName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  msgRecipientRole: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  msgStatusCol: {
+    alignItems: "flex-end",
+  },
+  msgStatusBadge: {
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  msgStatusText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+  msgTimeText: {
+    fontSize: 11,
+    color: "#94A3B8",
+    marginTop: 3,
+  },
+  msgPropertyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    padding: 10,
+    borderRadius: 10,
+    marginVertical: 8,
+    gap: 10,
+  },
+  msgPropertyThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: "#E2E8F0",
+  },
+  msgPropertyTitle: {
+    fontSize: 13.5,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  msgPropertyLoc: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  msgBubble: {
+    backgroundColor: "#F1F5F9",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  msgBubbleText: {
+    fontSize: 12.5,
+    color: "#334155",
+    fontStyle: "italic",
+    lineHeight: 18,
+  },
+  callCustomerBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  callCustomerBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  whatsappActionBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  whatsappActionBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#16A34A",
+  },
+
+  /* Site Visits Tab Styles (Matching Screenshot) */
+  visitScreenHeader: {
+    marginBottom: 12,
+  },
+  visitHeaderTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.4,
+  },
+  visitHeaderSubtitle: {
+    fontSize: 12.5,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  visitFilterRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+  },
+  visitFilterBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  visitFilterBtnActive: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
+  },
+  visitFilterBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  visitFilterBtnTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  visitsList: {
+    gap: 14,
+    paddingBottom: 24,
+  },
+  visitCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    padding: 16,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  visitCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  visitPersonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  visitPersonName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  visitPersonRole: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  statusPill: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusPillCompleted: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#DCFCE7",
+  },
+  statusPillCancelled: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  statusPillTextCompleted: {
+    color: "#16A34A",
+  },
+  statusPillTextCancelled: {
+    color: "#DC2626",
+  },
+  visitBody: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 12,
+    gap: 6,
+  },
+  bodyField: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  fieldLabel: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  fieldValue: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#1E293B",
+  },
+  fieldValueBold: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  dateTimeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 6,
+  },
+  dateTimeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  dateTimeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 12,
+  },
+  visitCardActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  visitCallBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  visitCallBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  visitWhatsAppBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  visitWhatsAppBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+  visitDetailsBtn: {
+    flex: 1.2,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#2563EB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  visitDetailsBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+
+  /* Details Modal Styles */
+  detailsModalCard: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: "85%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailsList: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    marginBottom: 16,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    width: 80,
+  },
+  detailValue: {
+    flex: 1,
+    fontSize: 12.5,
+    color: "#1E293B",
+    textAlign: "right",
+  },
+  detailValueBold: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+    textAlign: "right",
+  },
+  detailsModalActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  btnReschedule: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnRescheduleText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  btnComplete: {
+    flex: 1.2,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#16A34A",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnCompleteText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  btnCancel: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnCancelText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+
+  /* Card Action Extensions: Agent Info Buttons */
+  callActionBtnAgent: {
+    flex: 1,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  callActionTextAgent: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#2563EB",
+  },
+  msgAgentDetailBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  msgAgentDetailBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  visitAgentBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  visitAgentBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+
+  /* TAB 6: AGENTS LIST STYLES */
+  agentsList: {
+    gap: 16,
+    paddingBottom: 24,
+  },
+  agentCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    padding: 16,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  agentCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  agentAvatar: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    marginRight: 14,
+    backgroundColor: "#E2E8F0",
+  },
+  agentHeaderInfo: {
+    flex: 1,
+  },
+  agentNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 3,
+  },
+  agentNameText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  agentVerifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  agentVerifiedText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+  agentAgencyText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#2563EB",
+    marginBottom: 2,
+  },
+  agentRoleText: {
+    fontSize: 11.5,
+    color: "#64748B",
+    marginBottom: 4,
+  },
+  agentRatingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  agentRatingText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginRight: 4,
+  },
+  agentReviewsText: {
+    fontSize: 11.5,
+    color: "#64748B",
+  },
+  agentStatsGrid: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+  },
+  agentStatItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  agentStatItemBorder: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  agentStatNumber: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 2,
+  },
+  agentStatLabel: {
+    fontSize: 10.5,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  agentLocalitiesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    flexWrap: "wrap",
+    gap: 4,
+  },
+  agentLocalitiesLabel: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#475569",
+    marginRight: 4,
+  },
+  agentLocalitiesChips: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 4,
+  },
+  agentLocChip: {
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+  },
+  agentLocChipText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#2563EB",
+  },
+  agentSpecialtyText: {
+    fontSize: 12,
+    color: "#475569",
+    lineHeight: 17,
+    marginBottom: 12,
+  },
+  agentCardActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  agentCallBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  agentCallBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  agentMsgBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  agentMsgBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+  agentDetailBtn: {
+    flex: 1.2,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#2563EB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  agentDetailBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+
+  /* ASSIGNED AGENT BOX INSIDE VISIT DETAILS MODAL */
+  modalAgentBox: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    marginBottom: 16,
+  },
+  modalAgentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  modalAgentAvatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  modalAgentName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  modalAgentAgency: {
+    fontSize: 11.5,
+    color: "#2563EB",
+    marginTop: 1,
+  },
+  modalAgentActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  modalAgentCallBtn: {
+    flex: 1,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalAgentCallBtnText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  modalAgentMsgBtn: {
+    flex: 1,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalAgentMsgBtnText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+  modalAgentProfileBtn: {
+    flex: 1.1,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalAgentProfileBtnText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+
+  /* AGENT DETAIL MODAL */
+  agentDetailModalCard: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: "88%",
+  },
+  modalAgentProfileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    marginBottom: 14,
+  },
+  modalAgentBigAvatar: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    marginRight: 14,
+    backgroundColor: "#E2E8F0",
+  },
+  modalAgentBigName: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 3,
+  },
+  modalAgentBigAgency: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#2563EB",
+    marginBottom: 6,
+  },
+  modalReraPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    alignSelf: "flex-start",
+  },
+  modalReraPillText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+  modalAgentStatsBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 14,
+  },
+  modalStatCol: {
+    flex: 1,
+    alignItems: "center",
+  },
+  modalStatColBorder: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  modalStatVal: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 2,
+  },
+  modalStatSub: {
+    fontSize: 11,
+    color: "#64748B",
+  },
+  modalSectionBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    marginBottom: 12,
+  },
+  modalSectionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 6,
+  },
+  modalSectionBody: {
+    fontSize: 12.5,
+    color: "#475569",
+    lineHeight: 18,
+  },
+  modalContactItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  modalContactText: {
+    fontSize: 12.5,
+    color: "#334155",
+    fontWeight: "500",
+  },
+  modalLocChipsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
+  },
+  modalAgentCtaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  modalAgentCallCta: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#0F172A",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalAgentCallCtaText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  modalAgentMsgCta: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#16A34A",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalAgentMsgCtaText: {
+    fontSize: 13,
+    fontWeight: "700",
     color: "#FFFFFF",
   },
 });

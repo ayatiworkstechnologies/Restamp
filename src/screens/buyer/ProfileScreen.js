@@ -30,13 +30,17 @@ import {
   LogOut,
   ArrowRight,
   X,
-  Pencil,
   Check,
-} from "lucide-react-native";
+  Crown,
+  Briefcase,
+  Calendar,
+  Sparkles,
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useWishlist } from "../../context/WishlistContext";
 import { useOwner } from "../../context/OwnerContext";
+import { useAgent } from "../../context/AgentContext";
 import { useAuth } from "../../context/AuthContext";
 import { getAuthTokenSync } from "../../api/client";
 import { enterOwnerFlow } from "../../api/users";
@@ -51,11 +55,44 @@ export default function ProfileScreen({ navigation }) {
   const nav = useNavigation() || navigation;
   const { wishlist, wishlistSynced, refreshWishlist } = useWishlist();
   const { subscription } = useOwner();
+  const { agentPlan, hasActivePlan, selectedLocalities } = useAgent();
   const { user: authUser, logout, refreshMe } = useAuth();
   const authForOwnerEntry = { user: authUser, refreshMe };
   const [switchingOwner, setSwitchingOwner] = useState(false);
   // Owner entry is protected (Change 2): guests log in first, then resume.
   const requireAuth = useRequireAuth(nav);
+
+  const hasOwnerPlan = Boolean(
+    subscription?.hasPurchased ||
+    subscription?.planName ||
+    authUser?.role === "OWNER"
+  );
+  const hasAgentPlan = Boolean(
+    hasActivePlan &&
+    (agentPlan?.hasPurchased ||
+      agentPlan?.name ||
+      authUser?.role === "BROKER" ||
+      authUser?.role === "AGENT")
+  );
+
+  const handleSwitchToAgent = () => {
+    nav.navigate("AgentNavigator");
+  };
+
+  const handleManageOwnerPlan = () => {
+    nav.navigate("OwnerPlans");
+  };
+
+  const handleManageAgentPlan = () => {
+    nav.navigate("AgentLocationSelect", {
+      selectedLocalities,
+      plan: agentPlan,
+    });
+  };
+
+  const handleExploreAgentPlans = () => {
+    nav.navigate("AgentPlanConfirm");
+  };
 
   // Real counts + live role, refreshed whenever Profile gains focus.
   // Buyer endpoints (wishlist, enquiries) are only called while the account
@@ -199,18 +236,9 @@ export default function ProfileScreen({ navigation }) {
           <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
 
           <View style={styles.profileInfo}>
-            <TouchableOpacity
-              style={styles.nameRow}
-              onPress={() => {
-                setEditName(userProfile.name);
-                setEditPhone(userProfile.phone);
-                setIsEditing(true);
-              }}
-              activeOpacity={0.7}
-            >
+            <View style={styles.nameRow}>
               <Text style={styles.ownerName}>{userProfile.name}</Text>
-              <Pencil size={15} color="#475569" style={styles.pencilIcon} />
-            </TouchableOpacity>
+            </View>
 
             {userProfile.phone ? (
               <Text style={styles.phoneText}>{userProfile.phone}</Text>
@@ -219,19 +247,12 @@ export default function ProfileScreen({ navigation }) {
             )}
             <Text style={styles.emailText}>{userProfile.email}</Text>
 
-            {/* Role badge reflects the LIVE backend role (never hardcoded):
-                BUYER -> Verified Buyer, OWNER -> Owner Mode. */}
-            {authUser?.role === "OWNER" ? (
+            {authUser?.role === "OWNER" && (
               <View style={styles.verifiedBadge}>
                 <ShieldCheck size={12} color="#16A34A" style={{ marginRight: 4 }} />
                 <Text style={styles.verifiedBadgeText}>Owner Mode</Text>
               </View>
-            ) : authUser?.role === "BUYER" ? (
-              <View style={styles.verifiedBadge}>
-                <ShieldCheck size={12} color="#16A34A" style={{ marginRight: 4 }} />
-                <Text style={styles.verifiedBadgeText}>Verified Buyer</Text>
-              </View>
-            ) : null}
+            )}
           </View>
         </View>
 
@@ -254,6 +275,276 @@ export default function ProfileScreen({ navigation }) {
           </View>
           <ArrowRight size={18} color={COLORS.primary} />
         </TouchableOpacity>
+
+        {/* =========================================================================
+            ACTIVE SUBSCRIPTIONS & MEMBERSHIPS (Owner & Agent)
+            ========================================================================= */}
+        <View style={styles.subscriptionsSection}>
+          <View style={styles.sectionHeadingRow}>
+            <View style={styles.sectionHeadingIcon}>
+              <Crown size={15} color="#2563EB" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionHeadingText}>ACTIVE MEMBERSHIPS & PLANS</Text>
+              <Text style={styles.sectionSubHeadingText}>
+                Purchased subscription details for your account
+              </Text>
+            </View>
+          </View>
+
+          {/* 1. OWNER SUBSCRIPTION CARD */}
+          {hasOwnerPlan ? (
+            <View style={styles.planCardOwner}>
+              {/* Header: Title, Category & Active Status Pill */}
+              <View style={styles.planCardHeader}>
+                <View style={styles.planCardIconWrapOwner}>
+                  <Crown size={20} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.planTitle}>
+                    {subscription?.planName || subscription?.name || "Owner Pro Plan"}
+                  </Text>
+                  <Text style={styles.planSubtitle}>Owner Partner Membership</Text>
+                </View>
+                <View style={styles.activeStatusPill}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.activeStatusText}>ACTIVE</Text>
+                </View>
+              </View>
+
+              {/* Stats Box (Grid of 3) */}
+              <View style={styles.statsGrid}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>VALIDITY</Text>
+                  <Text style={styles.statValue}>
+                    {subscription?.validity || "90 Days"}
+                  </Text>
+                </View>
+                <View style={[styles.statBox, styles.statBoxBorder]}>
+                  <Text style={styles.statLabel}>LISTINGS QUOTA</Text>
+                  <Text style={styles.statValue}>
+                    {subscription?.usedListings || 0} / {subscription?.listingLimit || 5} Used
+                  </Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>AMOUNT PAID</Text>
+                  <Text style={[styles.statValue, { color: "#16A34A" }]}>
+                    {subscription?.amountPaid || subscription?.price || "₹2,999"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Extra details row: Transaction ref & Features */}
+              <View style={styles.metaInfoRow}>
+                <View style={styles.metaItem}>
+                  <ShieldCheck size={13} color="#16A34A" style={{ marginRight: 4 }} />
+                  <Text style={styles.metaItemText}>
+                    0% Brokerage • Direct Inquiries Active
+                  </Text>
+                </View>
+                <Text style={styles.metaItemRef}>
+                  {subscription?.txnId || "TXN-2026-98124"}
+                </Text>
+              </View>
+
+              {subscription?.expiryDate ? (
+                <View style={styles.expiryNoticeRow}>
+                  <Calendar size={12} color="#64748B" style={{ marginRight: 5 }} />
+                  <Text style={styles.expiryNoticeText}>
+                    Expires on {subscription.expiryDate} ({subscription?.daysRemaining || 90} days left)
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Action Buttons Row */}
+              <View style={styles.planActionsRow}>
+                <TouchableOpacity
+                  style={styles.primaryPlanBtn}
+                  onPress={handleSwitchToOwner}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.primaryPlanBtnText}>Open Owner Dashboard</Text>
+                  <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.secondaryPlanBtn}
+                  onPress={handleManageOwnerPlan}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.secondaryPlanBtnText}>Renew / Upgrade</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
+          {/* 2. AGENT SUBSCRIPTION CARD */}
+          {hasAgentPlan ? (
+            <View style={styles.planCardAgent}>
+              {/* Header: Title, Category & Active Status Pill */}
+              <View style={styles.planCardHeader}>
+                <View style={styles.planCardIconWrapAgent}>
+                  <Briefcase size={20} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.planTitle}>
+                    {agentPlan?.name || "Agent Pro Plan"}
+                  </Text>
+                  <Text style={styles.planSubtitle}>Certified Agent Partner</Text>
+                </View>
+                <View style={styles.activeStatusPill}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.activeStatusText}>ACTIVE</Text>
+                </View>
+              </View>
+
+              {/* Stats Box (Grid of 3) */}
+              <View style={styles.statsGrid}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>VALIDITY</Text>
+                  <Text style={styles.statValue}>
+                    {agentPlan?.validity || "30 Days"}
+                  </Text>
+                </View>
+                <View style={[styles.statBox, styles.statBoxBorder]}>
+                  <Text style={styles.statLabel}>LOCATIONS</Text>
+                  <Text style={styles.statValue}>
+                    {selectedLocalities?.length || 10} Areas
+                  </Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>AMOUNT PAID</Text>
+                  <Text style={[styles.statValue, { color: "#16A34A" }]}>
+                    {agentPlan?.amountPaid || agentPlan?.price || "₹6,999"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Covered Localities preview */}
+              <View style={styles.localitiesPreviewWrap}>
+                <Text style={styles.localitiesPreviewTitle}>Covered Localities:</Text>
+                <View style={styles.localitiesChipsRow}>
+                  {(selectedLocalities || []).slice(0, 4).map((loc, idx) => (
+                    <View key={idx} style={styles.localityChip}>
+                      <MapPin size={10} color="#2563EB" style={{ marginRight: 3 }} />
+                      <Text style={styles.localityChipText}>{loc}</Text>
+                    </View>
+                  ))}
+                  {(selectedLocalities?.length || 0) > 4 ? (
+                    <View style={styles.localityMoreChip}>
+                      <Text style={styles.localityMoreChipText}>
+                        +{(selectedLocalities?.length || 0) - 4} more
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+
+              {/* Extra details row: Invoice ref & Features */}
+              <View style={styles.metaInfoRow}>
+                <View style={styles.metaItem}>
+                  <ShieldCheck size={13} color="#16A34A" style={{ marginRight: 4 }} />
+                  <Text style={styles.metaItemText}>
+                    Verified Broker • Exclusive Buyer Leads
+                  </Text>
+                </View>
+                <Text style={styles.metaItemRef}>
+                  {agentPlan?.invoiceNumber || "INV-2026-AGT-8821"}
+                </Text>
+              </View>
+
+              {agentPlan?.expiryDate ? (
+                <View style={styles.expiryNoticeRow}>
+                  <Calendar size={12} color="#64748B" style={{ marginRight: 5 }} />
+                  <Text style={styles.expiryNoticeText}>
+                    Expires on {agentPlan.expiryDate} ({agentPlan?.daysRemaining || 30} days left)
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Action Buttons Row */}
+              <View style={styles.planActionsRow}>
+                <TouchableOpacity
+                  style={styles.primaryPlanBtn}
+                  onPress={handleSwitchToAgent}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.primaryPlanBtnText}>Open Agent Dashboard</Text>
+                  <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.secondaryPlanBtn}
+                  onPress={handleManageAgentPlan}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.secondaryPlanBtnText}>Manage Areas</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
+          {/* 3. PROMO CARD IF MISSING A PLAN */}
+          {!hasOwnerPlan && !hasAgentPlan ? (
+            <View style={styles.emptyPlanCard}>
+              <View style={styles.emptyPlanIconWrap}>
+                <Sparkles size={22} color="#2563EB" />
+              </View>
+              <Text style={styles.emptyPlanTitle}>Become an Owner or Agent Partner</Text>
+              <Text style={styles.emptyPlanSubtitle}>
+                Post properties with zero brokerage or access high-intent buyer leads across Chennai.
+              </Text>
+              <View style={styles.emptyPlanButtonsRow}>
+                <TouchableOpacity
+                  style={styles.emptyOwnerBtn}
+                  onPress={handleManageOwnerPlan}
+                  activeOpacity={0.85}
+                >
+                  <Crown size={14} color="#B45309" style={{ marginRight: 6 }} />
+                  <Text style={styles.emptyOwnerBtnText}>Owner Plans (from ₹0)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.emptyAgentBtn}
+                  onPress={handleExploreAgentPlans}
+                  activeOpacity={0.85}
+                >
+                  <Briefcase size={14} color="#4338CA" style={{ marginRight: 6 }} />
+                  <Text style={styles.emptyAgentBtnText}>Agent Plans (from ₹2,499)</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : hasOwnerPlan && !hasAgentPlan ? (
+            <TouchableOpacity
+              style={styles.addOtherPlanRow}
+              onPress={handleExploreAgentPlans}
+              activeOpacity={0.8}
+            >
+              <View style={styles.addOtherLeft}>
+                <Briefcase size={16} color="#2563EB" style={{ marginRight: 10 }} />
+                <View>
+                  <Text style={styles.addOtherTitle}>Add Agent Membership</Text>
+                  <Text style={styles.addOtherSub}>Claim buyer leads in your top Chennai localities</Text>
+                </View>
+              </View>
+              <ArrowRight size={16} color="#2563EB" />
+            </TouchableOpacity>
+          ) : hasAgentPlan && !hasOwnerPlan ? (
+            <TouchableOpacity
+              style={styles.addOtherPlanRow}
+              onPress={handleManageOwnerPlan}
+              activeOpacity={0.8}
+            >
+              <View style={styles.addOtherLeft}>
+                <Crown size={16} color="#D97706" style={{ marginRight: 10 }} />
+                <View>
+                  <Text style={styles.addOtherTitle}>Add Owner Membership</Text>
+                  <Text style={styles.addOtherSub}>Post your properties with 0% brokerage</Text>
+                </View>
+              </View>
+              <ArrowRight size={16} color="#D97706" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
         {/* 1. ACCOUNT */}
         <View style={styles.menuGroup}>
@@ -899,5 +1190,371 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#FFFFFF",
+  },
+  // Subscriptions & Memberships Section Styles
+  subscriptionsSection: {
+    marginBottom: 20,
+  },
+  sectionHeadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  sectionHeadingIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+  sectionHeadingText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#1E293B",
+    letterSpacing: 0.5,
+  },
+  sectionSubHeadingText: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  planCardOwner: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#FDE68A",
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#D97706",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  planCardAgent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#BFDBFE",
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  planCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  planCardIconWrapOwner: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  planCardIconWrapAgent: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  planTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: -0.3,
+  },
+  planSubtitle: {
+    fontSize: 11.5,
+    color: "#64748B",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  activeStatusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#16A34A",
+    marginRight: 5,
+  },
+  activeStatusText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#15803D",
+    letterSpacing: 0.4,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    marginBottom: 12,
+  },
+  statBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  statBoxBorder: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  statLabel: {
+    fontSize: 9.5,
+    fontWeight: "600",
+    color: "#64748B",
+    marginBottom: 3,
+    letterSpacing: 0.4,
+  },
+  statValue: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0F172A",
+    textAlign: "center",
+  },
+  metaInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  metaItemText: {
+    fontSize: 11.5,
+    color: "#15803D",
+    fontWeight: "500",
+  },
+  metaItemRef: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  expiryNoticeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  expiryNoticeText: {
+    fontSize: 11,
+    color: "#475569",
+    fontWeight: "400",
+  },
+  planActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  primaryPlanBtn: {
+    flex: 1.4,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#2563EB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  primaryPlanBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  secondaryPlanBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.2,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 8,
+  },
+  secondaryPlanBtnText: {
+    color: "#334155",
+    fontSize: 12.5,
+    fontWeight: "600",
+  },
+  localitiesPreviewWrap: {
+    marginBottom: 10,
+  },
+  localitiesPreviewTitle: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#475569",
+    marginBottom: 6,
+  },
+  localitiesChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  localityChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  localityChipText: {
+    fontSize: 11,
+    color: "#2563EB",
+    fontWeight: "500",
+  },
+  localityMoreChip: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  localityMoreChipText: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  emptyPlanCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#BFDBFE",
+    padding: 18,
+    alignItems: "center",
+    marginBottom: 12,
+    backgroundColor: "#F8FAFC",
+  },
+  emptyPlanIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  emptyPlanTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  emptyPlanSubtitle: {
+    fontSize: 12,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 17,
+    marginBottom: 14,
+    paddingHorizontal: 12,
+  },
+  emptyPlanButtonsRow: {
+    flexDirection: "row",
+    gap: 8,
+    width: "100%",
+  },
+  emptyOwnerBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 12,
+    height: 42,
+    paddingHorizontal: 8,
+  },
+  emptyOwnerBtnText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#B45309",
+  },
+  emptyAgentBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF2FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 12,
+    height: 42,
+    paddingHorizontal: 8,
+  },
+  emptyAgentBtnText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#4338CA",
+  },
+  addOtherPlanRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  addOtherLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 10,
+  },
+  addOtherTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  addOtherSub: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
   },
 });

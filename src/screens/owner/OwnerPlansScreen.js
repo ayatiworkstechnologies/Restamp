@@ -13,7 +13,7 @@ import {
   Check,
   ArrowLeft,
   ShieldCheck,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import { useOwner } from "../../context/OwnerContext";
 
 /* Compact 3-Tier Owner Plans (Matching MenuScreen design) */
@@ -294,7 +294,7 @@ export default function OwnerPlansScreen({ navigation }) {
 
         {/* Assurance Box */}
         <View style={styles.assuranceBox}>
-          <ShieldCheck size={16} color="#059669" style={{ marginRight: 8 }} />
+          <ShieldCheck size={16} color="#16A34A" style={{ marginRight: 8 }} />
           <Text style={styles.assuranceText}>
             100% money-back guarantee if you don't receive buyer inquiries in 30 days.
           </Text>

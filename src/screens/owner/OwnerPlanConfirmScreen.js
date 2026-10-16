@@ -19,7 +19,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   Zap,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 
 export default function OwnerPlanConfirmScreen({ route, navigation }) {
@@ -184,7 +184,7 @@ export default function OwnerPlanConfirmScreen({ route, navigation }) {
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Promo-code</Text>
-            <Text style={[styles.summaryVal, { color: discount > 0 ? "#059669" : "#111111" }]}>
+            <Text style={[styles.summaryVal, { color: discount > 0 ? "#16A34A" : "#111111" }]}>
               {discount > 0 ? `-₹${discount.toFixed(2)}` : "₹0.00"}
             </Text>
           </View>
@@ -214,7 +214,7 @@ export default function OwnerPlanConfirmScreen({ route, navigation }) {
 
         {/* Assurance Box */}
         <View style={styles.assuranceBox}>
-          <ShieldCheck size={16} color="#059669" style={{ marginRight: 8 }} />
+          <ShieldCheck size={16} color="#16A34A" style={{ marginRight: 8 }} />
           <Text style={styles.assuranceText}>
             100% money-back guarantee if you don't receive buyer inquiries in 30 days.
           </Text>
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   },
   promoSuccessText: {
     fontSize: 11,
-    color: "#059669",
+    color: "#16A34A",
     fontWeight: "500",
     marginTop: 8,
     marginLeft: 28,

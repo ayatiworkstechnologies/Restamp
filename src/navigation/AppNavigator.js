@@ -3,7 +3,13 @@ import { Platform, DeviceEventEmitter } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Home, Search, Clock, Compass, Menu as MenuIcon, Heart, User } from "lucide-react-native";
+import {
+  HugeHome,
+  HugeSearch,
+  HugeClock,
+  HugeUser,
+  HugeMenu,
+} from "../components/common/HugeIcon";
 
 import HomeScreen from "../screens/buyer/HomeScreen";
 import SearchScreen from "../screens/buyer/SearchScreen";
@@ -39,27 +45,27 @@ const Stack = createNativeStackNavigator();
 const tabConfig = {
   Home: {
     label: "Home",
-    Icon: Home,
+    Icon: HugeHome,
   },
   Search: {
     label: "Search",
-    Icon: Search,
+    Icon: HugeSearch,
   },
   Activity: {
     label: "Activity",
-    Icon: Clock,
+    Icon: HugeClock,
   },
   Saved: {
     label: "Activity",
-    Icon: Clock,
+    Icon: HugeClock,
   },
   Profile: {
     label: "Profile",
-    Icon: User,
+    Icon: HugeUser,
   },
   Menu: {
     label: "Menu",
-    Icon: MenuIcon,
+    Icon: HugeMenu,
   },
 };
 

@@ -2,12 +2,12 @@ import React from "react";
 import { Platform } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import {
-  LayoutDashboard,
-  Building2,
-  Users,
-  CalendarDays,
-  User,
-} from "lucide-react-native";
+  HugeDashboard,
+  HugeBuilding,
+  HugeUsers,
+  HugeCalendar,
+  HugeUser,
+} from "../components/common/HugeIcon";
 
 import AgentDashboardScreen from "../screens/agent/AgentDashboardScreen";
 import AgentPropertiesScreen from "../screens/agent/AgentPropertiesScreen";
@@ -20,23 +20,23 @@ const Tab = createBottomTabNavigator();
 const agentTabConfig = {
   Dashboard: {
     label: "Dashboard",
-    Icon: LayoutDashboard,
+    Icon: HugeDashboard,
   },
   Properties: {
     label: "Properties",
-    Icon: Building2,
+    Icon: HugeBuilding,
   },
   Leads: {
     label: "Leads",
-    Icon: Users,
+    Icon: HugeUsers,
   },
   Visits: {
     label: "Visits",
-    Icon: CalendarDays,
+    Icon: HugeCalendar,
   },
   Profile: {
     label: "Profile",
-    Icon: User,
+    Icon: HugeUser,
   },
 };
 

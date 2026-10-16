@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from "react-native";
-import { Camera, Plus, Trash2, Star, Check } from "lucide-react-native";
+import { Camera, Plus, Trash2, Star, Check } from "../common/HugeIcon";
 import COLORS from "../../constants/colors";
 
 export default function ImageUploadCard({

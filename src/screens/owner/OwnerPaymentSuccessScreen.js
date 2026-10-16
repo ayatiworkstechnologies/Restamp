@@ -16,10 +16,12 @@ import {
   Check,
   ShieldCheck,
   Zap,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
+import { useOwner } from "../../context/OwnerContext";
 
 export default function OwnerPaymentSuccessScreen({ route, navigation }) {
+  const { subscription, activateSubscription } = useOwner();
   const planName = route?.params?.planName || "Owner Pro Plan";
   const planValidity = route?.params?.planValidity || "3 Months";
   const listingLimit = route?.params?.listingLimit || "Up to 5 Active Listings";
@@ -39,6 +41,31 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
       routes: [{ name: "OwnerNavigator" }],
     });
   };
+
+  const handleGoToProfile = () => {
+    if (redirectTimerRef.current) {
+      clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = null;
+    }
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "MainTabs", params: { screen: "Profile" } }],
+    });
+  };
+
+  useEffect(() => {
+    // Ensure subscription is activated with these details
+    if (!subscription?.hasPurchased || subscription?.planName !== planName) {
+      activateSubscription({
+        name: planName,
+        planName,
+        validity: planValidity,
+        listingLimit: parseInt(String(listingLimit).replace(/[^0-9]/g, ""), 10) || 5,
+        price: amountPaid,
+        amountPaid,
+      });
+    }
+  }, []);
 
   useEffect(() => {
     Animated.spring(scaleAnim, {
@@ -174,7 +201,7 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* BOTTOM FIXED CTA: Sleek Rounded Pill "Go to Owner Dashboard" */}
+      {/* BOTTOM FIXED CTA: Go to Dashboard + View Details in Profile */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.ctaButton}
@@ -182,6 +209,14 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
           activeOpacity={0.88}
         >
           <Text style={styles.ctaButtonText}>Go to Owner Dashboard</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.secondaryProfileBtn}
+          onPress={handleGoToProfile}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.secondaryProfileBtnText}>View Details in Profile</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -368,23 +403,38 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 22,
     backgroundColor: "#FFFFFF",
+    gap: 10,
   },
   ctaButton: {
-    height: 54,
-    borderRadius: 27,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: "#2563EB",
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowRadius: 8,
+    elevation: 3,
   },
   ctaButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "500",
+    fontSize: 15.5,
+    fontWeight: "600",
     letterSpacing: 0.2,
+  },
+  secondaryProfileBtn: {
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  secondaryProfileBtnText: {
+    color: "#334155",
+    fontSize: 14.5,
+    fontWeight: "600",
   },
 });

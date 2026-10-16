@@ -36,7 +36,7 @@ import {
   X,
   ChevronDown,
   SlidersHorizontal,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import TYPOGRAPHY from "../../constants/typography";
 import {
@@ -62,6 +62,10 @@ const CARD_WIDTH = width * 0.78;
 const REC_CARD_WIDTH = Math.min(170, Math.max(130, Math.round((width - 40) / 2.45)));
 const PROJECT_CARD_WIDTH = Math.min(320, width * 0.84);
 const DEMAND_CARD_WIDTH = Math.min(270, width * 0.72);
+
+// FEATURE FLAGS (Set to true to re-enable sections in future)
+const SHOW_NEWLY_LAUNCHED_PROJECTS = false;
+const SHOW_DEMAND_IN_CHENNAI = false;
 
 // MANUAL BANNER HEIGHT CONTROL (Change this value to adjust the banner height)
 const POST_PROPERTY_BANNER_HEIGHT = 130;
@@ -708,7 +712,8 @@ export default function HomeScreen({ navigation }) {
                 <View style={styles.recommendedImageContainer}>
                   <SafeImage source={{ uri: property.image }} style={styles.recommendedImage} />
                   <View style={styles.verifiedGreenBadge}>
-                    <Text style={styles.verifiedGreenBadgeText}>verified</Text>
+                    <CheckCircle2 size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
+                    <Text style={styles.verifiedGreenBadgeText}>Verified</Text>
                   </View>
                   <TouchableOpacity
                     style={styles.floatingHeartBtn}
@@ -721,8 +726,8 @@ export default function HomeScreen({ navigation }) {
                   >
                     <Heart
                       size={20}
-                      color={saved ? "#FF0000" : "#FFFFFF"}
-                      fill={saved ? "#FF0000" : "rgba(0,0,0,0.3)"}
+                      color={saved ? "#DC2626" : "#FFFFFF"}
+                      fill={saved ? "#DC2626" : "rgba(0,0,0,0.3)"}
                     />
                   </TouchableOpacity>
                 </View>
@@ -780,8 +785,8 @@ export default function HomeScreen({ navigation }) {
                   <SafeImage source={{ uri: property.image }} style={styles.cardImage} />
                   <View style={styles.badgeRow}>
                     <View style={styles.badgeVerified}>
-                      <CheckCircle2 size={12} color="#FFFFFF" style={{ marginRight: 3 }} />
-                      <Text style={styles.badgeTextWhite}>{property.badge}</Text>
+                      <CheckCircle2 size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.badgeTextWhite}>{property.badge || "Verified"}</Text>
                     </View>
                   </View>
                   <TouchableOpacity
@@ -795,8 +800,8 @@ export default function HomeScreen({ navigation }) {
                   >
                     <Heart
                       size={20}
-                      color={saved ? "#FF0000" : "#FFFFFF"}
-                      fill={saved ? "#FF0000" : "rgba(0,0,0,0.3)"}
+                      color={saved ? "#DC2626" : "#FFFFFF"}
+                      fill={saved ? "#DC2626" : "rgba(0,0,0,0.3)"}
                     />
                   </TouchableOpacity>
                 </View>
@@ -873,8 +878,8 @@ export default function HomeScreen({ navigation }) {
                   >
                     <Heart
                       size={20}
-                      color={saved ? "#FF0000" : "#FFFFFF"}
-                      fill={saved ? "#FF0000" : "rgba(0,0,0,0.3)"}
+                      color={saved ? "#DC2626" : "#FFFFFF"}
+                      fill={saved ? "#DC2626" : "rgba(0,0,0,0.3)"}
                     />
                   </TouchableOpacity>
                 </View>
@@ -905,184 +910,179 @@ export default function HomeScreen({ navigation }) {
         ) : null}
 
         {/* ================= NEWLY LAUNCHED PROJECTS (SECTION 4) ================= */}
-        <View style={styles.projectSectionHeader}>
-          <View style={styles.projectHeaderBadge}>
-            <Sparkles size={18} color="#D97706" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text style={styles.projectSectionTitle}>Newly launched projects</Text>
-              <View style={styles.sampleTag}>
-                <Text style={styles.sampleTagText}>Sample</Text>
+        {SHOW_NEWLY_LAUNCHED_PROJECTS && (
+          <>
+            <View style={styles.projectSectionHeader}>
+              <View style={styles.projectHeaderBadge}>
+                <Sparkles size={18} color="#D97706" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.projectSectionTitle}>Newly launched projects</Text>
+                <Text style={styles.projectSectionSubtitle}>
+                  Best prices • Unit of choice • Easy payment plans
+                </Text>
               </View>
             </View>
-            <Text style={styles.projectSectionSubtitle}>
-              Best prices • Unit of choice • Easy payment plans
-            </Text>
-          </View>
-        </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.projectCardList}
-          decelerationRate="fast"
-          snapToInterval={PROJECT_CARD_WIDTH + 14}
-        >
-          {NEWLY_LAUNCHED_PROJECTS.map((proj) => {
-            const isRevealed = revealedProjectPhone === proj.id;
-            return (
-              <View key={proj.id} style={styles.newProjectCard}>
-                {/* Top Warm Banner */}
-                <View style={styles.projectBanner}>
-                  <Text style={styles.projectBannerText}>{proj.tag}</Text>
-                </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.projectCardList}
+              decelerationRate="fast"
+              snapToInterval={PROJECT_CARD_WIDTH + 14}
+            >
+              {NEWLY_LAUNCHED_PROJECTS.map((proj) => {
+                const isRevealed = revealedProjectPhone === proj.id;
+                return (
+                  <View key={proj.id} style={styles.newProjectCard}>
+                    {/* Top Warm Banner */}
+                    <View style={styles.projectBanner}>
+                      <Text style={styles.projectBannerText}>{proj.tag}</Text>
+                    </View>
 
-                {/* Card Main Body */}
-                <View style={styles.projectCardContent}>
-                  {/* Left: Round Project Image with RERA Badge */}
-                  <View style={styles.projectThumbWrapper}>
-                    <SafeImage source={{ uri: proj.image }} style={styles.projectThumb} />
-                    <View style={styles.reraBadge}>
-                      <Check size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
-                      <Text style={styles.reraText}>{proj.rera}</Text>
+                    {/* Card Main Body */}
+                    <View style={styles.projectCardContent}>
+                      {/* Left: Round Project Image with RERA Badge */}
+                      <View style={styles.projectThumbWrapper}>
+                        <SafeImage source={{ uri: proj.image }} style={styles.projectThumb} />
+                        <View style={styles.reraBadge}>
+                          <Check size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
+                          <Text style={styles.reraText}>{proj.rera}</Text>
+                        </View>
+                      </View>
+
+                      {/* Right: Info */}
+                      <View style={styles.projectInfoCol}>
+                        <Text style={styles.projectTitle} numberOfLines={1}>
+                          {proj.title}
+                        </Text>
+                        <Text style={styles.projectLocality} numberOfLines={1}>
+                          {proj.locality}
+                        </Text>
+                        <Text style={styles.projectPrice}>
+                          {proj.priceRange} <Text style={styles.projectTypeDivider}>|</Text> {proj.type}
+                        </Text>
+                        <View style={styles.growthRow}>
+                          <TrendingUp size={11} color="#16A34A" style={{ marginRight: 2 }} />
+                          <Text style={styles.growthText}>{proj.growth.replace("▲ ", "")}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Bottom Action Strip */}
+                    <View style={styles.projectBottomStrip}>
+                      <View style={styles.zeroBrokerageRow}>
+                        <Tag size={14} color={COLORS.primary} style={{ marginRight: 6 }} />
+                        <Text style={styles.zeroBrokerageText}>
+                          Get preferred options{"\n"}@zero brokerage
+                        </Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.viewNumberBtn}
+                        activeOpacity={0.85}
+                        onPress={() => {
+                          setRevealedProjectPhone(isRevealed ? null : proj.id);
+                        }}
+                      >
+                        <Text style={styles.viewNumberBtnText}>
+                          {isRevealed ? proj.phone : "View number"}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
+                );
+              })}
+            </ScrollView>
+          </>
+        )}
 
-                  {/* Right: Info */}
-                  <View style={styles.projectInfoCol}>
-                    <Text style={styles.projectTitle} numberOfLines={1}>
-                      {proj.title}
-                    </Text>
-                    <Text style={styles.projectLocality} numberOfLines={1}>
-                      {proj.locality}
-                    </Text>
-                    <Text style={styles.projectPrice}>
-                      {proj.priceRange} <Text style={styles.projectTypeDivider}>|</Text> {proj.type}
-                    </Text>
-                    <View style={styles.growthRow}>
-                      <TrendingUp size={11} color="#16A34A" style={{ marginRight: 2 }} />
-                      <Text style={styles.growthText}>{proj.growth.replace("▲ ", "")}</Text>
-                    </View>
-                  </View>
+        {/* ================= DEMAND IN CHENNAI (SECTION 5) ================= */}
+        {SHOW_DEMAND_IN_CHENNAI && (
+          <>
+            <View style={styles.demandSectionHeader}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text style={styles.sectionTitle}>Demand in Chennai</Text>
+                  <TouchableOpacity activeOpacity={0.7} style={{ marginLeft: 6 }}>
+                    <Info size={18} color="#64748B" />
+                  </TouchableOpacity>
                 </View>
+                <Text style={styles.demandSubtitle}>
+                  Where are buyers searching in Chennai
+                </Text>
+              </View>
+            </View>
 
-                {/* Bottom Action Strip */}
-                <View style={styles.projectBottomStrip}>
-                  <View style={styles.zeroBrokerageRow}>
-                    <Tag size={14} color={COLORS.primary} style={{ marginRight: 6 }} />
-                    <Text style={styles.zeroBrokerageText}>
-                      Get preferred options{"\n"}@zero brokerage
+            {/* Region Underline Tabs */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.demandTabsContainer}
+            >
+              {["Chennai South", "Chennai Central", "Chennai North", "Chennai West"].map((region) => {
+                const isSelected = demandRegion === region;
+                return (
+                  <TouchableOpacity
+                    key={region}
+                    activeOpacity={0.8}
+                    onPress={() => setDemandRegion(region)}
+                    style={styles.demandTabItem}
+                  >
+                    <Text style={[styles.demandTabText, isSelected && styles.demandTabTextActive]}>
+                      {region}
                     </Text>
+                    {isSelected && <View style={styles.demandTabIndicator} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Demand Insight Cards */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.demandCardsList}
+              decelerationRate="fast"
+              snapToInterval={DEMAND_CARD_WIDTH + 14}
+            >
+              {(DEMAND_DATA[demandRegion] || DEMAND_DATA["Chennai South"]).map((item) => (
+                <View key={item.id} style={styles.demandCard}>
+                  <Text style={styles.demandCategoryTitle}>{item.category}</Text>
+                  <Text style={styles.demandCategorySubtitle}>{item.subtitle}</Text>
+
+                  <View style={styles.demandRankList}>
+                    {item.localities.map((loc) => (
+                      <View key={loc.name} style={styles.demandRankItem}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.demandRankName}>
+                            <Text style={styles.demandRankNum}>{loc.rank} </Text>
+                            <Text style={styles.demandLocName}>{loc.name}</Text>
+                          </Text>
+                          <View style={[styles.demandProgressBar, { width: loc.barWidth }]} />
+                        </View>
+                        <Text style={styles.demandSearchPercent}>{loc.percentage}</Text>
+                      </View>
+                    ))}
                   </View>
 
                   <TouchableOpacity
-                    style={styles.viewNumberBtn}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      setRevealedProjectPhone(isRevealed ? null : proj.id);
-                    }}
+                    activeOpacity={0.7}
+                    style={styles.viewMoreLocalitiesBtn}
+                    onPress={() => navigation.navigate("Search")}
                   >
-                    <Text style={styles.viewNumberBtnText}>
-                      {isRevealed ? proj.phone : "View number"}
-                    </Text>
+                    <Text style={styles.viewMoreLocalitiesText}>View more localities</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
-            );
-          })}
-        </ScrollView>
-
-        {/* ================= DEMAND IN CHENNAI (SECTION 5) ================= */}
-        <View style={styles.demandSectionHeader}>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text style={styles.sectionTitle}>Demand in Chennai</Text>
-              <TouchableOpacity activeOpacity={0.7} style={{ marginLeft: 6 }}>
-                <Info size={18} color="#64748B" />
-              </TouchableOpacity>
-              <View style={styles.sampleTag}>
-                <Text style={styles.sampleTagText}>Sample</Text>
-              </View>
-            </View>
-            <Text style={styles.demandSubtitle}>
-              Where are buyers searching in Chennai
-            </Text>
-          </View>
-        </View>
-
-        {/* Region Underline Tabs */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.demandTabsContainer}
-        >
-          {["Chennai South", "Chennai Central", "Chennai North", "Chennai West"].map((region) => {
-            const isSelected = demandRegion === region;
-            return (
-              <TouchableOpacity
-                key={region}
-                activeOpacity={0.8}
-                onPress={() => setDemandRegion(region)}
-                style={styles.demandTabItem}
-              >
-                <Text style={[styles.demandTabText, isSelected && styles.demandTabTextActive]}>
-                  {region}
-                </Text>
-                {isSelected && <View style={styles.demandTabIndicator} />}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* Demand Insight Cards */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.demandCardsList}
-          decelerationRate="fast"
-          snapToInterval={DEMAND_CARD_WIDTH + 14}
-        >
-          {(DEMAND_DATA[demandRegion] || DEMAND_DATA["Chennai South"]).map((item) => (
-            <View key={item.id} style={styles.demandCard}>
-              <Text style={styles.demandCategoryTitle}>{item.category}</Text>
-              <Text style={styles.demandCategorySubtitle}>{item.subtitle}</Text>
-
-              <View style={styles.demandRankList}>
-                {item.localities.map((loc) => (
-                  <View key={loc.name} style={styles.demandRankItem}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.demandRankName}>
-                        <Text style={styles.demandRankNum}>{loc.rank} </Text>
-                        <Text style={styles.demandLocName}>{loc.name}</Text>
-                      </Text>
-                      <View style={[styles.demandProgressBar, { width: loc.barWidth }]} />
-                    </View>
-                    <Text style={styles.demandSearchPercent}>{loc.percentage}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.viewMoreLocalitiesBtn}
-                onPress={() => navigation.navigate("Search")}
-              >
-                <Text style={styles.viewMoreLocalitiesText}>View more localities</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
+              ))}
+            </ScrollView>
+          </>
+        )}
 
 
         {/* ================= EXPLORE BY LOCATION ================= */}
         <View style={styles.sectionHeader}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={styles.sectionTitle}>Explore by Location</Text>
-            <View style={styles.sampleTag}>
-              <Text style={styles.sampleTagText}>Sample</Text>
-            </View>
-          </View>
+          <Text style={styles.sectionTitle}>Explore by Location</Text>
         </View>
 
         <ScrollView
@@ -1114,6 +1114,12 @@ export default function HomeScreen({ navigation }) {
       <SearchPropertyModal
         visible={isSearchModalOpen}
         onClose={() => setIsSearchModalOpen(false)}
+        onSelectProperty={(suggestion) => {
+          if (suggestion) {
+            setIsSearchModalOpen(false);
+            setSelectedProperty(suggestion);
+          }
+        }}
         onApply={(filters) => {
           setIsSearchModalOpen(false);
           setSelectedLocality(filters.locality);
@@ -1350,7 +1356,7 @@ const styles = StyleSheet.create({
   activeLocalityTag: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EBF4FF",
+    backgroundColor: "#EFF6FF",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 100,
@@ -1570,16 +1576,18 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 8,
     left: 8,
-    backgroundColor: "#00C853",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#16A34A",
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+    paddingVertical: 3.5,
+    borderRadius: 6,
   },
   verifiedGreenBadgeText: {
     color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "500",
-    textTransform: "lowercase",
+    fontSize: 10.5,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   floatingHeartBtn: {
     position: "absolute",
@@ -1965,20 +1973,22 @@ const styles = StyleSheet.create({
   badgeVerified: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(22, 163, 74, 0.95)",
-    paddingHorizontal: 10,
+    backgroundColor: "#16A34A",
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   badgeOrange: {
-    backgroundColor: "rgba(249, 115, 22, 0.9)",
-    paddingHorizontal: 10,
+    backgroundColor: "rgba(249, 115, 22, 0.95)",
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   badgeTextWhite: {
     color: "#FFFFFF",
-    ...TYPOGRAPHY.badge,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   heartBtn: {
     position: "absolute",
@@ -2201,7 +2211,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   localityChipSelected: {
-    backgroundColor: "#EBF4FF",
+    backgroundColor: "#EFF6FF",
     borderWidth: 1,
     borderColor: COLORS.primary,
   },
@@ -2287,7 +2297,7 @@ const styles = StyleSheet.create({
   },
   budgetDropdownBtnActive: {
     borderColor: COLORS.primary,
-    backgroundColor: "#F0F7FF",
+    backgroundColor: "#EFF6FF",
   },
   budgetDropdownLabel: {
     fontSize: 10,
@@ -2356,7 +2366,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F1F5F9",
   },
   dropdownMenuItemActive: {
-    backgroundColor: "#F0F7FF",
+    backgroundColor: "#EFF6FF",
   },
   dropdownMenuText: {
     fontSize: 13,

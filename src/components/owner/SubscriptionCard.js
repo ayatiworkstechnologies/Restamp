@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { Crown, Sparkles, ChevronRight } from "lucide-react-native";
+import { Crown, Sparkles, ChevronRight } from "../common/HugeIcon";
 import COLORS from "../../constants/colors";
 import StatusBadge from "./StatusBadge";
 

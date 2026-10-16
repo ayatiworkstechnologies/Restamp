@@ -18,7 +18,7 @@ import {
   Tag,
   ShieldCheck,
   CheckCircle2,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 
 export default function AgentPlanConfirmScreen({ route, navigation }) {
@@ -55,7 +55,7 @@ export default function AgentPlanConfirmScreen({ route, navigation }) {
       setCouponApplied(false);
       Alert.alert(
         "Invalid Code",
-        "Please enter a valid coupon code like RESTAMP or AGENT500."
+        "Please enter a valid coupon code like RESTAMP or AGENT500.",
       );
     }
   };
@@ -90,7 +90,7 @@ export default function AgentPlanConfirmScreen({ route, navigation }) {
           onPress={() =>
             Alert.alert(
               "Plan Information",
-              `${plan.name} gives you direct buyer leads across ${selectedLocalities.length} selected localities with 0% brokerage assurance.`
+              `${plan.name} gives you direct buyer leads across ${selectedLocalities.length} selected localities with 0% brokerage assurance.`,
             )
           }
           activeOpacity={0.7}
@@ -117,7 +117,8 @@ export default function AgentPlanConfirmScreen({ route, navigation }) {
             <View style={styles.planInfo}>
               <Text style={styles.planTitle}>{plan.name}</Text>
               <Text style={styles.planSubtitle}>
-                {plan.validity || "1 Month"} • Up to {plan.locationLimit || 10} Locations
+                {plan.validity || "1 Month"} • Up to {plan.locationLimit || 10}{" "}
+                Locations
               </Text>
             </View>
 
@@ -131,16 +132,34 @@ export default function AgentPlanConfirmScreen({ route, navigation }) {
           <View style={styles.benefitsDivider} />
           <View style={styles.benefitsList}>
             <View style={styles.benefitItem}>
-              <CheckCircle2 size={13} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.benefitText}>0% Brokerage & direct buyer inquiries</Text>
+              <CheckCircle2
+                size={13}
+                color={COLORS.primary}
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.benefitText}>
+                0% Brokerage & direct buyer inquiries
+              </Text>
             </View>
             <View style={styles.benefitItem}>
-              <CheckCircle2 size={13} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.benefitText}>Verified Agent badge on search results</Text>
+              <CheckCircle2
+                size={13}
+                color={COLORS.primary}
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.benefitText}>
+                Verified Agent badge on search results
+              </Text>
             </View>
             <View style={styles.benefitItem}>
-              <CheckCircle2 size={13} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.benefitText}>Site visit scheduling & priority placement</Text>
+              <CheckCircle2
+                size={13}
+                color={COLORS.primary}
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.benefitText}>
+                Site visit scheduling & priority placement
+              </Text>
             </View>
           </View>
         </View>
@@ -162,7 +181,10 @@ export default function AgentPlanConfirmScreen({ route, navigation }) {
               autoCapitalize="characters"
             />
             <TouchableOpacity
-              style={[styles.applyPillBtn, couponApplied && styles.applyPillBtnActive]}
+              style={[
+                styles.applyPillBtn,
+                couponApplied && styles.applyPillBtnActive,
+              ]}
               onPress={handleApplyCoupon}
               activeOpacity={0.8}
             >
@@ -194,7 +216,12 @@ export default function AgentPlanConfirmScreen({ route, navigation }) {
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Promo-code</Text>
-            <Text style={[styles.summaryVal, { color: discount > 0 ? "#16A34A" : "#111111" }]}>
+            <Text
+              style={[
+                styles.summaryVal,
+                { color: discount > 0 ? "#16A34A" : "#111111" },
+              ]}
+            >
               {discount > 0 ? `-₹${discount.toFixed(2)}` : "₹0.00"}
             </Text>
           </View>
@@ -202,7 +229,8 @@ export default function AgentPlanConfirmScreen({ route, navigation }) {
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Location Limit</Text>
             <Text style={styles.summaryVal}>
-              {selectedLocalities.length} Localities ({plan.locationLimit || 10} Limit)
+              {selectedLocalities.length} Localities ({plan.locationLimit || 10}{" "}
+              Limit)
             </Text>
           </View>
 
@@ -228,7 +256,8 @@ export default function AgentPlanConfirmScreen({ route, navigation }) {
         <View style={styles.assuranceBox}>
           <ShieldCheck size={16} color="#16A34A" style={{ marginRight: 8 }} />
           <Text style={styles.assuranceText}>
-            100% money-back guarantee if you don't receive buyer inquiries in 30 days.
+            100% money-back guarantee if you don't receive buyer inquiries in 30
+            days.
           </Text>
         </View>
 

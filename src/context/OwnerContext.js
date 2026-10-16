@@ -60,20 +60,36 @@ export function OwnerProvider({ children }) {
 
   // Methods
   const activateSubscription = (plan) => {
+    const validityStr = plan?.validity || "3 Months (90 Days)";
+    let days = 90;
+    if (validityStr.includes("30")) days = 30;
+    else if (validityStr.includes("Until Deal Closed") || validityStr.includes("VIP")) days = 365;
+    else if (validityStr.includes("90") || validityStr.includes("3 Month")) days = 90;
+
+    const now = new Date();
+    const expiryObj = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    const formattedStart = now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    const formattedExpiry = expiryObj.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    const formattedAmount = plan?.amountPaid || plan?.price || "₹2,999";
+
     const newSub = {
-      id: plan.id || "owner-pro",
-      name: plan.name || "Owner Pro Plan",
-      planName: plan.name || "Owner Pro Plan",
-      validity: plan.validity || "3 Months",
-      daysRemaining: 90,
-      listingLimit: plan.listingLimit || 5,
+      id: plan?.id || "owner-pro",
+      name: plan?.name || "Owner Pro Plan",
+      planName: plan?.name || "Owner Pro Plan",
+      validity: validityStr,
+      daysRemaining: days,
+      listingLimit: plan?.listingLimit || 5,
       usedListings: properties.filter((p) => p.status === "active").length,
-      price: plan.price || "₹2,999",
-      amountPaid: plan.price || "₹2,999",
+      price: formattedAmount,
+      amountPaid: formattedAmount,
       active: true,
+      hasPurchased: true,
       status: "Active",
-      startDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
-      expiryDate: "90 Days from now",
+      startDate: formattedStart,
+      expiryDate: formattedExpiry,
+      txnId: plan?.txnId || `TXN-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+      invoiceNumber: `INV-2026-OWN-${Math.floor(1000 + Math.random() * 9000)}`,
+      category: plan?.category || "Residential",
     };
     setSubscription(newSub);
   };

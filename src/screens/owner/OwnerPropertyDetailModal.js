@@ -28,7 +28,7 @@ import {
   Banknote,
   Wallet,
   Wrench,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import StatusBadge from "../../components/owner/StatusBadge";
 import PropertyGalleryModal from "../../components/PropertyGalleryModal";

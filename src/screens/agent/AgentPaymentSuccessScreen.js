@@ -20,10 +20,12 @@ import {
   Calendar,
   Layers,
   Sparkles,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
+import { useAgent } from "../../context/AgentContext";
 
 export default function AgentPaymentSuccessScreen({ route, navigation }) {
+  const { hasActivePlan, agentPlan, activatePlan } = useAgent();
   const planName = route?.params?.planName || "Agent Pro Plan";
   const locationLimit = route?.params?.locationLimit || "10 Locations";
   const selectedLocalities = route?.params?.selectedLocalities || [
@@ -49,6 +51,32 @@ export default function AgentPaymentSuccessScreen({ route, navigation }) {
       routes: [{ name: "AgentNavigator" }],
     });
   };
+
+  const handleGoToProfile = () => {
+    if (redirectTimerRef.current) {
+      clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = null;
+    }
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "MainTabs", params: { screen: "Profile" } }],
+    });
+  };
+
+  useEffect(() => {
+    if (!agentPlan?.hasPurchased || agentPlan?.name !== planName) {
+      activatePlan(
+        {
+          name: planName,
+          validity: planValidity,
+          price: amountPaid,
+          amountPaid,
+          locationLimit: selectedLocalities?.length || 10,
+        },
+        selectedLocalities
+      );
+    }
+  }, []);
 
   useEffect(() => {
     Animated.spring(scaleAnim, {
@@ -176,7 +204,7 @@ export default function AgentPaymentSuccessScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
-      {/* Bottom Sticky Action Button */}
+      {/* Bottom Sticky Action Buttons */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.dashboardBtn}
@@ -184,6 +212,14 @@ export default function AgentPaymentSuccessScreen({ route, navigation }) {
           activeOpacity={0.88}
         >
           <Text style={styles.dashboardBtnText}>Go to Agent Dashboard</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.profileBtn}
+          onPress={handleGoToProfile}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.profileBtnText}>View Details in Profile</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -414,10 +450,25 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 8,
   },
   dashboardBtnText: {
     fontSize: 15,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  profileBtn: {
+    backgroundColor: "#F1F5F9",
+    borderRadius: 100,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  profileBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#334155",
   },
 });

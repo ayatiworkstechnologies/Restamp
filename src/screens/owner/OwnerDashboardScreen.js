@@ -27,7 +27,7 @@ import {
   MoreHorizontal,
   ArrowUpRight,
   User,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
@@ -673,7 +673,7 @@ const styles = StyleSheet.create({
     borderColor: "#BFDBFE",
   },
   nowBadgeText: {
-    color: "#059669",
+    color: "#16A34A",
     fontSize: 11.5,
     fontWeight: "700",
     letterSpacing: 0.2,

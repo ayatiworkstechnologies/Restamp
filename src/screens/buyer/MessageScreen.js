@@ -20,7 +20,7 @@ import {
   ArrowLeft,
   Phone,
   Send,
-} from "lucide-react-native";
+} from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 
 // P2 honesty: this screen is not registered in AppNavigator (dead code) and

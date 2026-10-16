@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Building2, Plus } from "lucide-react-native";
+import { Building2, Plus } from "../common/HugeIcon";
 import COLORS from "../../constants/colors";
 import PrimaryButton from "./PrimaryButton";
 
