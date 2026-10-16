@@ -38,7 +38,7 @@ import {
 import COLORS from "../../constants/colors";
 import TYPOGRAPHY from "../../constants/typography";
 import { useWishlist } from "../../context/WishlistContext";
-import { useRequireAuth } from "../../context/AuthContext";
+import { useRequireAuth } from "../../auth/useRequireAuth";
 
 const CATEGORIES = ["All", "Properties", "Visits", "System"];
 
