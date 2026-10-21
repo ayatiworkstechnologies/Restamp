@@ -35,6 +35,7 @@ import {
   Briefcase,
   Calendar,
   Sparkles,
+  Pencil,
 } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -56,7 +57,7 @@ export default function ProfileScreen({ navigation }) {
   const { wishlist, wishlistSynced, refreshWishlist } = useWishlist();
   const { subscription } = useOwner();
   const { agentPlan, hasActivePlan, selectedLocalities } = useAgent();
-  const { user: authUser, logout, refreshMe } = useAuth();
+  const { user: authUser, logout, refreshMe, saveProfileName } = useAuth();
   const authForOwnerEntry = { user: authUser, refreshMe };
   const [switchingOwner, setSwitchingOwner] = useState(false);
   // Owner entry is protected (Change 2): guests log in first, then resume.
@@ -145,6 +146,7 @@ export default function ProfileScreen({ navigation }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(userProfile.name);
   const [editPhone, setEditPhone] = useState(userProfile.phone);
+  const [editEmail, setEditEmail] = useState(userProfile.email);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Google account linking (web-only GIS button; phone session JWT is sent
@@ -192,6 +194,7 @@ export default function ProfileScreen({ navigation }) {
         ...prev,
         name: authUser.name || prev.name,
         phone: authUser.phone || "",
+        email: authUser.email || prev.email,
       }));
     }
   }, [authUser]);
@@ -236,16 +239,30 @@ export default function ProfileScreen({ navigation }) {
           <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
 
           <View style={styles.profileInfo}>
-            <View style={styles.nameRow}>
+            <TouchableOpacity
+              style={styles.nameRow}
+              onPress={() => {
+                setEditName(userProfile.name);
+                setEditPhone(userProfile.phone);
+                setEditEmail(userProfile.email);
+                setIsEditing(true);
+              }}
+              activeOpacity={0.7}
+            >
               <Text style={styles.ownerName}>{userProfile.name}</Text>
-            </View>
+              <Pencil size={15} color="#475569" style={styles.pencilIcon} />
+            </TouchableOpacity>
 
             {userProfile.phone ? (
               <Text style={styles.phoneText}>{userProfile.phone}</Text>
             ) : (
               <Text style={styles.phoneText}>Phone not available</Text>
             )}
-            <Text style={styles.emailText}>{userProfile.email}</Text>
+            {userProfile.email ? (
+              <Text style={styles.emailText}>{userProfile.email}</Text>
+            ) : (
+              <Text style={styles.emailText}>Email not available</Text>
+            )}
 
             {authUser?.role === "OWNER" && (
               <View style={styles.verifiedBadge}>
@@ -292,226 +309,167 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
 
-          {/* 1. OWNER SUBSCRIPTION CARD */}
-          {hasOwnerPlan ? (
-            <View style={styles.planCardOwner}>
-              {/* Header: Title, Category & Active Status Pill */}
-              <View style={styles.planCardHeader}>
-                <View style={styles.planCardIconWrapOwner}>
-                  <Crown size={20} color="#2563EB" />
+          {/* =========================================================================
+              PROJECT TICKET DESIGN (Active Memberships & Plans)
+              ========================================================================= */}
+          <View style={styles.ticketCard}>
+            {/* 1. Top Row: Status Pill on left + Action Buttons on right */}
+            <View style={styles.ticketTopRow}>
+              <View style={styles.ticketStatusPill}>
+                <View style={styles.ticketCheckCircle}>
+                  <Check size={9} color="#FFFFFF" />
                 </View>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.planTitle}>
-                    {subscription?.planName || subscription?.name || "Owner Pro Plan"}
-                  </Text>
-                  <Text style={styles.planSubtitle}>Owner Partner Membership</Text>
-                </View>
-                <View style={styles.activeStatusPill}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.activeStatusText}>ACTIVE</Text>
-                </View>
+                <Text style={styles.ticketStatusText}>ACTIVE</Text>
               </View>
 
-              {/* Stats Box (Grid of 3) */}
-              <View style={styles.statsGrid}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>VALIDITY</Text>
-                  <Text style={styles.statValue}>
-                    {subscription?.validity || "90 Days"}
-                  </Text>
-                </View>
-                <View style={[styles.statBox, styles.statBoxBorder]}>
-                  <Text style={styles.statLabel}>LISTINGS QUOTA</Text>
-                  <Text style={styles.statValue}>
-                    {subscription?.usedListings || 0} / {subscription?.listingLimit || 5} Used
-                  </Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>AMOUNT PAID</Text>
-                  <Text style={[styles.statValue, { color: "#16A34A" }]}>
-                    {subscription?.amountPaid || subscription?.price || "₹2,999"}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Extra details row: Transaction ref & Features */}
-              <View style={styles.metaInfoRow}>
-                <View style={styles.metaItem}>
-                  <ShieldCheck size={13} color="#16A34A" style={{ marginRight: 4 }} />
-                  <Text style={styles.metaItemText}>
-                    0% Brokerage • Direct Inquiries Active
-                  </Text>
-                </View>
-                <Text style={styles.metaItemRef}>
-                  {subscription?.txnId || "TXN-2026-98124"}
-                </Text>
-              </View>
-
-              {subscription?.expiryDate ? (
-                <View style={styles.expiryNoticeRow}>
-                  <Calendar size={12} color="#64748B" style={{ marginRight: 5 }} />
-                  <Text style={styles.expiryNoticeText}>
-                    Expires on {subscription.expiryDate} ({subscription?.daysRemaining || 90} days left)
-                  </Text>
-                </View>
-              ) : null}
-
-              {/* Action Buttons Row */}
-              <View style={styles.planActionsRow}>
+              <View style={styles.ticketHeaderButtons}>
                 <TouchableOpacity
-                  style={styles.primaryPlanBtn}
-                  onPress={handleSwitchToOwner}
-                  activeOpacity={0.88}
+                  style={styles.ticketDraftBtn}
+                  onPress={hasAgentPlan ? handleManageAgentPlan : handleManageOwnerPlan}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.primaryPlanBtnText}>Open Owner Dashboard</Text>
-                  <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                  <Text style={styles.ticketDraftBtnText}>
+                    {hasAgentPlan ? "Manage" : "Upgrade"}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.secondaryPlanBtn}
-                  onPress={handleManageOwnerPlan}
-                  activeOpacity={0.8}
+                  style={styles.ticketSaveBtn}
+                  onPress={hasAgentPlan ? handleSwitchToAgent : handleSwitchToOwner}
+                  activeOpacity={0.88}
                 >
-                  <Text style={styles.secondaryPlanBtnText}>Renew / Upgrade</Text>
+                  <Text style={styles.ticketSaveBtnText}>Dashboard</Text>
                 </TouchableOpacity>
               </View>
             </View>
-          ) : null}
 
-          {/* 2. AGENT SUBSCRIPTION CARD */}
-          {hasAgentPlan ? (
-            <View style={styles.planCardAgent}>
-              {/* Header: Title, Category & Active Status Pill */}
-              <View style={styles.planCardHeader}>
-                <View style={styles.planCardIconWrapAgent}>
-                  <Briefcase size={20} color="#2563EB" />
-                </View>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.planTitle}>
-                    {agentPlan?.name || "Agent Pro Plan"}
-                  </Text>
-                  <Text style={styles.planSubtitle}>Certified Agent Partner</Text>
-                </View>
-                <View style={styles.activeStatusPill}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.activeStatusText}>ACTIVE</Text>
-                </View>
-              </View>
+            {/* 2. Plan Title */}
+            <Text
+              style={styles.ticketTitle}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {hasAgentPlan
+                ? (agentPlan?.name || "Agent Pro Plan")
+                : (subscription?.planName || "Owner Pro Plan")}
+            </Text>
 
-              {/* Stats Box (Grid of 3) */}
-              <View style={styles.statsGrid}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>VALIDITY</Text>
-                  <Text style={styles.statValue}>
-                    {agentPlan?.validity || "30 Days"}
+            {/* Divider */}
+            <View style={styles.ticketDivider} />
+
+            {/* 3. Metadata Grid */}
+            <View style={styles.ticketGrid}>
+              <View style={styles.ticketGridRow}>
+                <View style={styles.ticketGridCol}>
+                  <Text style={styles.ticketGridLabel}>Plan name</Text>
+                  <Text style={styles.ticketGridValue}>
+                    {hasAgentPlan
+                      ? (agentPlan?.name || "Agent Pro Plan")
+                      : (subscription?.planName || "Owner Pro Plan")}
                   </Text>
-                </View>
-                <View style={[styles.statBox, styles.statBoxBorder]}>
-                  <Text style={styles.statLabel}>LOCATIONS</Text>
-                  <Text style={styles.statValue}>
-                    {selectedLocalities?.length || 10} Areas
+                  <Text style={styles.ticketGridSub}>
+                    {hasAgentPlan ? "Certified Agent Partner" : "Owner Partner Membership"}
                   </Text>
                 </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>AMOUNT PAID</Text>
-                  <Text style={[styles.statValue, { color: "#16A34A" }]}>
-                    {agentPlan?.amountPaid || agentPlan?.price || "₹6,999"}
+
+                <View style={styles.ticketGridCol}>
+                  <Text style={styles.ticketGridLabel}>
+                    {hasAgentPlan ? "Covered Localities" : "Listings Quota"}
+                  </Text>
+                  <Text style={styles.ticketGridValue}>
+                    {hasAgentPlan
+                      ? `${selectedLocalities?.length || 10} Areas`
+                      : `${subscription?.usedListings || 0} / ${subscription?.listingLimit || 5} Used`}
+                  </Text>
+                  <Text style={styles.ticketGridSub}>
+                    {hasAgentPlan ? "Active Territory" : "Available Slots"}
                   </Text>
                 </View>
-              </View>
-
-              {/* Covered Localities preview */}
-              <View style={styles.localitiesPreviewWrap}>
-                <Text style={styles.localitiesPreviewTitle}>Covered Localities:</Text>
-                <View style={styles.localitiesChipsRow}>
-                  {(selectedLocalities || []).slice(0, 4).map((loc, idx) => (
-                    <View key={idx} style={styles.localityChip}>
-                      <MapPin size={10} color="#2563EB" style={{ marginRight: 3 }} />
-                      <Text style={styles.localityChipText}>{loc}</Text>
-                    </View>
-                  ))}
-                  {(selectedLocalities?.length || 0) > 4 ? (
-                    <View style={styles.localityMoreChip}>
-                      <Text style={styles.localityMoreChipText}>
-                        +{(selectedLocalities?.length || 0) - 4} more
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-
-              {/* Extra details row: Invoice ref & Features */}
-              <View style={styles.metaInfoRow}>
-                <View style={styles.metaItem}>
-                  <ShieldCheck size={13} color="#16A34A" style={{ marginRight: 4 }} />
-                  <Text style={styles.metaItemText}>
-                    Verified Broker • Exclusive Buyer Leads
-                  </Text>
-                </View>
-                <Text style={styles.metaItemRef}>
-                  {agentPlan?.invoiceNumber || "INV-2026-AGT-8821"}
-                </Text>
-              </View>
-
-              {agentPlan?.expiryDate ? (
-                <View style={styles.expiryNoticeRow}>
-                  <Calendar size={12} color="#64748B" style={{ marginRight: 5 }} />
-                  <Text style={styles.expiryNoticeText}>
-                    Expires on {agentPlan.expiryDate} ({agentPlan?.daysRemaining || 30} days left)
-                  </Text>
-                </View>
-              ) : null}
-
-              {/* Action Buttons Row */}
-              <View style={styles.planActionsRow}>
-                <TouchableOpacity
-                  style={styles.primaryPlanBtn}
-                  onPress={handleSwitchToAgent}
-                  activeOpacity={0.88}
-                >
-                  <Text style={styles.primaryPlanBtnText}>Open Agent Dashboard</Text>
-                  <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.secondaryPlanBtn}
-                  onPress={handleManageAgentPlan}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.secondaryPlanBtnText}>Manage Areas</Text>
-                </TouchableOpacity>
               </View>
             </View>
-          ) : null}
 
-          {/* 3. PROMO CARD IF MISSING A PLAN */}
+            {/* 4. Details Section */}
+            <View style={styles.ticketTabsRow}>
+              <View style={[styles.ticketTabItem, styles.ticketTabItemActive]}>
+                <Text style={[styles.ticketTabText, styles.ticketTabTextActive]}>
+                  Details
+                </Text>
+              </View>
+            </View>
+
+            {/* 5. Details Content */}
+            <View style={styles.ticketTabBox}>
+              <View style={styles.ticketDetailRow}>
+                <Text style={styles.ticketDetailLabel}>Status:</Text>
+                <Text style={styles.ticketDetailValue}>ACTIVE • Verified Partner</Text>
+              </View>
+              <View style={styles.ticketDetailRow}>
+                <Text style={styles.ticketDetailLabel}>Timeline:</Text>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Calendar size={14} color="#0F172A" style={{ marginRight: 5 }} />
+                  <Text style={styles.ticketDetailValue}>
+                    {hasOwnerPlan && subscription?.expiryDate
+                      ? `Expires ${subscription.expiryDate}`
+                      : hasAgentPlan && agentPlan?.expiryDate
+                      ? `Expires ${agentPlan.expiryDate}`
+                      : "90 Days Active"}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.ticketDetailRow}>
+                <Text style={styles.ticketDetailLabel}>Validity Period:</Text>
+                <Text style={styles.ticketDetailValue}>
+                  {hasAgentPlan
+                    ? (agentPlan?.validity || "30 Days")
+                    : (subscription?.validity || "90 Days")}
+                </Text>
+              </View>
+              <View style={styles.ticketDetailRow}>
+                <Text style={styles.ticketDetailLabel}>
+                  {hasAgentPlan ? "Covered Localities:" : "Listings Quota:"}
+                </Text>
+                <Text style={styles.ticketDetailValue}>
+                  {hasAgentPlan
+                    ? `${selectedLocalities?.length || 10} Areas Active`
+                    : `${subscription?.usedListings || 0} / ${subscription?.listingLimit || 5} Used`}
+                </Text>
+              </View>
+              <View style={styles.ticketDetailRow}>
+                <Text style={styles.ticketDetailLabel}>Brokerage:</Text>
+                <Text style={[styles.ticketDetailValue, { color: "#16A34A" }]}>
+                  0% Zero Commission
+                </Text>
+              </View>
+              <View style={styles.ticketDetailRow}>
+                <Text style={styles.ticketDetailLabel}>Transaction Ref:</Text>
+                <Text style={styles.ticketDetailValue}>
+                  {hasAgentPlan
+                    ? (agentPlan?.invoiceNumber || "INV-2026-AGT-8821")
+                    : (subscription?.txnId || "TXN-2026-98124")}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Quick Partner Options below Ticket Card */}
           {!hasOwnerPlan && !hasAgentPlan ? (
-            <View style={styles.emptyPlanCard}>
-              <View style={styles.emptyPlanIconWrap}>
-                <Sparkles size={22} color="#2563EB" />
-              </View>
-              <Text style={styles.emptyPlanTitle}>Become an Owner or Agent Partner</Text>
-              <Text style={styles.emptyPlanSubtitle}>
-                Post properties with zero brokerage or access high-intent buyer leads across Chennai.
-              </Text>
-              <View style={styles.emptyPlanButtonsRow}>
-                <TouchableOpacity
-                  style={styles.emptyOwnerBtn}
-                  onPress={handleManageOwnerPlan}
-                  activeOpacity={0.85}
-                >
-                  <Crown size={14} color="#B45309" style={{ marginRight: 6 }} />
-                  <Text style={styles.emptyOwnerBtnText}>Owner Plans (from ₹0)</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.emptyAgentBtn}
-                  onPress={handleExploreAgentPlans}
-                  activeOpacity={0.85}
-                >
-                  <Briefcase size={14} color="#4338CA" style={{ marginRight: 6 }} />
-                  <Text style={styles.emptyAgentBtnText}>Agent Plans (from ₹2,499)</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.emptyPlanButtonsRow}>
+              <TouchableOpacity
+                style={styles.emptyOwnerBtn}
+                onPress={handleManageOwnerPlan}
+                activeOpacity={0.85}
+              >
+                <Crown size={14} color="#B45309" style={{ marginRight: 6 }} />
+                <Text style={styles.emptyOwnerBtnText}>Owner Plans (from ₹0)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.emptyAgentBtn}
+                onPress={handleExploreAgentPlans}
+                activeOpacity={0.85}
+              >
+                <Briefcase size={14} color="#4338CA" style={{ marginRight: 6 }} />
+                <Text style={styles.emptyAgentBtnText}>Agent Plans (from ₹2,499)</Text>
+              </TouchableOpacity>
             </View>
           ) : hasOwnerPlan && !hasAgentPlan ? (
             <TouchableOpacity
@@ -555,6 +513,7 @@ export default function ProfileScreen({ navigation }) {
             onPress={() => {
               setEditName(userProfile.name);
               setEditPhone(userProfile.phone);
+              setEditEmail(userProfile.email);
               setIsEditing(true);
             }}
             activeOpacity={0.7}
@@ -845,6 +804,21 @@ export default function ProfileScreen({ navigation }) {
               />
             </View>
 
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email Address</Text>
+              <TextInput
+                style={styles.textInput}
+                value={editEmail}
+                onChangeText={setEditEmail}
+                placeholder="Enter your email address"
+                placeholderTextColor="#94A3B8"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                underlineColorAndroid="transparent"
+              />
+            </View>
+
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
@@ -855,11 +829,19 @@ export default function ProfileScreen({ navigation }) {
               <TouchableOpacity
                 style={styles.modalSaveBtn}
                 onPress={() => {
+                  const updatedName = editName.trim() || userProfile.name;
+                  const updatedPhone = editPhone.trim() || userProfile.phone;
+                  const updatedEmail = editEmail.trim() || userProfile.email;
                   setUserProfile((prev) => ({
                     ...prev,
-                    name: editName.trim() || prev.name,
-                    phone: editPhone.trim() || prev.phone,
+                    name: updatedName,
+                    phone: updatedPhone,
+                    email: updatedEmail,
                   }));
+                  if (saveProfileName && updatedName && updatedName !== authUser?.name) {
+                    const parts = updatedName.split(/\s+/);
+                    saveProfileName(parts[0], parts.slice(1).join(" ")).catch(() => {});
+                  }
                   setIsEditing(false);
                 }}
               >
@@ -1215,6 +1197,308 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#64748B",
     marginTop: 1,
+  },
+  // Ticket Design Styles (matching user reference)
+  ticketCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  ticketTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  ticketTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: -0.3,
+  },
+  ticketHeaderButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 0,
+  },
+  ticketDraftBtn: {
+    paddingHorizontal: 11,
+    paddingVertical: 6.5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ticketDraftBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  ticketSaveBtn: {
+    paddingHorizontal: 13,
+    paddingVertical: 6.5,
+    borderRadius: 8,
+    backgroundColor: "#0284FE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ticketSaveBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  ticketStatusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  ticketCheckCircle: {
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    backgroundColor: "#16A34A",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 5,
+  },
+  ticketStatusText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: 0.3,
+  },
+  ticketDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginTop: 14,
+    marginBottom: 16,
+  },
+  ticketGrid: {
+    marginBottom: 16,
+  },
+  ticketGridRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  ticketGridCol: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  ticketGridLabel: {
+    fontSize: 13,
+    color: "#94A3B8",
+    fontWeight: "500",
+    marginBottom: 6,
+  },
+  ticketGridValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  ticketGridSub: {
+    fontSize: 11.5,
+    color: "#64748B",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  ticketQuotaBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  ticketQuotaText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginRight: 8,
+  },
+  ticketManagerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  ticketManagerAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  ticketManagerName: {
+    fontSize: 14.5,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  ticketAvatarsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  ticketAssigneeAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+  ticketTimelineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  ticketTimelineText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  ticketTabsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  ticketTabItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    marginRight: 22,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  ticketTabItemActive: {
+    borderBottomColor: "#F59E0B",
+  },
+  ticketTabText: {
+    fontSize: 14,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  ticketTabTextActive: {
+    color: "#0F172A",
+    fontWeight: "700",
+  },
+  ticketTabBadge: {
+    backgroundColor: "#EF4444",
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 6,
+  },
+  ticketTabBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  ticketCommentCard: {
+    marginTop: 4,
+  },
+  ticketCommentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  ticketCommentAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
+  ticketCommentAuthor: {
+    fontSize: 14.5,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  ticketCommentMeta: {
+    fontSize: 12,
+    color: "#94A3B8",
+    marginTop: 2,
+  },
+  ticketSpeechBubble: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  ticketSpeechBubbleText: {
+    fontSize: 14,
+    color: "#1E293B",
+    lineHeight: 20,
+  },
+  ticketReplyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    alignSelf: "flex-start",
+    marginTop: 12,
+  },
+  ticketReplyBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  ticketTabBox: {
+    paddingVertical: 6,
+  },
+  ticketDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F8FAFC",
+  },
+  ticketDetailLabel: {
+    fontSize: 13,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  ticketDetailValue: {
+    fontSize: 13.5,
+    color: "#0F172A",
+    fontWeight: "600",
+  },
+  ticketAttachmentItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    marginTop: 4,
+  },
+  ticketAttachmentName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  ticketAttachmentSize: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
   },
   planCardOwner: {
     backgroundColor: "#FFFFFF",

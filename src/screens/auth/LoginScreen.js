@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,24 +7,18 @@ import {
   TouchableOpacity,
   Pressable,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
-  Keyboard,
   Modal,
   FlatList,
   Alert,
   Dimensions,
+  ImageBackground,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-// 6 boxes with 5 gaps of 8px (total gaps 40px) and container padding 44px
-const OTP_BOX_WIDTH = Math.min(48, Math.max(38, Math.floor((SCREEN_WIDTH - 84) / 6)));
-const OTP_BOX_HEIGHT = Math.round(OTP_BOX_WIDTH * 1.18);
+import Svg, { Path, Rect } from "react-native-svg";
 import {
-  ArrowRight,
-  ArrowLeft,
+  ChevronLeft,
   ChevronDown,
   RotateCcw,
   Lock,
@@ -39,8 +33,18 @@ import {
   sanitizePhoneInput,
   isPhoneValidForCountry,
   phoneValidationMessage,
+  maxPhoneDigits,
 } from "../../auth/phone";
 import { planLoginResume } from "../../auth/requireAuth";
+import NumericKeypad from "../../components/common/NumericKeypad";
+import RestampLogo from "../../components/RestampLogo";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const CARD_MAX_WIDTH = 480;
+const ACTUAL_WIDTH = Math.min(SCREEN_WIDTH, CARD_MAX_WIDTH);
+// 6 OTP boxes spaced cleanly
+const OTP_BOX_WIDTH = Math.min(46, Math.max(38, Math.floor((ACTUAL_WIDTH - 84) / 6)));
+const OTP_BOX_HEIGHT = Math.round(OTP_BOX_WIDTH * 1.18);
 
 const COUNTRY_CODES = [
   { flag: "🇮🇳", code: "+91", name: "India" },
@@ -65,17 +69,77 @@ const VALID_DEMO_CODES = [
   "205874",
 ];
 
+// SVG Icons for Welcome screen buttons
+function MobileIcon({ size = 20, color = "#FFFFFF" }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect
+        x="6"
+        y="2"
+        width="12"
+        height="20"
+        rx="3"
+        stroke={color}
+        strokeWidth="2"
+      />
+      <Path
+        d="M10 18h4"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+function GoogleIcon({ size = 20 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+        fill="#4285F4"
+      />
+      <Path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <Path
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+        fill="#FBBC05"
+      />
+      <Path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+        fill="#EA4335"
+      />
+    </Svg>
+  );
+}
+
+function FacebookIcon({ size = 20 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
+        fill="#1877F2"
+      />
+    </Svg>
+  );
+}
+
 export default function LoginScreen({ navigation }) {
   const {
     loginWithToken,
     saveProfileName,
-    setLocalProfileName,
     consumePendingAction,
     clearPendingAction,
   } = useAuth();
 
-  // Multi-step: 1 = Phone, 2 = OTP, 3 = Name
-  const [step, setStep] = useState(1);
+  // Multi-step flow:
+  // 0 = Welcome / Landing (Design 3)
+  // 1 = Phone Number input with Keypad (Design 2)
+  // 2 = OTP Verification with Keypad (Design 1)
+  // 3 = Profile Name completion
+  const [step, setStep] = useState(0);
 
   // Form states
   const [selectedCountry, setSelectedCountry] = useState(COUNTRY_CODES[0]);
@@ -90,15 +154,17 @@ export default function LoginScreen({ navigation }) {
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Local-dev helper: the backend returns debug_code ONLY when its OTP-debug
-  // mode is enabled. Never set in production (the field is absent there).
   const [devCode, setDevCode] = useState(null);
 
-  const fullPhone = () => `${selectedCountry.code}${phoneNumber.replace(/[^0-9]/g, "")}`;
+  // Input refs
+  const phoneInputRef = useRef(null);
+  const otpInputRefs = useRef([]);
+  const firstNameInputRef = useRef(null);
+  const lastNameInputRef = useRef(null);
 
-  // Phone validation state (Change 1): digits-only, capped at the
-  // country limit (+91 India: exactly 10; the +91 code is never counted).
-  // The inline message appears once the user starts typing.
+  const fullPhone = () =>
+    `${selectedCountry.code}${phoneNumber.replace(/[^0-9]/g, "")}`;
+
   const [phoneTouched, setPhoneTouched] = useState(false);
   const handlePhoneChange = (text) => {
     setPhoneTouched(true);
@@ -107,9 +173,6 @@ export default function LoginScreen({ navigation }) {
   const isPhoneValid = isPhoneValidForCountry(phoneNumber, selectedCountry.code);
   const showPhoneError = phoneTouched && !isPhoneValid;
 
-  // Post-login continuation (Change 2): resume one queued protected action
-  // on success; drop it when login is skipped or abandoned so it can never
-  // fire later unexpectedly. No tokens or personal data are stored here.
   const loginSucceededRef = useRef(false);
   useEffect(() => {
     return () => {
@@ -117,11 +180,24 @@ export default function LoginScreen({ navigation }) {
         try {
           clearPendingAction();
         } catch {
-          // ignore — store may already be empty
+          // ignore
         }
       }
     };
   }, [clearPendingAction]);
+
+  // Auto-focus inputs on step transition
+  useEffect(() => {
+    if (step === 1) {
+      setTimeout(() => {
+        phoneInputRef.current?.focus();
+      }, 120);
+    } else if (step === 2) {
+      setTimeout(() => {
+        otpInputRefs.current[0]?.focus();
+      }, 120);
+    }
+  }, [step]);
 
   const enterAfterLogin = () => {
     loginSucceededRef.current = true;
@@ -137,8 +213,6 @@ export default function LoginScreen({ navigation }) {
       loginSucceeded: true,
     });
     if (plan.mode === "resume-back") {
-      // Return to the exact origin screen (form state intact), then run the
-      // intended action exactly once.
       navigation.goBack();
       plan.action();
       return;
@@ -164,34 +238,18 @@ export default function LoginScreen({ navigation }) {
 
   const otpErrorMessage = (e) => {
     if (!e) return "Something went wrong. Please try again.";
-    if (e.kind === "validation") return "Enter a valid phone number with country code.";
+    if (e.kind === "validation")
+      return "Enter a valid phone number with country code.";
     if (e.status === 429 || e.kind === "retry_later")
       return "Too many attempts. Please wait a while and try again.";
-    if (e.kind === "timeout") return "The request timed out. Please check your connection and try again.";
-    if (e.kind === "offline") return "No connection. Check your internet and try again.";
+    if (e.kind === "timeout")
+      return "The request timed out. Please check your connection and try again.";
+    if (e.kind === "offline")
+      return "No connection. Check your internet and try again.";
     return "Could not reach the server. Please try again.";
   };
 
-  // Refs for inputs
-  const otpInputRefs = useRef([]);
-  const phoneInputRef = useRef(null);
-  const firstNameInputRef = useRef(null);
-  const lastNameInputRef = useRef(null);
-
-  // Dismiss the keyboard only for taps on non-editable background areas.
-  // (React Native Web routes native clicks to the nearest press responder
-  // without excluding <input>/<textarea> targets, so an unconditional dismiss
-  // would blur a TextInput on the same tap that focused it.)
-  const dismissKeyboardIfBackground = (e) => {
-    const target = e && e.nativeEvent ? e.nativeEvent.target : null;
-    const tag =
-      target && typeof target.tagName === "string" ? target.tagName.toLowerCase() : "";
-    if (tag === "input" || tag === "textarea" || (target && target.isContentEditable)) {
-      return;
-    }
-    Keyboard.dismiss();
-  };
-
+  // OTP Timer countdown
   useEffect(() => {
     let interval;
     if (step === 2 && timer > 0) {
@@ -204,22 +262,22 @@ export default function LoginScreen({ navigation }) {
     return () => clearInterval(interval);
   }, [step, timer]);
 
+  // Handle phone submit -> calls API and moves to OTP step
   const handlePhoneSubmit = async () => {
     if (busy) return;
     if (!isPhoneValid) {
-      // Inline message (below the input) explains the exact rule; the
-      // Continue button is disabled until the number is valid.
       setPhoneTouched(true);
       return;
     }
     setBusy(true);
     try {
       const resp = await requestOtp(fullPhone());
-      const serverCode = resp && resp.debug_code ? String(resp.debug_code) : null;
+      const serverCode =
+        resp && resp.debug_code ? String(resp.debug_code) : null;
       setDevCode(
         serverCode ||
-        (process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1" ? "297569" : null) ||
-        VALID_DEMO_CODES[0]
+          (process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1" ? "297569" : null) ||
+          VALID_DEMO_CODES[0]
       );
       setOtp(["", "", "", "", "", ""]);
       setStep(2);
@@ -245,7 +303,10 @@ export default function LoginScreen({ navigation }) {
   const handleAutoFill = (codeToFill) => {
     const targetCode = codeToFill || devCode;
     if (!targetCode) return;
-    const digits = String(targetCode).replace(/[^0-9]/g, "").slice(0, 6).split("");
+    const digits = String(targetCode)
+      .replace(/[^0-9]/g, "")
+      .slice(0, 6)
+      .split("");
     const newOtp = ["", "", "", "", "", ""];
     digits.forEach((d, i) => {
       newOtp[i] = d;
@@ -254,11 +315,59 @@ export default function LoginScreen({ navigation }) {
     const nextIdx = Math.min(5, digits.length - 1);
     setFocusedOtpIndex(nextIdx);
     otpInputRefs.current[nextIdx]?.focus();
+    if (digits.length === 6) {
+      setTimeout(() => verifyCode(digits.join("")), 150);
+    }
+  };
+
+  // Direct OTP verify call
+  const verifyCode = async (codeToVerify) => {
+    const code = codeToVerify || otp.join("");
+    if (code.length < 6 || busy) {
+      if (code.length < 6) {
+        Alert.alert(
+          "Incomplete Code",
+          "Please enter the 6-digit code we sent you."
+        );
+      }
+      return;
+    }
+    setBusy(true);
+    try {
+      const tokenResp = await verifyOtp(fullPhone(), code);
+      const userObj = await loginWithToken(tokenResp.access_token, {
+        phone: fullPhone(),
+        countryCode: selectedCountry.code,
+      });
+      if (userObj && userObj.isProfileComplete) {
+        enterAfterLogin();
+      } else {
+        if (userObj?.firstName) setFirstName(userObj.firstName);
+        if (userObj?.lastName) setLastName(userObj.lastName);
+        setStep(3);
+      }
+    } catch (e) {
+      if (e && (e.status === 401 || e.kind === "login")) {
+        Alert.alert(
+          "Invalid Code",
+          "That code is incorrect or expired. Please try again."
+        );
+      } else {
+        Alert.alert("Verification Failed", otpErrorMessage(e));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleOtpSubmit = () => {
+    verifyCode(otp.join(""));
   };
 
   const handleOtpChange = (text, index) => {
     const cleanDigits = text.replace(/[^0-9]/g, "");
     if (cleanDigits.length > 1) {
+      // Pasted multi-digit OTP
       const pasted = cleanDigits.slice(0, 6).split("");
       const newOtp = [...otp];
       pasted.forEach((d, i) => {
@@ -268,16 +377,26 @@ export default function LoginScreen({ navigation }) {
       const nextIdx = Math.min(5, pasted.length - 1);
       otpInputRefs.current[nextIdx]?.focus();
       setFocusedOtpIndex(nextIdx);
+      if (pasted.length === 6) {
+        setTimeout(() => verifyCode(pasted.join("")), 150);
+      }
       return;
     }
+
     const newOtp = [...otp];
     newOtp[index] = cleanDigits.slice(-1);
     setOtp(newOtp);
 
-    // Auto advance
+    // Auto advance focus
     if (cleanDigits && index < 5) {
       otpInputRefs.current[index + 1]?.focus();
       setFocusedOtpIndex(index + 1);
+    }
+
+    // Auto verify if all 6 filled
+    const fullCode = newOtp.join("");
+    if (fullCode.length === 6 && cleanDigits) {
+      setTimeout(() => verifyCode(fullCode), 150);
     }
   };
 
@@ -290,35 +409,37 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  const handleOtpSubmit = async () => {
-    const code = otp.join("");
-    if (code.length < 6 || busy) {
-      if (code.length < 6) {
-        Alert.alert("Incomplete Code", "Please enter the 6-digit code we sent you.");
-      }
-      return;
-    }
+  const handleResendOtp = async () => {
+    if (!canResend || busy) return;
     setBusy(true);
     try {
-      const tokenResp = await verifyOtp(fullPhone(), code);
-      const userObj = await loginWithToken(tokenResp.access_token, {
-        phone: fullPhone(),
-        countryCode: selectedCountry.code,
-      });
-      // Returning user whose profile was already completed -> skip Name screen to Common Home
-      if (userObj && userObj.isProfileComplete) {
-        enterAfterLogin();
-      } else {
-        // New user or incomplete profile -> Name screen
-        if (userObj?.firstName) setFirstName(userObj.firstName);
-        if (userObj?.lastName) setLastName(userObj.lastName);
-        setStep(3);
-      }
+      const resp = await requestOtp(fullPhone());
+      setTimer(30);
+      setCanResend(false);
+      const newCode =
+        resp && resp.debug_code
+          ? String(resp.debug_code)
+          : VALID_DEMO_CODES[
+              Math.floor(Math.random() * VALID_DEMO_CODES.length)
+            ];
+      setDevCode(newCode);
+      setOtp(["", "", "", "", "", ""]);
+      setFocusedOtpIndex(0);
+      otpInputRefs.current[0]?.focus();
+      Alert.alert("Code Sent", "A new verification code has been sent.");
     } catch (e) {
-      if (e && (e.status === 401 || e.kind === "login")) {
-        Alert.alert("Invalid Code", "That code is incorrect or expired. Please try again.");
+      if (__DEV__ || process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1") {
+        const fallbackNewCode =
+          VALID_DEMO_CODES[Math.floor(Math.random() * VALID_DEMO_CODES.length)];
+        setDevCode(fallbackNewCode);
+        setTimer(30);
+        setCanResend(false);
+        setOtp(["", "", "", "", "", ""]);
+        setFocusedOtpIndex(0);
+        otpInputRefs.current[0]?.focus();
+        Alert.alert("Code Sent", "A new verification code has been sent.");
       } else {
-        Alert.alert("Verification Failed", otpErrorMessage(e));
+        Alert.alert("Could Not Resend", otpErrorMessage(e));
       }
     } finally {
       setBusy(false);
@@ -332,16 +453,15 @@ export default function LoginScreen({ navigation }) {
       Alert.alert("Name Required", "Please enter your first name.");
       return;
     }
-
     setBusy(true);
     try {
-      // Persist to MySQL via PATCH /users/me
       await saveProfileName(trimmedFirst, trimmedLast);
-
-      // Enter the app (or resume the queued protected action)
       enterAfterLogin();
     } catch (e) {
-      Alert.alert("Could Not Save Profile", "Failed to save your profile name. Please try again.");
+      Alert.alert(
+        "Could Not Save Profile",
+        "Failed to save your profile name. Please try again."
+      );
     } finally {
       setBusy(false);
     }
@@ -363,9 +483,6 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  // Web-only Google Sign-In: GIS credential -> POST /auth/google ->
-  // existing loginWithToken. Unknown Google identities (backend 404
-  // GOOGLE_UNKNOWN) are NOT auto-created; the user must sign in by phone.
   const handleGoogleCredential = async (idToken) => {
     if (busy) return;
     setBusy(true);
@@ -383,7 +500,7 @@ export default function LoginScreen({ navigation }) {
       if (e && (e.status === 404 || e.detail === "GOOGLE_UNKNOWN")) {
         Alert.alert(
           "Google Account Not Linked",
-          "Your Google account is not linked to a Restamp account yet. Please sign in with your phone first."
+          "Your Google account is not linked to a RESTAMP account yet. Please sign in with your phone first."
         );
       } else {
         Alert.alert(
@@ -396,253 +513,466 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  const isOtpValid = otp.join("").length === 6 || otp.some((d) => d.length > 0);
+  // Central Keypad handler (also syncs with active input field)
+  const handleKeypadPress = useCallback(
+    (key) => {
+      if (step === 1) {
+        setPhoneTouched(true);
+        if (key === "backspace") {
+          setPhoneNumber((prev) => prev.slice(0, -1));
+        } else if (/^[0-9]$/.test(key)) {
+          setPhoneNumber((prev) => {
+            const next = prev + key;
+            return sanitizePhoneInput(next, selectedCountry.code);
+          });
+        }
+        phoneInputRef.current?.focus();
+      } else if (step === 2) {
+        if (key === "backspace") {
+          setOtp((prev) => {
+            const newOtp = [...prev];
+            let idxToClear = focusedOtpIndex;
+            if (newOtp[idxToClear] === "" && idxToClear > 0) {
+              idxToClear -= 1;
+            }
+            newOtp[idxToClear] = "";
+            setFocusedOtpIndex(Math.max(0, idxToClear));
+            otpInputRefs.current[Math.max(0, idxToClear)]?.focus();
+            return newOtp;
+          });
+        } else if (/^[0-9]$/.test(key)) {
+          setOtp((prev) => {
+            const newOtp = [...prev];
+            const currIdx = focusedOtpIndex;
+            if (currIdx < 6) {
+              newOtp[currIdx] = key;
+              const nextIdx = Math.min(5, currIdx + 1);
+              setFocusedOtpIndex(nextIdx);
+              otpInputRefs.current[nextIdx]?.focus();
+
+              const finalCode = newOtp.join("");
+              if (finalCode.length === 6) {
+                setTimeout(() => verifyCode(finalCode), 150);
+              }
+            }
+            return newOtp;
+          });
+        }
+      }
+    },
+    [step, selectedCountry.code, focusedOtpIndex, otp]
+  );
+
+  const isOtpComplete = otp.every((d) => d !== "");
   const isNameValid = firstName.trim().length > 0;
 
-  // Progress Bar width calculation: Step 1 = 33%, Step 2 = 66%, Step 3 = 100%
-  const progressPercent = step === 1 ? "33%" : step === 2 ? "66%" : "100%";
-
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      <StatusBar
+        barStyle={step === 0 ? "light-content" : "dark-content"}
+        backgroundColor={step === 0 ? "transparent" : "#FFFFFF"}
+        translucent={step === 0}
+      />
 
-      {/* TOP PROGRESS BAR */}
-      <View style={styles.progressBarTrack}>
-        <View style={[styles.progressBarFill, { width: progressPercent }]} />
-      </View>
-
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <TouchableWithoutFeedback onPress={dismissKeyboardIfBackground}>
-          <View style={styles.container}>
-            {/* TOP BAR / SKIP BUTTON */}
-            <View style={styles.topBar}>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity
-                onPress={handleSkip}
-                style={styles.skipBtn}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.skipBtnText}>Skip</Text>
-              </TouchableOpacity>
-            </View>
-
-          {/* ================= STEP 1: PHONE NUMBER ================= */}
-          {step === 1 && (
-            <View style={styles.content}>
-              <Text style={styles.heading}>What’s your phone number?</Text>
-
-                <View style={styles.phoneInputRow}>
-                  {/* Country Selector Card */}
+      <View style={styles.wrapper}>
+        {/* ======================================================== */}
+        {/* STEP 0: WELCOME / LANDING SCREEN (DESIGN 3)              */}
+        {/* ======================================================== */}
+        {step === 0 && (
+          <View style={styles.step0Container}>
+            {/* Top Half: Modern house architectural hero with sky overlay */}
+            <ImageBackground
+              source={require("../../../assets/login-hero-house.jpg")}
+              style={styles.step0HeroImage}
+              resizeMode="cover"
+            >
+              <View style={styles.step0HeroOverlay}>
+                {/* Top Status & Guest Skip */}
+                <View style={styles.step0TopRow}>
+                  <View style={{ flex: 1 }} />
                   <TouchableOpacity
-                    style={styles.countryCard}
-                    onPress={() => setShowCountryModal(true)}
+                    onPress={handleSkip}
+                    style={styles.step0SkipBtn}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.flagText}>{selectedCountry.flag}</Text>
-                    <Text style={styles.countryCodeText}>
-                      {selectedCountry.code}
-                    </Text>
-                    <ChevronDown size={14} color="#64748B" />
+                    <Text style={styles.step0SkipText}>Skip</Text>
                   </TouchableOpacity>
-
-                  {/* Phone Input Card */}
-                  <Pressable
-                    style={styles.phoneInputCard}
-                    onPress={() => phoneInputRef.current?.focus()}
-                  >
-                    <TextInput
-                      ref={phoneInputRef}
-                      style={styles.phoneTextInput}
-                      placeholder="10-digit mobile number"
-                      placeholderTextColor="#A8A29E"
-                      value={phoneNumber}
-                      onChangeText={handlePhoneChange}
-                      keyboardType="phone-pad"
-                      underlineColorAndroid="transparent"
-                      autoFocus
-                    />
-                  </Pressable>
                 </View>
 
-                {showPhoneError ? (
-                  <Text style={styles.phoneErrorText}>
-                    {phoneValidationMessage(phoneNumber, selectedCountry.code)}
+                {/* Centered Brand Title & Tagline in sky area */}
+                <View style={styles.step0BrandingContainer}>
+                  <View style={styles.step0LogoRow}>
+                    <RestampLogo size={42} />
+                    <Text style={styles.step0BrandTitle}>RESTAMP</Text>
+                  </View>
+                  <Text style={styles.step0Tagline}>
+                    The best place to find millions of home, apartment, and
+                    rental listings.
                   </Text>
-                ) : null}
+                </View>
+              </View>
+            </ImageBackground>
 
-                <Text style={styles.disclaimerText}>
-                  By continuing, you agree to receive{" "}
-                  <Text style={styles.boldText}>SMS</Text> messages from RESTAMP
-                  for phone verification.
+            {/* Bottom Half: Curved White Card with Action Buttons */}
+            <View style={styles.step0BottomCard}>
+              {/* Button 1: Continue with Mobile Number (Application primary theme) */}
+              <TouchableOpacity
+                style={styles.step0MobileBtn}
+                onPress={() => setStep(1)}
+                activeOpacity={0.85}
+              >
+                <MobileIcon size={20} color="#FFFFFF" />
+                <Text style={styles.step0MobileBtnText}>
+                  Continue with Mobile Number
                 </Text>
+              </TouchableOpacity>
 
-                {/* Web-only Google Sign-In (phone OTP stays the native flow). */}
-                {Platform.OS === "web" ? (
+              {/* Button 2: Login with Google */}
+              <TouchableOpacity
+                style={styles.step0SocialBtn}
+                onPress={() => {
+                  if (Platform.OS === "web") {
+                    Alert.alert(
+                      "Google Sign-In",
+                      "Please use Mobile Number or click below if Google button appears."
+                    );
+                  } else {
+                    Alert.alert(
+                      "Google Sign-In",
+                      "Google Sign-In is enabled for web. Please sign in with your mobile number."
+                    );
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <GoogleIcon size={20} />
+                <Text style={styles.step0SocialBtnText}>Login with Google</Text>
+              </TouchableOpacity>
+
+              {/* Web-only GIS invisible/native embed if configured */}
+              {Platform.OS === "web" ? (
+                <View style={styles.gisWrapper}>
                   <GoogleSignInButton
                     onCredential={handleGoogleCredential}
                     onError={() =>
                       Alert.alert(
                         "Google Sign-In Failed",
-                        "Could not start Google Sign-In. Please try again or use phone login."
+                        "Could not sign in with Google. Please use mobile number."
                       )
                     }
                   />
-                ) : null}
-              </View>
-            )}
+                </View>
+              ) : null}
 
-            {/* ================= STEP 2: OTP VERIFICATION ================= */}
-            {step === 2 && (
-              <View style={styles.content}>
-                <Text style={styles.heading}>
-                  We just texted you, what’s the code?
+              {/* Button 3: Login with Facebook */}
+              <TouchableOpacity
+                style={styles.step0SocialBtn}
+                onPress={() => {
+                  Alert.alert(
+                    "Facebook Login",
+                    "Facebook login is coming soon. Please continue with your mobile number."
+                  );
+                }}
+                activeOpacity={0.8}
+              >
+                <FacebookIcon size={20} />
+                <Text style={styles.step0SocialBtnText}>Login with Facebook</Text>
+              </TouchableOpacity>
+
+              {/* Footer: Sign up / terms */}
+              <View style={styles.step0FooterRow}>
+                <Text style={styles.step0FooterText}>
+                  Don’t have an account?{" "}
                 </Text>
+                <TouchableOpacity
+                  onPress={() => setStep(1)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.step0SignUpLink}>Sign Up</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
 
-                {/* 6 OTP Boxes */}
-                <View style={styles.otpBoxesRow}>
-                  {otp.map((digit, idx) => {
-                    const isFocused = focusedOtpIndex === idx;
-                    const isFilled = Boolean(digit);
-                    return (
+        {/* ======================================================== */}
+        {/* STEP 1: PHONE NUMBER INPUT SCREEN (DESIGN 2)             */}
+        {/* ======================================================== */}
+        {step === 1 && (
+          <View style={styles.flowContainer}>
+            {/* Top Navigation Bar: Back arrow and Skip Here */}
+            <View style={styles.flowTopBar}>
+              <TouchableOpacity
+                onPress={() => setStep(0)}
+                style={styles.backButton}
+                activeOpacity={0.7}
+                accessibilityLabel="Go back"
+              >
+                <ChevronLeft size={26} color="#0F172A" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleSkip}
+                style={styles.skipHereBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.skipHereText}>Skip Here</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Content Area */}
+            <View style={styles.flowBody}>
+              <Text style={styles.flowHeading}>Welcome back!</Text>
+              <Text style={styles.flowSubheading}>
+                Enter your registered phone number to log in
+              </Text>
+
+              {/* Phone Input Card (Flag + Code + Dropdown + Real Interactive TextInput) */}
+              <Pressable
+                style={styles.phoneInputCard}
+                onPress={() => phoneInputRef.current?.focus()}
+              >
+                {/* Flag + Country Code trigger */}
+                <TouchableOpacity
+                  style={styles.countryBadge}
+                  onPress={() => setShowCountryModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.countryFlagText}>
+                    {selectedCountry.flag}
+                  </Text>
+                  <Text style={styles.countryCodeBadgeText}>
+                    {selectedCountry.code}
+                  </Text>
+                  <ChevronDown size={14} color="#64748B" style={{ marginLeft: 2 }} />
+                </TouchableOpacity>
+
+                {/* Subtle vertical separator */}
+                <View style={styles.phoneInputDivider} />
+
+                {/* Real interactive TextInput */}
+                <TextInput
+                  ref={phoneInputRef}
+                  style={styles.phoneTextInput}
+                  placeholder="00 000 000 00"
+                  placeholderTextColor="#94A3B8"
+                  value={phoneNumber}
+                  onChangeText={handlePhoneChange}
+                  keyboardType="phone-pad"
+                  autoFocus
+                  maxLength={maxPhoneDigits(selectedCountry.code)}
+                  underlineColorAndroid="transparent"
+                />
+              </Pressable>
+
+              {/* Inline Validation Error */}
+              {showPhoneError ? (
+                <Text style={styles.phoneErrorText}>
+                  {phoneValidationMessage(phoneNumber, selectedCountry.code)}
+                </Text>
+              ) : null}
+
+              {/* Sign in Button (Application Primary Theme Color #2563EB) */}
+              <TouchableOpacity
+                style={[
+                  styles.primaryActionButton,
+                  (!isPhoneValid || busy) &&
+                    styles.primaryActionButtonDisabled,
+                ]}
+                onPress={handlePhoneSubmit}
+                disabled={!isPhoneValid || busy}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryActionButtonText}>
+                  {busy ? "Sending Code..." : "Sign in"}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Help? Link (Colored in application theme color) */}
+              <TouchableOpacity
+                style={styles.helpLinkContainer}
+                onPress={() =>
+                  Alert.alert(
+                    "Need Help?",
+                    "Please enter your 10-digit mobile number. For support, contact support@restamp.in"
+                  )
+                }
+                activeOpacity={0.7}
+              >
+                <Text style={styles.helpLinkText}>Help?</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Custom On-screen Numeric Keypad */}
+            <NumericKeypad onKeyPress={handleKeypadPress} />
+          </View>
+        )}
+
+        {/* ======================================================== */}
+        {/* STEP 2: OTP VERIFICATION SCREEN (DESIGN 1)               */}
+        {/* ======================================================== */}
+        {step === 2 && (
+          <View style={styles.flowContainer}>
+            {/* Top Navigation Bar: Back Arrow */}
+            <View style={styles.flowTopBar}>
+              <TouchableOpacity
+                onPress={() => setStep(1)}
+                style={styles.backButton}
+                activeOpacity={0.7}
+                accessibilityLabel="Go back"
+              >
+                <ChevronLeft size={26} color="#0F172A" />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }} />
+            </View>
+
+            {/* Content Area */}
+            <View style={styles.flowBody}>
+              <Text style={styles.flowHeading}>OTP Sent!</Text>
+              <Text style={styles.flowSubheading}>
+                Enter the 6-digit code sent to you at{" "}
+                <Text style={styles.flowSubheadingBold}>
+                  {selectedCountry.code} {phoneNumber}.
+                </Text>{" "}
+                <Text
+                  style={styles.didYouEnterNumberLink}
+                  onPress={() => setStep(1)}
+                >
+                  Did you enter the correct number?
+                </Text>
+              </Text>
+
+              {/* Floating OTP Digits with Sleek Unified Underlines */}
+              <View style={styles.otpDigitsRow}>
+                {otp.map((digit, idx) => {
+                  const isFocused = focusedOtpIndex === idx;
+                  const isFilled = Boolean(digit);
+                  return (
+                    <Pressable
+                      key={idx}
+                      style={styles.otpSlot}
+                      onPress={() => otpInputRefs.current[idx]?.focus()}
+                    >
                       <TextInput
-                        key={idx}
                         ref={(ref) => (otpInputRefs.current[idx] = ref)}
-                        style={[
-                          styles.otpBox,
-                          isFilled ? styles.otpBoxFilled : null,
-                          isFocused ? styles.otpBoxFocused : null,
-                        ]}
+                        style={styles.otpSlotInput}
                         value={digit}
                         onChangeText={(val) => handleOtpChange(val, idx)}
                         onKeyPress={(e) => handleOtpKeyPress(e, idx)}
                         onFocus={() => setFocusedOtpIndex(idx)}
-                        onBlur={() => {
-                          if (focusedOtpIndex === idx) setFocusedOtpIndex(-1);
-                        }}
                         keyboardType="number-pad"
                         maxLength={1}
-                        caretHidden={true}
-                        selectTextOnFocus={true}
-                        selectionColor="#2563EB"
+                        selectTextOnFocus
+                        selectionColor={COLORS.primary}
                         underlineColorAndroid="transparent"
                         autoFocus={idx === 0}
                       />
-                    );
-                  })}
-                </View>
+                      <View
+                        style={[
+                          styles.otpSlotUnderline,
+                          isFilled && styles.otpSlotUnderlineFilled,
+                          isFocused && styles.otpSlotUnderlineFocused,
+                        ]}
+                      />
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-                {/* Subtext Notice */}
-                <Text style={styles.subtextNotice}>
-                  We've sent a <Text style={styles.boldText}>WhatsApp / SMS</Text>{" "}
-                  verification code to{" "}
-                  <Text style={styles.boldText}>
-                    {selectedCountry.code} {phoneNumber || "your number"}
-                  </Text>
-                </Text>
-
-                {/* Minimal oneline text design for OTP with Tap to Auto-Fill */}
-                {devCode ? (
-                  <TouchableOpacity
-                    style={styles.devCodeNotice}
-                    onPress={() => handleAutoFill(devCode)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.devCodeNoticeText}>
-                      Testing code: <Text style={styles.devCodeBold}>{devCode}</Text>
-                      <Text style={styles.devCodeHint}> • Tap to auto-fill</Text>
-                    </Text>
-                  </TouchableOpacity>
-                ) : process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1" ? (
-                  <TouchableOpacity
-                    style={styles.demoOtpBox}
-                    onPress={() => handleAutoFill("297569")}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.demoOtpTitle}>Demo Mode</Text>
-                    <Text style={styles.demoOtpText}>
-                      Use OTP: <Text style={styles.demoOtpCode}>297569</Text>
-                      <Text style={styles.devCodeHint}> • Tap to auto-fill</Text>
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {/* Resend Code Button */}
+              {/* Dev / Demo Code Auto-fill Chip */}
+              {devCode ? (
                 <TouchableOpacity
-                  style={[
-                    styles.resendPillBtn,
-                    !canResend && styles.resendPillBtnDisabled,
-                  ]}
-                  onPress={() => {
-                    if (canResend && !busy) {
-                      setBusy(true);
-                      requestOtp(fullPhone()).then(
-                        (resp) => {
-                          setBusy(false);
-                          setTimer(30);
-                          setCanResend(false);
-                          const newCode =
-                            resp && resp.debug_code
-                              ? String(resp.debug_code)
-                              : VALID_DEMO_CODES[
-                                  Math.floor(Math.random() * VALID_DEMO_CODES.length)
-                                ];
-                          setDevCode(newCode);
-                          setOtp(["", "", "", "", "", ""]);
-                          setFocusedOtpIndex(0);
-                          Alert.alert(
-                            "Code Sent",
-                            "A new verification code has been sent."
-                          );
-                        },
-                        (e) => {
-                          setBusy(false);
-                          if (__DEV__ || process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1") {
-                            const fallbackNewCode =
-                              VALID_DEMO_CODES[
-                                Math.floor(Math.random() * VALID_DEMO_CODES.length)
-                              ];
-                            setDevCode(fallbackNewCode);
-                            setTimer(30);
-                            setCanResend(false);
-                            setOtp(["", "", "", "", "", ""]);
-                            setFocusedOtpIndex(0);
-                            Alert.alert(
-                              "Code Sent",
-                              "A new verification code has been sent."
-                            );
-                          } else {
-                            Alert.alert("Could Not Resend", otpErrorMessage(e));
-                          }
-                        }
-                      );
-                    }
-                  }}
-                  activeOpacity={canResend ? 0.75 : 1}
+                  style={styles.devCodeNotice}
+                  onPress={() => handleAutoFill(devCode)}
+                  activeOpacity={0.7}
                 >
-                  <RotateCcw
-                    size={14}
-                    color={canResend ? "#2563EB" : "#94A3B8"}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={[
-                      styles.resendPillText,
-                      !canResend && styles.resendPillTextDisabled,
-                    ]}
-                  >
-                    {canResend ? "Resend code" : `Resend code in ${timer}s`}
+                  <Text style={styles.devCodeNoticeText}>
+                    Testing code:{" "}
+                    <Text style={styles.devCodeBold}>{devCode}</Text>
+                    <Text style={styles.devCodeHint}> • Tap to auto-fill</Text>
                   </Text>
                 </TouchableOpacity>
-              </View>
-            )}
+              ) : null}
 
-          {/* ================= STEP 3: USER NAME ================= */}
-          {step === 3 && (
-            <View style={styles.content}>
-              <Text style={styles.heading}>What’s your name?</Text>
+              {/* Action Button: Styled in application color theme (#2563EB) */}
+              <TouchableOpacity
+                style={[
+                  styles.primaryActionButton,
+                  !isOtpComplete && !canResend && styles.primaryActionButtonDisabled,
+                ]}
+                onPress={() => {
+                  if (isOtpComplete) {
+                    handleOtpSubmit();
+                  } else if (canResend) {
+                    handleResendOtp();
+                  }
+                }}
+                disabled={!isOtpComplete && !canResend}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryActionButtonText}>
+                  {busy
+                    ? "Verifying..."
+                    : isOtpComplete
+                    ? "Verify OTP"
+                    : canResend
+                    ? "Resend OTP"
+                    : `Resend OTP in ${timer}s`}
+                </Text>
+              </TouchableOpacity>
+
+              {/* "I don’t receive code" Link (Left-aligned under button, matching mockup) */}
+              <TouchableOpacity
+                style={styles.iDontReceiveCodeContainer}
+                onPress={() => {
+                  if (canResend) {
+                    handleResendOtp();
+                  } else {
+                    Alert.alert(
+                      "Code Not Received?",
+                      `Please wait ${timer}s to request a new code. Ensure your network has SMS coverage or contact support@restamp.in.`
+                    );
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.iDontReceiveCodeText}>
+                  I don’t receive code
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Custom On-screen Numeric Keypad */}
+            <NumericKeypad onKeyPress={handleKeypadPress} />
+          </View>
+        )}
+
+        {/* ======================================================== */}
+        {/* STEP 3: USER NAME SETUP (FOR NEW PROFILES)               */}
+        {/* ======================================================== */}
+        {step === 3 && (
+          <View style={styles.flowContainer}>
+            {/* Top Navigation Bar: Back Arrow */}
+            <View style={styles.flowTopBar}>
+              <TouchableOpacity
+                onPress={() => setStep(2)}
+                style={styles.backButton}
+                activeOpacity={0.7}
+                accessibilityLabel="Go back"
+              >
+                <ChevronLeft size={26} color="#0F172A" />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }} />
+            </View>
+
+            <ScrollView
+              contentContainerStyle={styles.nameScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.flowHeading}>What’s your name?</Text>
+              <Text style={styles.flowSubheading}>
+                Enter your details to complete your RESTAMP profile
+              </Text>
 
               {/* First Name Card */}
               <Pressable
@@ -654,11 +984,10 @@ export default function LoginScreen({ navigation }) {
                   ref={firstNameInputRef}
                   style={styles.nameTextInput}
                   placeholder="Enter first name"
-                  placeholderTextColor="#A8A29E"
+                  placeholderTextColor="#94A3B8"
                   value={firstName}
                   onChangeText={setFirstName}
                   autoCapitalize="words"
-                  underlineColorAndroid="transparent"
                   autoFocus
                 />
               </Pressable>
@@ -673,85 +1002,46 @@ export default function LoginScreen({ navigation }) {
                   ref={lastNameInputRef}
                   style={styles.nameTextInput}
                   placeholder="Enter last name"
-                  placeholderTextColor="#A8A29E"
+                  placeholderTextColor="#94A3B8"
                   value={lastName}
                   onChangeText={setLastName}
                   autoCapitalize="words"
-                  underlineColorAndroid="transparent"
                 />
               </Pressable>
 
-              {/* Privacy Guarantee */}
+              {/* Privacy Guarantee Note */}
               <View style={styles.privacyRow}>
-                <Lock size={13} color="#78716C" style={{ marginRight: 6 }} />
+                <Lock size={14} color="#64748B" style={{ marginRight: 6 }} />
                 <Text style={styles.privacyText}>
-                  We'll only show this information to people you connect with
-                  on RESTAMP
+                  We'll only show this information to people you connect with on
+                  RESTAMP.
                 </Text>
               </View>
-            </View>
-          )}
 
-            {/* ================= BOTTOM BAR ================= */}
-            <View style={styles.bottomBar}>
-              {/* Back Button (visible on step 2 & 3) */}
-              {step > 1 ? (
-                <TouchableOpacity
-                  style={styles.circleBackBtn}
-                  onPress={() => setStep((prev) => prev - 1)}
-                  activeOpacity={0.8}
-                >
-                  <ArrowLeft size={22} color="#1E293B" />
-                </TouchableOpacity>
-              ) : (
-                <View style={{ width: 54 }} />
-              )}
-
-              {/* Support / Help link */}
-              <View style={styles.supportContainer}>
-                <Text style={styles.supportLabel}>
-                  Experiencing issues? Email our team:
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    Alert.alert(
-                      "Support",
-                      "Contact our team at support@restamp.in"
-                    )
-                  }
-                >
-                  <Text style={styles.supportEmail}>support@restamp.in</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Next Circular Button (App Primary Color #2563EB) */}
+              {/* Complete & Continue Button */}
               <TouchableOpacity
                 style={[
-                  styles.circleNextBtn,
-                  busy && styles.circleNextBtnDisabled,
-                  step === 1 && !isPhoneValid && styles.circleNextBtnDisabled,
-                  step === 2 && !isOtpValid && styles.circleNextBtnDisabled,
-                  step === 3 && !isNameValid && styles.circleNextBtnDisabled,
+                  styles.primaryActionButton,
+                  { marginTop: 32 },
+                  (!isNameValid || busy) &&
+                    styles.primaryActionButtonDisabled,
                 ]}
-                onPress={() => {
-                  if (step === 1) handlePhoneSubmit();
-                  else if (step === 2) handleOtpSubmit();
-                  else if (step === 3) handleNameSubmit();
-                }}
+                onPress={handleNameSubmit}
+                disabled={!isNameValid || busy}
                 activeOpacity={0.85}
               >
-                {step === 3 ? (
-                  <Check size={24} color="#FFFFFF" strokeWidth={2.6} />
-                ) : (
-                  <ArrowRight size={24} color="#FFFFFF" strokeWidth={2.4} />
-                )}
+                <Text style={styles.primaryActionButtonText}>
+                  {busy ? "Saving..." : "Complete & Continue"}
+                </Text>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
+        )}
+      </View>
 
-      {/* ================= COUNTRY CODE MODAL ================= */}
+      {/* ======================================================== */}
+      {/* COUNTRY CODE MODAL SHEET                                 */}
+      {/* ======================================================== */}
       <Modal
         visible={showCountryModal}
         animationType="slide"
@@ -783,8 +1073,13 @@ export default function LoginScreen({ navigation }) {
                   onPress={() => {
                     setSelectedCountry(item);
                     setPhoneTouched(false);
-                    setPhoneNumber((prev) => sanitizePhoneInput(prev, item.code));
+                    setPhoneNumber((prev) =>
+                      sanitizePhoneInput(prev, item.code)
+                    );
                     setShowCountryModal(false);
+                    setTimeout(() => {
+                      phoneInputRef.current?.focus();
+                    }, 100);
                   }}
                 >
                   <Text style={styles.countryListFlag}>{item.flag}</Text>
@@ -805,337 +1100,465 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  progressBarTrack: {
+  wrapper: {
+    flex: 1,
+    maxWidth: CARD_MAX_WIDTH,
     width: "100%",
-    height: 3,
-    backgroundColor: "#F1F5F9",
-  },
-  progressBarFill: {
-    height: "100%",
-    backgroundColor: "#2563EB", // Follow app primary color
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 22,
-    justifyContent: "space-between",
-  },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: 10,
-    paddingBottom: 6,
-  },
-  skipBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: "#F1F5F9",
-  },
-  skipBtnText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-  content: {
-    flex: 1,
-    paddingTop: 16,
-  },
-  heading: {
-    fontSize: 29,
-    fontWeight: "700",
-    color: "#111111",
-    letterSpacing: -0.6,
-    lineHeight: 38,
-    marginBottom: 28,
+    alignSelf: "center",
+    backgroundColor: "#FFFFFF",
   },
 
-  /* STEP 1: PHONE */
-  phoneInputRow: {
+  /* ================= STEP 0: WELCOME SCREEN ================= */
+  step0Container: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  step0HeroImage: {
+    flex: 1.15,
+    width: "100%",
+  },
+  step0HeroOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.28)",
+    justifyContent: "space-between",
+    paddingTop: Platform.OS === "ios" ? 12 : 20,
+    paddingBottom: 28,
+    paddingHorizontal: 20,
+  },
+  step0TopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  step0SkipBtn: {
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backdropFilter: "blur(6px)",
+  },
+  step0SkipText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  step0BrandingContainer: {
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  step0LogoRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 16,
+    marginBottom: 8,
   },
-  countryCard: {
+  step0BrandTitle: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.8,
+    textShadowColor: "rgba(0, 0, 0, 0.35)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  step0Tagline: {
+    fontSize: 14.5,
+    fontWeight: "500",
+    color: "rgba(255, 255, 255, 0.95)",
+    textAlign: "center",
+    lineHeight: 21,
+    textShadowColor: "rgba(0, 0, 0, 0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  step0BottomCard: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: Platform.OS === "ios" ? 24 : 20,
+    marginTop: -28,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000000",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 8,
+      },
+      web: {
+        boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.08)",
+      },
+    }),
+  },
+  step0MobileBtn: {
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary, // Follow application theme color
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginBottom: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: "0 4px 12px rgba(37, 99, 235, 0.25)",
+      },
+    }),
+  },
+  step0MobileBtnText: {
+    fontSize: 15.5,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  step0SocialBtn: {
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.2,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  step0SocialBtnText: {
+    fontSize: 15.5,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  gisWrapper: {
+    display: "none",
+  },
+  step0FooterRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 10,
+    paddingBottom: 4,
+  },
+  step0FooterText: {
+    fontSize: 13.5,
+    color: "#64748B",
+  },
+  step0SignUpLink: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+
+  /* ================= FLOW SCREENS (STEP 1 & 2) ================= */
+  flowContainer: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "space-between",
+  },
+  flowTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 8,
+    height: 48,
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: -6,
+  },
+  skipHereBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  skipHereText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  flowBody: {
+    flex: 1,
+    paddingHorizontal: 22,
+    paddingTop: 12,
+  },
+  flowHeading: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.6,
+    marginBottom: 6,
+  },
+  flowSubheading: {
+    fontSize: 14,
+    color: "#64748B",
+    lineHeight: 20,
+    marginBottom: 26,
+  },
+  flowSubheadingBold: {
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  didYouEnterNumberLink: {
+    color: "#DC2626",
+    fontWeight: "600",
+  },
+
+  /* Step 1: Real Interactive Phone Card */
+  phoneInputCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 58,
     backgroundColor: "#F8FAFC",
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.2,
     borderColor: "#E2E8F0",
     paddingHorizontal: 14,
-    height: 58,
+  },
+  countryBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
+    paddingVertical: 8,
+    paddingRight: 6,
   },
-  flagText: {
-    fontSize: 18,
+  countryFlagText: {
+    fontSize: 20,
   },
-  countryCodeText: {
+  countryCodeBadgeText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111111",
+    color: "#0F172A",
   },
-  phoneInputCard: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingHorizontal: 16,
-    height: 58,
-    justifyContent: "center",
-  },
-  phoneErrorText: {
-    fontSize: 12.5,
-    color: "#DC2626",
-    lineHeight: 18,
-    marginTop: -8,
-    marginBottom: 12,
-    paddingHorizontal: 4,
+  phoneInputDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: "#CBD5E1",
+    marginHorizontal: 8,
   },
   phoneTextInput: {
     flex: 1,
     height: "100%",
     fontSize: 17,
     fontWeight: "600",
-    color: "#111111",
+    color: "#0F172A",
+    letterSpacing: 0.5,
     paddingVertical: 0,
-    outlineStyle: "none",
-    outlineWidth: 0,
-    outlineColor: "transparent",
+    paddingHorizontal: 4,
+    ...Platform.select({
+      web: {
+        outlineStyle: "none",
+        outlineWidth: 0,
+        outlineColor: "transparent",
+      },
+    }),
   },
-  disclaimerText: {
+  phoneErrorText: {
     fontSize: 12.5,
-    color: "#78716C",
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  boldText: {
-    fontWeight: "700",
-    color: "#1C1917",
+    color: COLORS.danger,
+    marginTop: 6,
+    marginLeft: 4,
   },
 
-  /* STEP 2: OTP */
-  otpBoxesRow: {
+  /* Step 2: Floating OTP Digits with Sleek Unified Underlines */
+  otpDigitsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
     width: "100%",
+    paddingHorizontal: 10,
+    marginTop: 28,
+    marginBottom: 32,
   },
-  otpBox: {
-    width: OTP_BOX_WIDTH,
-    height: OTP_BOX_HEIGHT,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 14,
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#111111",
+  otpSlot: {
+    width: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  otpSlotInput: {
+    width: 44,
+    height: 44,
     textAlign: "center",
     textAlignVertical: "center",
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#0F172A",
+    backgroundColor: "transparent",
     paddingHorizontal: 0,
     paddingVertical: 0,
-    borderWidth: 1.5,
-    borderColor: "#E2E8F0",
-    outlineStyle: "none",
-    outlineWidth: 0,
-    outlineColor: "transparent",
+    borderWidth: 0,
+    ...Platform.select({
+      web: {
+        outlineStyle: "none",
+        outlineWidth: 0,
+        outlineColor: "transparent",
+      },
+    }),
   },
-  otpBoxFilled: {
-    borderColor: "#CBD5E1",
-    backgroundColor: "#FFFFFF",
+  otpSlotUnderline: {
+    width: 20,
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: "#E2E8F0",
+    marginTop: 2,
   },
-  otpBoxFocused: {
-    borderColor: "#2563EB",
-    backgroundColor: "#FFFFFF",
+  otpSlotUnderlineFocused: {
+    backgroundColor: COLORS.primary,
+    width: 20,
+    height: 2.5,
   },
-  subtextNotice: {
-    fontSize: 13,
-    color: "#78716C",
-    lineHeight: 20,
-    marginBottom: 14,
+  otpSlotUnderlineFilled: {
+    backgroundColor: "#94A3B8",
+    width: 20,
+    height: 2.5,
+  },
+  iDontReceiveCodeContainer: {
+    alignSelf: "flex-start",
+    marginTop: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  iDontReceiveCodeText: {
+    fontSize: 14.5,
+    fontWeight: "600",
+    color: "#DC2626", // Red/coral link matching mockup
   },
   devCodeNotice: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#EFF6FF",
+    backgroundColor: COLORS.primaryLight,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: COLORS.primaryBorder,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    marginBottom: 16,
+    marginBottom: 18,
     alignSelf: "flex-start",
   },
   devCodeNoticeText: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: "#1E40AF",
   },
   devCodeBold: {
     fontWeight: "700",
-    color: "#1D4ED8",
+    color: COLORS.primaryDark,
   },
   devCodeHint: {
     fontSize: 12,
-    color: "#2563EB",
-    fontWeight: "500",
-  },
-  demoOtpBox: {
-    alignItems: "center",
-    backgroundColor: "#FFFBEB",
-    borderWidth: 1,
-    borderColor: "#FCD34D",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-    overflow: "hidden",
-  },
-  demoOtpTitle: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#92400E",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  demoOtpText: {
-    fontSize: 14,
+    color: COLORS.primary,
     fontWeight: "600",
-    color: "#78350F",
-    marginTop: 4,
-  },
-  demoOtpCode: {
-    fontWeight: "800",
-    letterSpacing: 2,
-  },
-  demoOtpSub: {
-    fontSize: 11,
-    color: "#A16207",
-    marginTop: 4,
-  },
-  resendPillBtn: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-  },
-  resendPillBtnDisabled: {
-    backgroundColor: "#F8FAFC",
-    borderColor: "#E2E8F0",
-  },
-  resendPillText: {
-    fontSize: 12.5,
-    fontWeight: "700",
-    color: "#2563EB",
-  },
-  resendPillTextDisabled: {
-    color: "#A8A29E",
   },
 
-  /* STEP 3: NAME */
+  /* Action Buttons */
+  primaryActionButton: {
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary, // Follow application theme color
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 22,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: "0 4px 12px rgba(37, 99, 235, 0.25)",
+      },
+    }),
+  },
+  primaryActionButtonDisabled: {
+    backgroundColor: "#93C5FD",
+    ...Platform.select({
+      web: {
+        boxShadow: "none",
+      },
+    }),
+  },
+  primaryActionButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  helpLinkContainer: {
+    alignSelf: "flex-start",
+    marginTop: 14,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  helpLinkText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.primary, // Follow application theme
+  },
+
+  /* Step 3: Name Setup */
+  nameScrollContent: {
+    paddingHorizontal: 22,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
   nameInputCard: {
     backgroundColor: "#F8FAFC",
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.2,
     borderColor: "#E2E8F0",
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginBottom: 14,
   },
   nameInputLabel: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "600",
-    color: "#78716C",
+    color: "#64748B",
     marginBottom: 2,
   },
   nameTextInput: {
     fontSize: 16.5,
     fontWeight: "600",
-    color: "#111111",
+    color: "#0F172A",
     paddingVertical: 4,
     height: 36,
     width: "100%",
-    outlineStyle: "none",
-    outlineWidth: 0,
-    outlineColor: "transparent",
+    ...Platform.select({
+      web: {
+        outlineStyle: "none",
+        outlineWidth: 0,
+      },
+    }),
   },
   privacyRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 6,
-    paddingHorizontal: 4,
+    marginTop: 4,
+    paddingHorizontal: 2,
   },
   privacyText: {
     fontSize: 12,
-    color: "#78716C",
+    color: "#64748B",
     flex: 1,
     lineHeight: 17,
   },
 
-  /* BOTTOM BAR */
-  bottomBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: Platform.OS === "ios" ? 20 : 28,
-    paddingTop: 12,
-  },
-  circleBackBtn: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E7E5E4",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  supportContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 10,
-  },
-  supportLabel: {
-    fontSize: 11,
-    color: "#78716C",
-    textAlign: "center",
-  },
-  supportEmail: {
-    fontSize: 11.5,
-    fontWeight: "700",
-    color: "#111111",
-    textDecorationLine: "underline",
-    marginTop: 2,
-  },
-  circleNextBtn: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: "#2563EB", // Follow app primary color
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  circleNextBtnDisabled: {
-    backgroundColor: "#93C5FD",
-    shadowOpacity: 0.1,
-  },
-
-  /* MODAL */
+  /* Country Modal */
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.45)",
@@ -1149,6 +1572,9 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 36,
     maxHeight: "70%",
+    maxWidth: CARD_MAX_WIDTH,
+    width: "100%",
+    alignSelf: "center",
   },
   modalHeader: {
     flexDirection: "row",
@@ -1189,6 +1615,6 @@ const styles = StyleSheet.create({
   countryListCode: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#2563EB",
+    color: COLORS.primary,
   },
 });
