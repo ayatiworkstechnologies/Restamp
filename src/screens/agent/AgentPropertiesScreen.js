@@ -152,19 +152,22 @@ export default function AgentPropertiesScreen({ navigation }) {
   ]);
 
   const handleContactOwner = (item, type = "whatsapp") => {
-    const rawPhone = item.ownerPhone || "+919840012345";
-    const cleanPhone = rawPhone.replace(/[^0-9]/g, "");
+    const cleanPhone = String(item.ownerPhone || "").replace(/[^0-9]/g, "");
+    if (!cleanPhone) {
+      Alert.alert("Contact Number Unavailable", "No phone number is available for this owner.");
+      return;
+    }
 
     if (type === "whatsapp") {
       const text = encodeURIComponent(
         `Hello! I am a RESTAMP Agent contacting you regarding your property "${item.title}" in ${item.location}. I have interested clients and would like to arrange a site visit.`
       );
       Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`).catch(() => {
-        Alert.alert("WhatsApp Unavailable", `Contact Owner at ${rawPhone}`);
+        Alert.alert("WhatsApp Unavailable", "Could not launch WhatsApp.");
       });
     } else {
       Linking.openURL(`tel:${cleanPhone}`).catch(() => {
-        Alert.alert("Call Contact", `Owner Phone: ${rawPhone}`);
+        Alert.alert("Call Unavailable", "Could not place this call.");
       });
     }
   };

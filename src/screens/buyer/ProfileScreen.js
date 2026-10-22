@@ -51,6 +51,7 @@ import { linkGoogleAccount } from "../../api/auth";
 import GoogleSignInButton from "../../components/GoogleSignInButton";
 import ConfirmationModal from "../../components/owner/ConfirmationModal";
 import AppBrandHeader from "../../components/AppBrandHeader";
+import { AGENT_MODULE_ENABLED } from "../../constants/features";
 
 export default function ProfileScreen({ navigation }) {
   const nav = useNavigation() || navigation;
@@ -68,13 +69,15 @@ export default function ProfileScreen({ navigation }) {
     subscription?.planName ||
     authUser?.role === "OWNER"
   );
-  const hasAgentPlan = Boolean(
-    hasActivePlan &&
-    (agentPlan?.hasPurchased ||
-      agentPlan?.name ||
-      authUser?.role === "BROKER" ||
-      authUser?.role === "AGENT")
-  );
+  const hasAgentPlan =
+    AGENT_MODULE_ENABLED &&
+    Boolean(
+      hasActivePlan &&
+      (agentPlan?.hasPurchased ||
+        agentPlan?.name ||
+        authUser?.role === "BROKER" ||
+        authUser?.role === "AGENT")
+    );
 
   const handleSwitchToAgent = () => {
     nav.navigate("AgentNavigator");
@@ -134,13 +137,14 @@ export default function ProfileScreen({ navigation }) {
   const enquiriesCount = authed ? enquiriesTotal ?? "…" : "–";
 
   const [userProfile, setUserProfile] = useState({
-    name: authUser?.name || "Alex Smith",
+    // Identity comes from the authenticated user only. A logged-out visitor
+    // has no identity: the fields stay empty instead of showing another
+    // (mock) person's name, phone or email.
+    name: authUser?.name || "",
     phone: authUser?.phone || "",
-    email: authUser?.email || "alex.smith@restamp.in",
-    avatar:
-      authUser?.avatar ||
-      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
-    verified: true,
+    email: authUser?.email || "",
+    avatar: authUser?.avatar || null,
+    verified: !!authUser?.verified,
   });
 
   const [isEditing, setIsEditing] = useState(false);
@@ -192,10 +196,22 @@ export default function ProfileScreen({ navigation }) {
     if (authUser) {
       setUserProfile((prev) => ({
         ...prev,
-        name: authUser.name || prev.name,
+        name: authUser.name || "",
         phone: authUser.phone || "",
-        email: authUser.email || prev.email,
+        email: authUser.email || "",
+        avatar: authUser.avatar || null,
+        verified: !!authUser.verified,
       }));
+    } else {
+      // Signed out: drop the previous account's identity entirely, so the
+      // next account never inherits it.
+      setUserProfile({
+        name: "",
+        phone: "",
+        email: "",
+        avatar: null,
+        verified: false,
+      });
     }
   }, [authUser]);
 
@@ -216,11 +232,62 @@ export default function ProfileScreen({ navigation }) {
     requireAuth(doSwitchToOwner);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogoutModal(false);
-    logout();
-    nav.navigate("Login");
+    // Clear the session, the account-scoped cached data and the navigation
+    // stack in one step (AuthContext owns the first two).
+    await logout();
+    try {
+      nav.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+    } catch {
+      // The navigator may not be mounted; AuthContext already reset it.
+    }
   };
+
+  // Signed-out experience: no previous account's identity, no account data —
+  // just the existing auth entry point.
+  if (!authUser) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+        {/* TOP BRAND HEADER (Matching Buyer Home) */}
+        <AppBrandHeader currentRole="buyer" />
+
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.loggedOutCard}>
+            <View style={styles.loggedOutIconWrap}>
+              <User size={26} color={COLORS.primary} />
+            </View>
+            <Text style={styles.loggedOutTitle}>You're not signed in</Text>
+            <Text style={styles.loggedOutText}>
+              Log in to see your profile, saved properties, enquiries and visits.
+            </Text>
+            <TouchableOpacity
+              style={styles.loggedOutBtn}
+              onPress={() => {
+                try {
+                  nav.navigate("Login");
+                } catch {
+                  // navigation unavailable; the Home Login action still works
+                }
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.loggedOutBtnText}>Login</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -323,6 +390,52 @@ export default function ProfileScreen({ navigation }) {
               </View>
 
               <View style={styles.ticketHeaderButtons}>
+                {/* Stats Box (Grid of 3) */}
+                <View style={styles.statsGrid}>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statLabel}>VALIDITY</Text>
+                    <Text style={styles.statValue}>
+                      {subscription?.validity || "90 Days"}
+                    </Text>
+                  </View>
+                  <View style={[styles.statBox, styles.statBoxBorder]}>
+                    <Text style={styles.statLabel}>LISTINGS QUOTA</Text>
+                    <Text style={styles.statValue}>
+                      {subscription?.usedListings || 0} / {subscription?.listingLimit || 5} Used
+                    </Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statLabel}>AMOUNT PAID</Text>
+                    <Text style={[styles.statValue, { color: "#16A34A" }]}>
+                      {subscription?.amountPaid || "Not purchased"}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Extra details row: Transaction ref & Features */}
+                <View style={styles.metaInfoRow}>
+                  <View style={styles.metaItem}>
+                    <ShieldCheck size={13} color="#16A34A" style={{ marginRight: 4 }} />
+                    <Text style={styles.metaItemText}>
+                      0% Brokerage • Direct Inquiries Active
+                    </Text>
+                  </View>
+                  <Text style={styles.metaItemRef}>
+                    {subscription?.txnId || "Not purchased"}
+                  </Text>
+                </View>
+
+                {subscription?.expiryDate ? (
+                  <View style={styles.expiryNoticeRow}>
+                    <Calendar size={12} color="#64748B" style={{ marginRight: 5 }} />
+                    <Text style={styles.expiryNoticeText}>
+                      Expires on {subscription.expiryDate} ({subscription?.daysRemaining || 90} days left)
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* Action Buttons Row */}
+                <View style={styles.planActionsRow}>
                 <TouchableOpacity
                   style={styles.ticketDraftBtn}
                   onPress={hasAgentPlan ? handleManageAgentPlan : handleManageOwnerPlan}
@@ -385,6 +498,99 @@ export default function ProfileScreen({ navigation }) {
                     {hasAgentPlan ? "Active Territory" : "Available Slots"}
                   </Text>
                 </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>AMOUNT PAID</Text>
+                  <Text style={[styles.statValue, { color: "#16A34A" }]}>
+                    {(hasAgentPlan ? agentPlan?.amountPaid : subscription?.amountPaid) || "Not purchased"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Covered Localities preview — agent-plan only */}
+              {hasAgentPlan && (
+                <View style={styles.localitiesPreviewWrap}>
+                  <Text style={styles.localitiesPreviewTitle}>Covered Localities:</Text>
+                  <View style={styles.localitiesChipsRow}>
+                    {(selectedLocalities || []).slice(0, 4).map((loc, idx) => (
+                      <View key={idx} style={styles.localityChip}>
+                        <MapPin size={10} color="#2563EB" style={{ marginRight: 3 }} />
+                        <Text style={styles.localityChipText}>{loc}</Text>
+                      </View>
+                    ))}
+                    {(selectedLocalities?.length || 0) > 4 ? (
+                      <View style={styles.localityMoreChip}>
+                        <Text style={styles.localityMoreChipText}>
+                          +{(selectedLocalities?.length || 0) - 4} more
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              )}
+
+              {/* Extra details row: Transaction / Broker / Invoice ref */}
+              <View style={styles.metaInfoRow}>
+                <View style={styles.metaItem}>
+                  <ShieldCheck size={13} color="#16A34A" style={{ marginRight: 4 }} />
+                  <Text style={styles.metaItemText}>
+                    {hasAgentPlan ? "Verified Broker • Exclusive Buyer Leads" : "0% Brokerage • Direct Inquiries Active"}
+                  </Text>
+                </View>
+                <Text style={styles.metaItemRef}>
+                  {hasAgentPlan ? (agentPlan?.invoiceNumber || "INV-2026-AGT-8821") : (subscription?.txnId || "Not purchased")}
+                </Text>
+              </View>
+
+              {((hasAgentPlan && agentPlan?.expiryDate) || (!hasAgentPlan && subscription?.expiryDate)) ? (
+                <View style={styles.expiryNoticeRow}>
+                  <Calendar size={12} color="#64748B" style={{ marginRight: 5 }} />
+                  <Text style={styles.expiryNoticeText}>
+                    Expires on {(hasAgentPlan ? agentPlan?.expiryDate : subscription?.expiryDate)} (
+                    {(hasAgentPlan ? agentPlan?.daysRemaining : subscription?.daysRemaining) || (hasAgentPlan ? 30 : 90)} days left)
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Action Buttons Row — agent-plan buttons kept, upstream layout */}
+              <View style={styles.planActionsRow}>
+                {hasAgentPlan ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.primaryPlanBtn}
+                      onPress={handleSwitchToAgent}
+                      activeOpacity={0.88}
+                    >
+                      <Text style={styles.primaryPlanBtnText}>Open Agent Dashboard</Text>
+                      <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.secondaryPlanBtn}
+                      onPress={handleManageAgentPlan}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.secondaryPlanBtnText}>Manage Areas</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.primaryPlanBtn}
+                      onPress={handleManageOwnerPlan}
+                      activeOpacity={0.88}
+                    >
+                      <Text style={styles.primaryPlanBtnText}>Upgrade Plan</Text>
+                      <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.secondaryPlanBtn}
+                      onPress={handleManageOwnerPlan}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.secondaryPlanBtnText}>Browse Plans</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
               </View>
             </View>
 
@@ -453,25 +659,42 @@ export default function ProfileScreen({ navigation }) {
 
           {/* Quick Partner Options below Ticket Card */}
           {!hasOwnerPlan && !hasAgentPlan ? (
-            <View style={styles.emptyPlanButtonsRow}>
-              <TouchableOpacity
-                style={styles.emptyOwnerBtn}
-                onPress={handleManageOwnerPlan}
-                activeOpacity={0.85}
-              >
-                <Crown size={14} color="#B45309" style={{ marginRight: 6 }} />
-                <Text style={styles.emptyOwnerBtnText}>Owner Plans (from ₹0)</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.emptyAgentBtn}
-                onPress={handleExploreAgentPlans}
-                activeOpacity={0.85}
-              >
-                <Briefcase size={14} color="#4338CA" style={{ marginRight: 6 }} />
-                <Text style={styles.emptyAgentBtnText}>Agent Plans (from ₹2,499)</Text>
-              </TouchableOpacity>
+            <View style={styles.emptyPlanCard}>
+              <View style={styles.emptyPlanIconWrap}>
+                <Sparkles size={22} color="#2563EB" />
+              </View>
+              <Text style={styles.emptyPlanTitle}>
+                {AGENT_MODULE_ENABLED
+                  ? "Become an Owner or Agent Partner"
+                  : "Become an Owner Partner"}
+              </Text>
+              <Text style={styles.emptyPlanSubtitle}>
+                {AGENT_MODULE_ENABLED
+                  ? "Post properties with zero brokerage or access high-intent buyer leads across Chennai."
+                  : "Post properties with zero brokerage and receive direct buyer inquiries."}
+              </Text>
+              <View style={styles.emptyPlanButtonsRow}>
+                <TouchableOpacity
+                  style={styles.emptyOwnerBtn}
+                  onPress={handleManageOwnerPlan}
+                  activeOpacity={0.85}
+                >
+                  <Crown size={14} color="#B45309" style={{ marginRight: 6 }} />
+                  <Text style={styles.emptyOwnerBtnText}>Owner Plans (from ₹0)</Text>
+                </TouchableOpacity>
+                {AGENT_MODULE_ENABLED ? (
+                  <TouchableOpacity
+                    style={styles.emptyAgentBtn}
+                    onPress={handleExploreAgentPlans}
+                    activeOpacity={0.85}
+                  >
+                    <Briefcase size={14} color="#4338CA" style={{ marginRight: 6 }} />
+                    <Text style={styles.emptyAgentBtnText}>Agent Plans (from ₹2,499)</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             </View>
-          ) : hasOwnerPlan && !hasAgentPlan ? (
+          ) : AGENT_MODULE_ENABLED && hasOwnerPlan && !hasAgentPlan ? (
             <TouchableOpacity
               style={styles.addOtherPlanRow}
               onPress={handleExploreAgentPlans}
@@ -879,6 +1102,57 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+  },
+  loggedOutCard: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+    marginTop: 12,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  loggedOutIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  loggedOutTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#0F172A",
+    letterSpacing: -0.2,
+  },
+  loggedOutText: {
+    fontSize: 13,
+    color: "#64748B",
+    textAlign: "center",
+    marginTop: 6,
+    lineHeight: 19,
+  },
+  loggedOutBtn: {
+    height: 46,
+    minWidth: 140,
+    borderRadius: 23,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 18,
+  },
+  loggedOutBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
   profileHeaderCard: {
     flexDirection: "row",

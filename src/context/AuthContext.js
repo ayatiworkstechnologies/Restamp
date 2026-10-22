@@ -2,7 +2,9 @@ import React, { createContext, useCallback, useContext, useEffect, useState, use
 import { fetchMe, updateProfileName } from "../api/auth";
 import { setMyRole } from "../api/users";
 import { getAuthTokenSync, setAuthToken } from "../api/client";
+import { invalidateBuyerMode, noteServerRole } from "../api/buyerMode";
 import { createContinuationStore } from "../auth/continuation";
+import { resetToLogin } from "../navigation/navRef";
 
 const AuthContext = createContext();
 
@@ -61,6 +63,9 @@ function toUser(me, local) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Bumped on every login and every logout. Account-scoped stores watch it so
+  // a previous account's cached data can never survive into the next session.
+  const [sessionVersion, setSessionVersion] = useState(0);
 
   // In-memory token only (no persisted session): a fresh start is logged out
   // unless a token was set earlier in this JS runtime (e.g. fast refresh).
@@ -70,7 +75,13 @@ export function AuthProvider({ children }) {
       try {
         if (getAuthTokenSync()) {
           const me = await fetchMe();
-          if (!cancelled) setUser(toUser(me, null));
+          // The server is the source of truth for the current role; keep the
+          // buyer-mode guard in sync so it never acts on a stale role.
+          noteServerRole(me && me.role);
+          if (!cancelled) {
+            setUser(toUser(me, null));
+            setSessionVersion((v) => v + 1);
+          }
         }
       } catch {
         setAuthToken(null);
@@ -101,7 +112,12 @@ export function AuthProvider({ children }) {
         }
       }
       const u = toUser(me, local);
+      // Seed the confirmed server role (it may be OWNER if this account was
+      // last used in owner mode — the buyer-mode guard must not assume BUYER).
+      noteServerRole(me && me.role);
       setUser(u);
+      // New session: account-scoped stores drop the previous account's data.
+      setSessionVersion((v) => v + 1);
       return u;
     } catch (e) {
       setAuthToken(null);
@@ -137,6 +153,7 @@ export function AuthProvider({ children }) {
 
   const refreshMe = useCallback(async () => {
     const me = await fetchMe();
+    noteServerRole(me && me.role);
     let updated = null;
     setUser((prev) => {
       updated = {
@@ -152,9 +169,50 @@ export function AuthProvider({ children }) {
     return me;
   }, []);
 
+  /**
+   * Sign out.
+   *
+   * The backend session is a stateless JWT with no server-side logout
+   * endpoint (see backend app/security.py), so signing out is exactly:
+   * dropping the bearer token. Everything else is client-side hygiene that
+   * MUST happen so the next account never sees the previous one's data:
+   *
+   * 1. clear the bearer token (the app's established credential mechanism);
+   * 2. clear the current-user profile;
+   * 3. drop the single-shot post-login continuation (it belongs to the
+   *    account that is signing out, never to the next one);
+   * 4. bump the session version so every account-scoped store (owner
+   *    listings/leads, wishlist, ...) drops the previous account's cached
+   *    rows and re-fetches for the next account;
+   * 5. reset the navigation stack to the logged-out auth entry route, so no
+   *    protected screen stays on the stack and Back cannot return to one.
+   *
+   * It never throws and never leaves a falsely authenticated session: the
+   * token is cleared first, so a failure in step 5 cannot keep the user
+   * signed in.
+   */
   const logout = useCallback(async () => {
+    // Credentials first: from here on the session is genuinely unauthenticated.
     setAuthToken(null);
     setUser(null);
+    // The cached server role belonged to the account that just left.
+    invalidateBuyerMode();
+    // The queued continuation belongs to the account that just left.
+    try {
+      continuationStore.clear();
+    } catch {
+      // ignore: clearing an empty store must never break sign-out
+    }
+    // Announce the new (logged-out) session to every account-scoped store.
+    setSessionVersion((v) => v + 1);
+    // Land on the logged-out auth entry route (no protected screen on the
+    // stack, so Back cannot return to one).
+    try {
+      resetToLogin();
+    } catch {
+      // Navigation may not be mounted yet; the AppNavigator session effect
+      // performs the same reset as soon as the auth state settles.
+    }
   }, []);
 
   const setPendingAction = useCallback((fn) => {
@@ -174,6 +232,7 @@ export function AuthProvider({ children }) {
       user,
       isAuthenticated: !!user,
       isLoading,
+      sessionVersion,
       loginWithToken,
       saveProfileName,
       setLocalProfileName,
@@ -183,7 +242,7 @@ export function AuthProvider({ children }) {
       consumePendingAction,
       clearPendingAction,
     }),
-    [user, isLoading, loginWithToken, saveProfileName, setLocalProfileName, refreshMe, logout, setPendingAction, consumePendingAction, clearPendingAction]
+    [user, isLoading, sessionVersion, loginWithToken, saveProfileName, setLocalProfileName, refreshMe, logout, setPendingAction, consumePendingAction, clearPendingAction]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

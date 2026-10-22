@@ -16,12 +16,11 @@ import {
   Check,
   ShieldCheck,
   Zap,
+  AlertCircle,
 } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
-import { useOwner } from "../../context/OwnerContext";
 
 export default function OwnerPaymentSuccessScreen({ route, navigation }) {
-  const { subscription, activateSubscription } = useOwner();
   const planName = route?.params?.planName || "Owner Pro Plan";
   const planValidity = route?.params?.planValidity || "3 Months";
   const listingLimit = route?.params?.listingLimit || "Up to 5 Active Listings";
@@ -54,20 +53,6 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
   };
 
   useEffect(() => {
-    // Ensure subscription is activated with these details
-    if (!subscription?.hasPurchased || subscription?.planName !== planName) {
-      activateSubscription({
-        name: planName,
-        planName,
-        validity: planValidity,
-        listingLimit: parseInt(String(listingLimit).replace(/[^0-9]/g, ""), 10) || 5,
-        price: amountPaid,
-        amountPaid,
-      });
-    }
-  }, []);
-
-  useEffect(() => {
     Animated.spring(scaleAnim, {
       toValue: 1,
       friction: 5,
@@ -86,9 +71,6 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
       }
     };
   }, []);
-
-  // Parse amount number for styled currency display
-  const numericAmount = amountPaid.replace(/[^0-9.]/g, "") || "2999";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -110,8 +92,8 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
           style={styles.circleBtn}
           onPress={() =>
             Alert.alert(
-              "Receipt Details",
-              `Transaction #TXN-2026-98124\nPlan: ${planName}\nAmount Paid: ${amountPaid}\nStatus: Completed & Verified.`
+              "Owner Plan",
+              "Owner plan payments are not yet available. No payment was processed and no invoice or transaction was issued."
             )
           }
           activeOpacity={0.7}
@@ -125,68 +107,37 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* CARD 1: SUCCESS STATUS CARD */}
+        {/* CARD 1: PAYMENT NOT AVAILABLE */}
         <View style={styles.successCard}>
-          {/* Animated Green Badge */}
-          <Animated.View style={[styles.badgeCircle, { transform: [{ scale: scaleAnim }] }]}>
-            <View style={styles.innerBadgeCircle}>
-              <Check size={28} color="#FFFFFF" strokeWidth={3} />
-            </View>
-          </Animated.View>
-
-          <Text style={styles.statusTitle}>Payment Successful</Text>
+          <AlertCircle size={28} color="#D97706" />
+          <Text style={styles.statusTitle}>Payments Not Available</Text>
           <Text style={styles.statusSubtitle}>
-            Your Owner subscription is now active. You can now post properties and receive verified buyer leads.
+            Owner plan payments are not yet available. No payment was processed, no invoice was issued, and no plan was activated.
           </Text>
-
-          {/* Transaction Pill */}
-          <View style={styles.txnBadge}>
-            <ShieldCheck size={14} color="#16A34A" style={{ marginRight: 6 }} />
-            <Text style={styles.txnBadgeText}>
-              TXN-2026-98124 • Instant Activation
-            </Text>
-          </View>
         </View>
 
-        {/* CARD 2: SUBSCRIPTION SUMMARY (Exact styling as screenshot's Order Summary) */}
+        {/* CARD 2: SUBSCRIPTION STATUS */}
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Subscription Summary</Text>
+          <Text style={styles.summaryTitle}>Subscription Status</Text>
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Plan Name</Text>
+            <Text style={styles.summaryKey}>Plan</Text>
             <Text style={styles.summaryVal}>{planName}</Text>
           </View>
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Plan Validity</Text>
-            <Text style={styles.summaryVal}>{planValidity}</Text>
+            <Text style={styles.summaryKey}>Status</Text>
+            <Text style={styles.summaryVal}>Not activated</Text>
           </View>
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Listing Limit</Text>
-            <Text style={styles.summaryVal}>{listingLimit}</Text>
+            <Text style={styles.summaryKey}>Transaction</Text>
+            <Text style={styles.summaryVal}>None</Text>
           </View>
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Payment Status</Text>
-            <Text style={[styles.summaryVal, { color: "#16A34A" }]}>Completed • Paid</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Tax (18% GST)</Text>
-            <Text style={styles.summaryVal}>Included</Text>
-          </View>
-
-          {/* Dashed Separator */}
-          <View style={styles.dashedDivider} />
-
-          {/* Total Amount Row with orange currency symbol */}
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Amount Paid</Text>
-            <Text style={styles.totalAmount}>
-              <Text style={styles.currencySymbol}>₹ </Text>
-              {Number(numericAmount).toFixed(2)}
-            </Text>
+            <Text style={styles.summaryKey}>Invoice</Text>
+            <Text style={styles.summaryVal}>None</Text>
           </View>
         </View>
 

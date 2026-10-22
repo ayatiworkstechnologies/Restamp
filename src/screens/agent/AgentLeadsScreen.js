@@ -102,21 +102,27 @@ export default function AgentLeadsScreen({ navigation }) {
   };
 
   const handleCall = (lead) => {
-    const rawPhone = lead.phone || "+919876543210";
-    const cleanPhone = rawPhone.replace(/[^0-9+]/g, "");
+    const cleanPhone = String(lead.phone || "").replace(/[^0-9+]/g, "");
+    if (!cleanPhone) {
+      Alert.alert("Contact Number Unavailable", "No phone number is available for this lead.");
+      return;
+    }
     Linking.openURL(`tel:${cleanPhone}`).catch(() => {
-      Alert.alert("Call Lead", `${lead.customerName}: ${rawPhone}`);
+      Alert.alert("Call Unavailable", "Could not place this call.");
     });
   };
 
   const handleMessage = (lead) => {
-    const rawPhone = lead.phone || "+919876543210";
-    const cleanPhone = rawPhone.replace(/[^0-9]/g, "");
+    const cleanPhone = String(lead.phone || "").replace(/[^0-9]/g, "");
+    if (!cleanPhone) {
+      Alert.alert("Contact Number Unavailable", "No phone number is available for this lead.");
+      return;
+    }
     const text = encodeURIComponent(
       `Hello ${lead.customerName}! I am your RESTAMP Certified Agent regarding your requirement for ${lead.requirement} in ${lead.preferredLocality}. I have matching verified owner listings ready.`
     );
     Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`).catch(() => {
-      Alert.alert("Message Lead", `Contact ${lead.customerName} at ${rawPhone}`);
+      Alert.alert("WhatsApp Unavailable", "Could not launch WhatsApp.");
     });
   };
 

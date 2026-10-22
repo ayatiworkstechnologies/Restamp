@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -74,30 +75,11 @@ export default function OwnerPaymentScreen({ route, navigation }) {
     },
   ]);
 
-  const handlePay = (shouldSucceed = true) => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      if (shouldSucceed) {
-        activateSubscription({
-          ...plan,
-          price: formattedAmount,
-          amountPaid: formattedAmount,
-        });
-        navigation.navigate("OwnerPaymentSuccess", {
-          planName: plan.name,
-          planValidity: plan.validity,
-          listingLimit: `Up to ${plan.listingLimit} Active Listings`,
-          amountPaid: formattedAmount,
-        });
-      } else {
-        navigation.navigate("OwnerPaymentFailed", {
-          plan,
-          totalAmount,
-          formattedAmount,
-        });
-      }
-    }, 1200);
+  const handlePay = () => {
+    Alert.alert(
+      "Payments Not Available",
+      "Owner plan payments are not yet available. Please contact support to activate your plan. No payment is processed and no invoice is issued."
+    );
   };
 
   const handleAddNewMethod = () => {

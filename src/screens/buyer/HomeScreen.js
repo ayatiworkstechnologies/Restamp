@@ -1111,7 +1111,7 @@ export default function HomeScreen({ navigation }) {
               <View style={styles.locationOverlay} />
               <View style={styles.locationCardContent}>
                 <Text style={styles.locationCardName}>{loc.name}</Text>
-                <Text style={styles.locationCardCount}>{loc.count}</Text>
+                <Text style={styles.locationCardCount}>Explore locality</Text>
               </View>
             </TouchableOpacity>
           ))}

@@ -68,7 +68,7 @@ export default function OwnerPublishSuccessScreen({ route, navigation }) {
 
         {/* Title & Subtitle */}
         <Text style={styles.title}>Property Submitted Successfully</Text>
-        <Text style={styles.subtitle}>Your property has been sent for verification.</Text>
+        <Text style={styles.subtitle}>Your property has been submitted for backend verification. You’ll be notified once verification is complete.</Text>
 
         {/* Status Badge */}
         <View style={styles.statusBox}>
@@ -97,7 +97,9 @@ export default function OwnerPublishSuccessScreen({ route, navigation }) {
 
         <View style={styles.infoCard}>
           <Text style={styles.infoText}>
-            Our verification team typically validates property ownership within 2 to 4 business hours. You'll receive a push notification once your listing goes live.
+            Your listing is saved as Pending Verification and is not visible to buyers yet. It will
+            automatically become Active within 2 minutes. You can pull to refresh in My Properties
+            to see the updated status.
           </Text>
         </View>
 
@@ -117,15 +119,9 @@ export default function OwnerPublishSuccessScreen({ route, navigation }) {
             variant="outline"
             style={styles.secondaryBtn}
           />
-
-          <TouchableOpacity
-            style={styles.backLinkBtn}
-            onPress={handleGoBack}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.backLinkText}>Back to Dashboard</Text>
-          </TouchableOpacity>
         </View>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -141,129 +137,117 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 14,
+    paddingVertical: 16,
     backgroundColor: "#FFFFFF",
   },
   circleBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FFFFFF",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: "500",
-    color: "#111111",
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#0F172A",
     letterSpacing: -0.3,
   },
   scrollView: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
   },
   container: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 36,
   },
   iconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "#ECFDF5",
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#F0FDF4",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
-    borderWidth: 6,
-    borderColor: "#D1FAE5",
   },
   title: {
     fontSize: 22,
     fontWeight: "600",
-    color: COLORS.textDark,
-    textAlign: "center",
+    color: "#0F172A",
     letterSpacing: -0.4,
+    textAlign: "center",
     marginBottom: 6,
   },
   subtitle: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    fontSize: 15,
+    color: "#64748B",
     textAlign: "center",
+    lineHeight: 22,
     marginBottom: 20,
-    fontWeight: "400",
   },
   statusBox: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFBEB",
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 10,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: "#FCD34D",
-    marginBottom: 24,
   },
   statusLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "500",
     color: "#92400E",
   },
   propertyCard: {
-    width: "100%",
     flexDirection: "row",
-    alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#E2E8F0",
-    padding: 12,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    padding: 14,
     marginBottom: 16,
+    width: "100%",
   },
   propertyThumb: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
+    width: 80,
+    height: 80,
+    borderRadius: 12,
     marginRight: 12,
   },
   propertyTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "500",
-    color: COLORS.textDark,
+    color: "#0F172A",
+    marginBottom: 4,
   },
   propertyLocality: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    fontWeight: "400",
+    fontSize: 13,
+    color: "#64748B",
+    marginBottom: 6,
   },
   propertyPrice: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 16,
+    fontWeight: "600",
     color: COLORS.primary,
-    marginTop: 4,
   },
   infoCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F8FAFC",
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     padding: 14,
-    marginBottom: 24,
+    marginBottom: 20,
+    width: "100%",
   },
   infoText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-    textAlign: "center",
+    fontSize: 13,
+    color: "#475569",
+    lineHeight: 20,
   },
   buttonStack: {
     width: "100%",
@@ -274,15 +258,5 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     width: "100%",
-  },
-  backLinkBtn: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-  },
-  backLinkText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#64748B",
   },
 });

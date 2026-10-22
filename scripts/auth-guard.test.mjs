@@ -123,7 +123,14 @@ check("W5 skip + unmount abandon drop the action", loginSrc.includes("clearPendi
 const wishSrc = src("src/context/WishlistContext.js");
 check("W6 wishlist toggle defers guests centrally", wishSrc.includes("planProtectedAction") && wishSrc.includes("goLogin()") && wishSrc.includes("setPendingAction"));
 const modalSrc = src("src/components/PropertyDetailModal.js");
-check("W7 modal passes a resume thunk", modalSrc.includes("onLoginRequired(resume)") && modalSrc.includes("() => handleSendEnquiry()"));
+check("W7 modal passes a resume thunk", modalSrc.includes("onLoginRequired(resume)") && modalSrc.includes("() => handleSubmitEnquiry()"));
+const usersSrc = src("src/api/users.js");
+check(
+  "W14 role entry waits for server confirmation before navigation",
+  usersSrc.includes("await ensureOwnerRole(auth)") &&
+    usersSrc.indexOf("await ensureOwnerRole(auth)") < usersSrc.indexOf('navigation.navigate("OwnerNavigator"') &&
+    usersSrc.indexOf('await ensureRole(auth, "BUYER")') < usersSrc.indexOf('rootNav.reset(')
+);
 for (const [label, rel] of [
   ["W8a home", "src/screens/buyer/HomeScreen.js"],
   ["W8b search", "src/screens/buyer/SearchScreen.js"],

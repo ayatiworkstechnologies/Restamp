@@ -577,6 +577,33 @@ export async function fetchOwnerListings(page = 1, pageSize = 20) {
 }
 
 /**
+ * Fetch EVERY listing of the authenticated owner, following the server's
+ * pagination until the owner's own `total` is reached.
+ *
+ * The backend scopes the list to the bearer token's owner, so this never
+ * returns another account's rows. Paging through the whole set (instead of
+ * only the first page) keeps the tab counts and the rendered cards
+ * consistent for owners with more listings than one page.
+ *
+ * @param {number} pageSize - server page size (max 100)
+ * @param {number} maxPages - safety bound on the number of requests
+ * @returns {Promise<{items: Array, total: number}>}
+ */
+export async function fetchAllOwnerListings(pageSize = 100, maxPages = 20) {
+  const items = [];
+  let total = 0;
+  for (let page = 1; page <= maxPages; page += 1) {
+    const resp = await apiGetAuth("/owner/listings", { page, page_size: pageSize });
+    const pageItems = Array.isArray(resp?.items) ? resp.items : [];
+    items.push(...pageItems);
+    total = typeof resp?.total === "number" ? resp.total : items.length;
+    if (pageItems.length < pageSize) break;
+    if (items.length >= total) break;
+  }
+  return { items, total: Math.max(total, items.length) };
+}
+
+/**
  * Fetch the authenticated owner's buyer-enquiry leads (P3 leads MVP).
  * Only rows the backend authorizes for this owner are ever returned.
  * @param {{propertyListingId?: number, status?: "NEW"|"CONTACTED"|"CLOSED", page?: number, pageSize?: number}} opts
@@ -684,6 +711,41 @@ export async function updateOwnerListing(listingId, payload) {
 export async function deleteListingPhoto(listingId, mediaId) {
   await apiDelete(`/owner/listings/${listingId}/photos/${mediaId}`);
   return true;
+}
+
+/**
+ * Explicit listing lifecycle transitions (backend state machine; GETs never
+ * verify). Each returns the updated OwnerListingOut. Throws ApiError with
+ * `status` (401 login / 403 denied / 404 missing / 422 invalid transition).
+ * Same-state repeats are idempotent on the server.
+ */
+export async function submitListing(listingId) {
+  return apiPost(`/owner/listings/${listingId}/submit`);
+}
+
+export async function verifyListing(listingId) {
+  return apiPost(`/owner/listings/${listingId}/verify`);
+}
+
+export async function rejectListing(listingId, reason) {
+  const body = reason && String(reason).trim() ? { reason: String(reason).slice(0, 500) } : {};
+  return apiPost(`/owner/listings/${listingId}/reject`, body);
+}
+
+export async function publishListing(listingId) {
+  return apiPost(`/owner/listings/${listingId}/publish`);
+}
+
+export async function archiveListing(listingId) {
+  return apiPost(`/owner/listings/${listingId}/archive`);
+}
+
+export async function updateListingStatus(listingId, { status, closedReason } = {}) {
+  const body = { status };
+  if (closedReason !== undefined && closedReason !== null && String(closedReason).trim() !== "") {
+    body.closed_reason = String(closedReason).slice(0, 500);
+  }
+  return apiPost(`/owner/listings/${listingId}/status`, body);
 }
 
 /**
@@ -949,7 +1011,16 @@ export function toOwnerProperty(apiListing) {
     builtUpArea: apiListing.area_value ? `${apiListing.area_value} ${apiListing.area_unit || "sqft"}` : "",
     bedrooms: apiListing.bedrooms !== null ? String(apiListing.bedrooms) : "",
     bathrooms: apiListing.bathrooms !== null ? String(apiListing.bathrooms) : "",
-    status: apiListing.verification_status === "VERIFIED" ? "active" : "pending",
+    // UI status buckets mirror the backend state machine: terminal
+    // SOLD/RENTED/LEASED read as closed (off-market); only VERIFIED+AVAILABLE
+    // is active. PENDING/REJECTED/CLOSED/EXPIRED keep their own buckets.
+    status: (() => {
+      const l = apiListing.listing_status;
+      if (l === "CLOSED" || l === "SOLD" || l === "RENTED" || l === "LEASED") return "closed";
+      if (l === "EXPIRED") return "expired";
+      if (apiListing.verification_status === "REJECTED") return "rejected";
+      return apiListing.verification_status === "VERIFIED" ? "active" : "pending";
+    })(),
     verification_status: apiListing.verification_status,
     listing_status: apiListing.listing_status,
     images: [coverPhoto],

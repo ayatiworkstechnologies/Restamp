@@ -34,14 +34,10 @@ import {
 } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import RestampLogo from "../../components/RestampLogo";
-import { useAgent } from "../../context/AgentContext";
 import { useAuth } from "../../context/AuthContext";
 import { enterOwnerFlow } from "../../api/users";
 
-const VERTICAL_TABS = [
-  { id: "owner", label: "Owner Plan", icon: Crown },
-  { id: "agent", label: "Agent Plan", icon: Briefcase },
-];
+const VERTICAL_TABS = [{ id: "owner", label: "Owner Plan", icon: Crown }];
 
 const RESIDENTIAL_TYPES = [
   {
@@ -203,118 +199,6 @@ const OWNER_PLANS = {
   ],
 };
 
-/* 3 Compact Agent Plans */
-const AGENT_PLANS = {
-  residential: [
-    {
-      id: "agent-starter",
-      name: "Agent Starter (5 Locations)",
-      titleColor: "#0F172A",
-      price: "₹2,999",
-      priceSub1: "Suitable for local agents",
-      priceSub2: "billed monthly • 30 days validity",
-      isPopular: false,
-      buttonText: "Choose Plan",
-      locationLimit: 5,
-      features: [
-        "5 Selected Chennai Localities",
-        "Owner-posted properties access",
-        "40 Verified buyer & tenant leads",
-      ],
-    },
-    {
-      id: "agent-pro",
-      name: "Agent Pro (10 Locations)",
-      titlePrefix: "Pro ",
-      titlePrefixColor: "#2563EB",
-      titleColor: "#0F172A",
-      price: "₹6,999",
-      priceSub1: "Recommended • High coverage",
-      priceSub2: "billed monthly • 30 days validity",
-      isPopular: true,
-      buttonText: "Choose Plan",
-      locationLimit: 10,
-      features: [
-        "10 Selected Chennai Localities",
-        "Full owner contact & property matching",
-        "150 Verified buyer & tenant leads",
-      ],
-    },
-    {
-      id: "agent-agency",
-      name: "Elite Agency (15 Locations)",
-      titlePrefix: "Elite ",
-      titlePrefixColor: "#2563EB",
-      titleColor: "#0F172A",
-      price: "₹14,999",
-      priceSub1: "Maximum coverage",
-      priceSub2: "billed monthly • 30 days validity",
-      isPopular: false,
-      buttonText: "Choose Plan",
-      locationLimit: 15,
-      features: [
-        "15 Selected Chennai Localities",
-        "500+ Verified HNI buyer leads",
-        "Priority visit coordination & CRM sync",
-      ],
-    },
-  ],
-  commercial: [
-    {
-      id: "comm-agent-starter",
-      name: "Commercial (5 Locations)",
-      titleColor: "#0F172A",
-      price: "₹4,999",
-      priceSub1: "Suitable for local agents",
-      priceSub2: "billed monthly • 30 days validity",
-      isPopular: false,
-      buttonText: "Choose Plan",
-      locationLimit: 5,
-      features: [
-        "5 Commercial Hub Localities",
-        "Verified office & retail tenants",
-        "Commercial lead CRM",
-      ],
-    },
-    {
-      id: "comm-agent-pro",
-      name: "Corporate Partner (10 Locations)",
-      titlePrefix: "Corporate ",
-      titlePrefixColor: "#2563EB",
-      titleColor: "#0F172A",
-      price: "₹9,999",
-      priceSub1: "Recommended • Top IT hubs",
-      priceSub2: "billed monthly • 30 days validity",
-      isPopular: true,
-      buttonText: "Choose Plan",
-      locationLimit: 10,
-      features: [
-        "10 Commercial Hub Localities",
-        "200+ Corporate tenant contacts",
-        "Top category placement for IT hubs",
-      ],
-    },
-    {
-      id: "comm-agent-elite",
-      name: "Developer Mandate (15 Locations)",
-      titlePrefix: "Developer ",
-      titlePrefixColor: "#2563EB",
-      titleColor: "#0F172A",
-      price: "₹19,999",
-      priceSub1: "Maximum coverage",
-      priceSub2: "billed monthly • 30 days validity",
-      isPopular: false,
-      buttonText: "Choose Plan",
-      locationLimit: 15,
-      features: [
-        "15 Prime Business Corridors",
-        "Institutional tenant network",
-        "Exclusive mandate marketing",
-      ],
-    },
-  ],
-};
-
 const CHENNAI_PRICE_TRENDS = [
   {
     locality: "Anna Nagar",
@@ -384,7 +268,6 @@ const PROPERTY_TYPE_OPTIONS = [
 
 export default function MenuScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { hasActivePlan, agentPlan } = useAgent();
   const auth = useAuth();
   const [ownerSwitching, setOwnerSwitching] = useState(false);
 
@@ -401,10 +284,8 @@ export default function MenuScreen({ navigation, route }) {
     }
   };
 
-  // Vertical Tab state: 'owner' | 'agent' | 'price' | 'insights'
-  const [activeVerticalTab, setActiveVerticalTab] = useState(
-    route?.params?.initialTab || "owner"
-  );
+  // Agent plans are gated off (no production broker/lead API yet).
+  const [activeVerticalTab, setActiveVerticalTab] = useState("owner");
 
   // Category: 'residential' | 'commercial'
   const [propertyCategory, setPropertyCategory] = useState("residential");
@@ -494,21 +375,6 @@ export default function MenuScreen({ navigation, route }) {
       return;
     }
 
-    if (planRole === "Agent") {
-      navigation.navigate("AgentLocationSelect", {
-        plan: {
-          id: plan.id,
-          name: plan.name,
-          locationLimit: plan.locationLimit || (plan.name?.includes("15") ? 15 : plan.name?.includes("5") ? 5 : 10),
-          price: plan.price,
-          priceNumeric: parseInt(plan.price?.replace(/[^0-9]/g, "")) || 6999,
-          validity: "1 Month (30 Days)",
-          category: propertyCategory,
-        },
-      });
-      return;
-    }
-
     Alert.alert(
       `${plan.name} Selected`,
       `Proceed with ${plan.name} (${plan.price}) for your ${propertyCategory} property as an ${planRole}?`,
@@ -530,13 +396,9 @@ export default function MenuScreen({ navigation, route }) {
 
   // Determine current active plans array
   const currentPlans =
-    activeVerticalTab === "owner"
-      ? propertyCategory === "residential"
-        ? OWNER_PLANS.residential
-        : OWNER_PLANS.commercial
-      : propertyCategory === "residential"
-        ? AGENT_PLANS.residential
-        : AGENT_PLANS.commercial;
+    propertyCategory === "residential"
+      ? OWNER_PLANS.residential
+      : OWNER_PLANS.commercial;
 
   const safeTopPadding = Math.max(insets.top, Platform.OS === "ios" ? 48 : 14);
   const currentLocData = getLocalityData();
@@ -603,13 +465,7 @@ export default function MenuScreen({ navigation, route }) {
                 <TouchableOpacity
                   key={tab.id}
                   style={[styles.railItem, isActive && styles.railItemActive]}
-                  onPress={() => {
-                    if (tab.id === "agent") {
-                      navigation.navigate("AgentLocationSelect");
-                    } else {
-                      setActiveVerticalTab(tab.id);
-                    }
-                  }}
+                  onPress={() => setActiveVerticalTab(tab.id)}
                   activeOpacity={0.75}
                 >
                   {/* Left Active Indicator Bar */}
@@ -646,41 +502,21 @@ export default function MenuScreen({ navigation, route }) {
           contentContainerStyle={styles.contentPaneScroll}
           showsVerticalScrollIndicator={false}
         >
-          {/* ================= PANE 1 & 2: OWNER PLAN / AGENT PLAN ================= */}
-          {(activeVerticalTab === "owner" || activeVerticalTab === "agent") && (
+          {/* ================= OWNER PLAN ================= */}
+          {activeVerticalTab === "owner" && (
             <View>
               {/* Header Info */}
               <View style={styles.paneHeader}>
                 <View style={styles.headerRoleRow}>
-                  <Text style={styles.paneMainTitle}>
-                    {activeVerticalTab === "owner"
-                      ? "Owner Plans"
-                      : "Agent Plans"}
-                  </Text>
-                  <View
-                    style={[
-                      styles.roleBadge,
-                      activeVerticalTab === "owner"
-                        ? styles.roleBadgeOwner
-                        : styles.roleBadgeAgent,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.roleBadgeText,
-                        activeVerticalTab === "owner"
-                          ? styles.roleBadgeTextOwner
-                          : styles.roleBadgeTextAgent,
-                      ]}
-                    >
-                      {activeVerticalTab === "owner" ? "Individual" : "Partner"}
+                  <Text style={styles.paneMainTitle}>Owner Plans</Text>
+                  <View style={[styles.roleBadge, styles.roleBadgeOwner]}>
+                    <Text style={[styles.roleBadgeText, styles.roleBadgeTextOwner]}>
+                      Individual
                     </Text>
                   </View>
                 </View>
                 <Text style={styles.paneSubtitle}>
-                  {activeVerticalTab === "owner"
-                    ? "Direct buyer inquiries • 0% brokerage in Chennai"
-                    : "Micromarket boost • Verified corporate & HNI leads"}
+                  Direct buyer inquiries • 0% brokerage in Chennai
                 </Text>
               </View>
 
@@ -703,28 +539,6 @@ export default function MenuScreen({ navigation, route }) {
                     activeOpacity={0.85}
                   >
                     <Text style={styles.ownerTestBtnText}>Open</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Active Plan Quick Access Banner for Agents */}
-              {activeVerticalTab === "agent" && hasActivePlan && (
-                <View style={styles.activePlanBanner}>
-                  <View style={styles.activePlanLeft}>
-                    <Crown size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.activePlanTitle}>{agentPlan?.name || "Agent Pro"} Active</Text>
-                      <Text style={styles.activePlanSub}>
-                        {agentPlan?.locationLimit || 10} Locations • {agentPlan?.daysRemaining || 24} Days Left
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.activePlanBtn}
-                    onPress={() => navigation.navigate("AgentNavigator")}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.activePlanBtnText}>Dashboard</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -797,7 +611,7 @@ export default function MenuScreen({ navigation, route }) {
                     onPress={() =>
                       handleSelectPlan(
                         plan,
-                        activeVerticalTab === "owner" ? "Owner" : "Agent",
+                        "Owner",
                       )
                     }
                   >

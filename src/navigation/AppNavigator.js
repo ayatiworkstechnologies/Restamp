@@ -1,5 +1,5 @@
-import React from "react";
-import { Platform, DeviceEventEmitter } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Platform, DeviceEventEmitter, View } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -38,7 +38,11 @@ import AgentPaymentSuccessScreen from "../screens/agent/AgentPaymentSuccessScree
 import AgentLeadDetailScreen from "../screens/agent/AgentLeadDetailScreen";
 import AgentEarningsScreen from "../screens/agent/AgentEarningsScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
+import { AGENT_MODULE_ENABLED } from "../constants/features";
 import { navigationRef } from "./navRef";
+import RequireAuth from "./RequireAuth";
+import { useAuth } from "../context/AuthContext";
+import { AUTH_ENTRY_ROUTE, planSessionNavigation } from "../auth/session";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -161,11 +165,69 @@ const navTheme = {
   },
 };
 
+// Account-scoped screens are wrapped once, at module scope, so the wrapper
+// identity is stable across renders (a wrapper created during render would
+// remount the screen on every parent update).
+const guarded = (Component) => {
+  const Guarded = (props) => (
+    <RequireAuth>
+      <Component {...props} />
+    </RequireAuth>
+  );
+  Guarded.displayName = `RequireAuth(${Component.displayName || Component.name || "Screen"})`;
+  return Guarded;
+};
+
+const GuardedProfile = guarded(ProfileScreen);
+const GuardedEnquiries = guarded(EnquiriesScreen);
+const GuardedNotifications = guarded(NotificationScreen);
+const GuardedOwnerNavigator = guarded(OwnerNavigator);
+const GuardedOwnerPlans = guarded(OwnerPlansScreen);
+const GuardedOwnerPlanConfirm = guarded(OwnerPlanConfirmScreen);
+const GuardedOwnerPayment = guarded(OwnerPaymentScreen);
+const GuardedOwnerPaymentSuccess = guarded(OwnerPaymentSuccessScreen);
+const GuardedOwnerPaymentFailed = guarded(OwnerPaymentFailedScreen);
+const GuardedOwnerPublishSuccess = guarded(OwnerPublishSuccessScreen);
+const GuardedOwnerLeadDetail = guarded(OwnerLeadDetailScreen);
+const GuardedOwnerPropertyLeads = guarded(OwnerPropertyLeadsScreen);
+
 export default function AppNavigator() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Track the previous session so a logout can be told apart from "the app
+  // simply started logged out" (a guest may keep browsing the public tabs).
+  const wasAuthenticatedRef = useRef(false);
+  useEffect(() => {
+    if (isAuthenticated) wasAuthenticatedRef.current = true;
+  }, [isAuthenticated]);
+
+  // Authentication state is the single source of truth for the navigation
+  // shell: while the session is resolving nothing is rendered (no flash of
+  // authenticated screens), and a logout drops the stack on the auth entry
+  // route so Back can never return to a protected screen.
+  useEffect(() => {
+    if (isLoading) return;
+    const plan = planSessionNavigation({
+      isLoading,
+      isAuthenticated,
+      wasAuthenticated: wasAuthenticatedRef.current,
+      currentRouteName: navigationRef.getCurrentRoute()?.name ?? null,
+    });
+    if (plan.action === "reset") {
+      navigationRef.reset({ index: 0, routes: [{ name: plan.route || AUTH_ENTRY_ROUTE }] });
+    }
+  }, [isLoading, isAuthenticated]);
+
+  // Session still resolving: render neither shell. The animated splash in
+  // App.js stays on top during this window.
+  if (isLoading) {
+    return <View style={{ flex: 1, backgroundColor: "#FFFFFF" }} />;
+  }
+
   return (
     <NavigationContainer theme={navTheme} ref={navigationRef}>
       <Stack.Navigator
-        initialRouteName="Login"
+        initialRouteName={isAuthenticated ? "MainTabs" : AUTH_ENTRY_ROUTE}
         screenOptions={{
           headerShown: false,
           animation: "fade_from_bottom",
@@ -176,13 +238,13 @@ export default function AppNavigator() {
       >
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="MainTabs" component={MainTabs} />
-        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Profile" component={GuardedProfile} />
         <Stack.Screen name="Activity" component={SavedScreen} />
         <Stack.Screen name="Saved" component={SavedScreen} />
-        <Stack.Screen name="Enquiries" component={EnquiriesScreen} />
+        <Stack.Screen name="Enquiries" component={GuardedEnquiries} />
         <Stack.Screen name="Explore" component={ExploreScreen} />
-        <Stack.Screen name="Notifications" component={NotificationScreen} />
-        <Stack.Screen name="Notification" component={NotificationScreen} />
+        <Stack.Screen name="Notifications" component={GuardedNotifications} />
+        <Stack.Screen name="Notification" component={GuardedNotifications} />
         <Stack.Screen
           name="Menu"
           component={MenuScreen}
@@ -193,24 +255,28 @@ export default function AppNavigator() {
         />
 
         {/* OWNER FLOW (Entry, Subscription, Payment, Success/Failed, Navigator) */}
-        <Stack.Screen name="OwnerPlans" component={OwnerPlansScreen} />
-        <Stack.Screen name="OwnerPlanConfirm" component={OwnerPlanConfirmScreen} />
-        <Stack.Screen name="OwnerPayment" component={OwnerPaymentScreen} />
-        <Stack.Screen name="OwnerPaymentSuccess" component={OwnerPaymentSuccessScreen} />
-        <Stack.Screen name="OwnerPaymentFailed" component={OwnerPaymentFailedScreen} />
-        <Stack.Screen name="OwnerNavigator" component={OwnerNavigator} />
-        <Stack.Screen name="OwnerPublishSuccess" component={OwnerPublishSuccessScreen} />
-        <Stack.Screen name="OwnerLeadDetail" component={OwnerLeadDetailScreen} />
-        <Stack.Screen name="OwnerPropertyLeads" component={OwnerPropertyLeadsScreen} />
+        <Stack.Screen name="OwnerPlans" component={GuardedOwnerPlans} />
+        <Stack.Screen name="OwnerPlanConfirm" component={GuardedOwnerPlanConfirm} />
+        <Stack.Screen name="OwnerPayment" component={GuardedOwnerPayment} />
+        <Stack.Screen name="OwnerPaymentSuccess" component={GuardedOwnerPaymentSuccess} />
+        <Stack.Screen name="OwnerPaymentFailed" component={GuardedOwnerPaymentFailed} />
+        <Stack.Screen name="OwnerNavigator" component={GuardedOwnerNavigator} />
+        <Stack.Screen name="OwnerPublishSuccess" component={GuardedOwnerPublishSuccess} />
+        <Stack.Screen name="OwnerLeadDetail" component={GuardedOwnerLeadDetail} />
+        <Stack.Screen name="OwnerPropertyLeads" component={GuardedOwnerPropertyLeads} />
 
-        {/* AGENT FLOW (Entry, Location Select, Confirm, Payment, Success, Navigator, Detail) */}
-        <Stack.Screen name="AgentLocationSelect" component={AgentLocationSelectScreen} />
-        <Stack.Screen name="AgentPlanConfirm" component={AgentPlanConfirmScreen} />
-        <Stack.Screen name="AgentPayment" component={AgentPaymentScreen} />
-        <Stack.Screen name="AgentPaymentSuccess" component={AgentPaymentSuccessScreen} />
-        <Stack.Screen name="AgentNavigator" component={AgentNavigator} />
-        <Stack.Screen name="AgentLeadDetail" component={AgentLeadDetailScreen} />
-        <Stack.Screen name="AgentEarnings" component={AgentEarningsScreen} />
+        {/* AGENT FLOW: gated off until a production broker/lead API exists. */}
+        {AGENT_MODULE_ENABLED ? (
+          <>
+            <Stack.Screen name="AgentLocationSelect" component={AgentLocationSelectScreen} />
+            <Stack.Screen name="AgentPlanConfirm" component={AgentPlanConfirmScreen} />
+            <Stack.Screen name="AgentPayment" component={AgentPaymentScreen} />
+            <Stack.Screen name="AgentPaymentSuccess" component={AgentPaymentSuccessScreen} />
+            <Stack.Screen name="AgentNavigator" component={AgentNavigator} />
+            <Stack.Screen name="AgentLeadDetail" component={AgentLeadDetailScreen} />
+            <Stack.Screen name="AgentEarnings" component={AgentEarningsScreen} />
+          </>
+        ) : null}
       </Stack.Navigator>
 
     </NavigationContainer>

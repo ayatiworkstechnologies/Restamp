@@ -8,6 +8,7 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -21,8 +22,10 @@ import {
   MoreHorizontal,
 } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
-import { useOwner } from "../../context/OwnerContext";
-import { fetchOwnerListings, toOwnerProperty, fetchDrafts, deleteDraft, freshAddParams } from "../../api/owner";
+import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContext";
+import { useAuth } from "../../context/AuthContext";
+import { fetchAllOwnerListings, toOwnerProperty, fetchDrafts, deleteDraft, freshAddParams, verifyListing, publishListing, archiveListing, updateListingStatus } from "../../api/owner";
+import { resetToLogin } from "../../navigation/navRef";
 import RestampLogo from "../../components/RestampLogo";
 import AppBrandHeader from "../../components/AppBrandHeader";
 import OwnerHeader from "../../components/owner/OwnerHeader";
@@ -47,32 +50,56 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
     updatePropertyStatus,
     deleteProperty,
   } = useOwner();
+  const { user: authUser } = useAuth();
+  // The owning account of this screen. Everything rendered here belongs to
+  // this account only — the backend scopes the API response, and the locally
+  // cached rows are filtered by the same owner id.
+  const ownerUserId = authUser?.id ?? null;
 
   const initialTab = route?.params?.initialTab || "All";
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [liveProperties, setLiveProperties] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   // Server-backed drafts (listing_drafts): the ONLY draft source for the
   // Draft tab. Local mock drafts are excluded below.
   const [serverDrafts, setServerDrafts] = useState([]);
 
-  // Merge: live API listings take precedence; fall back to local OwnerContext.
+  // Merge: live API listings take precedence; local rows are used ONLY when
+  // they belong to the authenticated owner (never another account's rows).
   // Local mock drafts (status draft) are excluded — real drafts come from
   // the server and render in the Draft tab.
   const properties = useMemo(() => {
     const withoutMockDrafts = (list) => (list || []).filter((p) => p.status !== "draft");
-    if (!liveProperties) return withoutMockDrafts(localProperties);
+    const scopedLocal = selectOwnerScopedProperties(localProperties, ownerUserId);
+    if (!liveProperties) return withoutMockDrafts(scopedLocal);
     // Deduplicate by id string
     const liveIds = new Set(liveProperties.map((p) => p.id));
-    const localOnly = localProperties.filter((p) => !liveIds.has(p.id));
+    const localOnly = scopedLocal.filter((p) => !liveIds.has(p.id));
     return [...withoutMockDrafts(liveProperties), ...withoutMockDrafts(localOnly)];
-  }, [liveProperties, localProperties]);
+  }, [liveProperties, localProperties, ownerUserId]);
 
   const loadLiveListings = useCallback(() => {
-    fetchOwnerListings(1, 50)
-      .then((resp) => setLiveProperties((resp.items || []).map(toOwnerProperty)))
-      .catch(() => {}); // silently fall back to local data
+    return fetchAllOwnerListings()
+      .then((resp) => {
+        setLiveProperties((resp.items || []).map(toOwnerProperty));
+        setLoadError(null);
+      })
+      .catch((e) => {
+        // An expired session must not keep showing the previous account's
+        // rows: drop the cached list and return to the auth entry route.
+        if (e && (e.status === 401 || e.kind === "login")) {
+          setLiveProperties(null);
+          setLoadError(null);
+          resetToLogin();
+          return;
+        }
+        setLoadError(
+          "Couldn't load your listings. Check your connection and pull to refresh."
+        );
+      });
   }, []);
 
   const loadDrafts = useCallback(() => {
@@ -90,6 +117,16 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
       unsubDrafts();
     };
   }, [navigation, loadLiveListings, loadDrafts]);
+
+  // Pull to refresh: the status of a listing can change server-side (an
+  // explicit verification, an archive, a rejection), so the owner can always
+  // re-read the authoritative state without signing out and back in.
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    Promise.all([loadLiveListings(), loadDrafts()]).finally(() => {
+      setRefreshing(false);
+    });
+  }, [loadLiveListings, loadDrafts]);
 
   // Honor late navigation params (e.g. Save & Exit → Draft tab).
   useEffect(() => {
@@ -202,24 +239,141 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
       variant: "primary",
       confirmText: "Pause",
       onConfirm: () => {
-        updatePropertyStatus(property.id, "closed", { pauseReason: "Owner Paused" });
+        runListingTransition(property, () => archiveListing(serverListingId(property)), "paused");
         setConfirmModal((prev) => ({ ...prev, visible: false }));
       },
     });
   };
 
   const handleCloseListing = (property) => {
+    // Deal outcome picker: the backend supports SOLD/RENTED/LEASED closes
+    // (all terminal) plus reversible archiving. The owner picks the real
+    // outcome — never silently recorded as a generic close.
+    Alert.alert(
+      "Close Listing?",
+      `How was "${property.title}" closed? Sold, rented and leased outcomes are final; archiving simply hides it and can be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sold",
+          onPress: () =>
+            runListingTransition(
+              property,
+              () => updateListingStatus(serverListingId(property), { status: "SOLD", closedReason: "Sold" }),
+              "closed"
+            ),
+        },
+        {
+          text: "Rented",
+          onPress: () =>
+            runListingTransition(
+              property,
+              () => updateListingStatus(serverListingId(property), { status: "RENTED", closedReason: "Rented out" }),
+              "closed"
+            ),
+        },
+        {
+          text: "Leased",
+          onPress: () =>
+            runListingTransition(
+              property,
+              () => updateListingStatus(serverListingId(property), { status: "LEASED", closedReason: "Leased out" }),
+              "closed"
+            ),
+        },
+        {
+          text: "Just Archive",
+          onPress: () => {
+            setConfirmModal({
+              visible: true,
+              title: "Archive Listing?",
+              message: `Archive "${property.title}"? It will be hidden from buyers but can be published again later.`,
+              variant: "primary",
+              confirmText: "Archive",
+              onConfirm: () => {
+                runListingTransition(
+                  property,
+                  () => updateListingStatus(serverListingId(property), { status: "CLOSED", closedReason: "Archived by Owner" }),
+                  "closed"
+                );
+                setConfirmModal((prev) => ({ ...prev, visible: false }));
+              },
+            });
+          },
+        },
+      ]
+    );
+  };
+
+  // Numeric backend identity for server-backed cards; local/mock cards and
+  // drafts resolve to null and keep the legacy local-only behavior below.
+  const serverListingId = (property) => {
+    const raw = property && (property.listing_id ?? property.listingId);
+    const n = typeof raw === "number" ? raw : parseInt(String(raw ?? ""), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  // Guards duplicate taps while a lifecycle request is in flight.
+  const [transitionBusyId, setTransitionBusyId] = useState(null);
+
+  // Run a real backend lifecycle transition for server-backed cards, then
+  // reload from the server. Local/mock cards fall back to the legacy local
+  // status flip. Failures show an honest error and change nothing.
+  const runListingTransition = (property, action, verb) => {
+    const listingId = serverListingId(property);
+    if (listingId == null) {
+      updatePropertyStatus(property.id, verb === "published" ? "active" : "closed");
+      return;
+    }
+    if (transitionBusyId === property.id) return;
+    setTransitionBusyId(property.id);
+    action().then(
+      () => {
+        setTransitionBusyId(null);
+        loadLiveListings();
+      },
+      (e) => {
+        setTransitionBusyId(null);
+        if (e && (e.status === 401 || e.kind === "login")) {
+          // The session is gone: drop the cached list and leave the owner on
+          // the auth entry route instead of showing a stale property list.
+          setLiveProperties(null);
+          resetToLogin();
+          return;
+        }
+        if (e && (e.status === 403 || e.kind === "denied")) {
+          Alert.alert(
+            "Owner Mode Required",
+            "Your account must hold the Owner role for this property."
+          );
+          return;
+        }
+        Alert.alert(
+          "Couldn't update listing",
+          e?.status === 422 || e?.kind === "validation"
+            ? "This change isn't allowed for the listing's current state."
+            : "Please check your connection and try again."
+        );
+      }
+    );
+  };
+
+  const handleVerifyListing = (property) => {
     setConfirmModal({
       visible: true,
-      title: "Close Listing?",
-      message: `Mark "${property.title}" as closed? This indicates the property was rented, sold, or taken off market.`,
+      title: "Verify Listing?",
+      message: `Verify "${property.title}"? Verified listings become visible to buyers.`,
       variant: "primary",
-      confirmText: "Close Listing",
+      confirmText: "Verify",
       onConfirm: () => {
-        updatePropertyStatus(property.id, "closed", { closedOutcome: "Closed by Owner" });
+        runListingTransition(property, () => verifyListing(serverListingId(property)), "published");
         setConfirmModal((prev) => ({ ...prev, visible: false }));
       },
     });
+  };
+
+  const handlePublishListing = (property) => {
+    runListingTransition(property, () => publishListing(serverListingId(property)), "published");
   };
 
   const handleDeleteDraft = (property) => {
@@ -310,6 +464,14 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
       >
         {/* Search Input Bar (Expandable) */}
         {showSearch && (
@@ -343,6 +505,14 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
             Manage and track your active property listings
           </Text>
         </View>
+
+        {/* Honest load failure: the owner is told instead of being shown a
+            stale list from a previous session. */}
+        {loadError ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{loadError}</Text>
+          </View>
+        ) : null}
 
         {/* Horizontally Scrollable Status Tabs (Matching Buyer Search Properties Filter Bar) */}
         <View style={styles.tabsContainer}>
@@ -423,6 +593,8 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
               }
               onPauseListing={handlePauseListing}
               onCloseListing={handleCloseListing}
+              onVerifyListing={handleVerifyListing}
+              onPublishListing={handlePublishListing}
               onDeleteDraft={handleDeleteDraft}
               onResubmit={handleResubmit}
             />
@@ -626,6 +798,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
+  },
+  errorBanner: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+  errorBannerText: {
+    fontSize: 12,
+    color: "#991B1B",
+    lineHeight: 17,
   },
   scrollContent: {
     paddingHorizontal: 20,

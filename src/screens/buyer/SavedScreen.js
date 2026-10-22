@@ -51,10 +51,13 @@ import ScheduleVisitModal from "../../components/ScheduleVisitModal";
 import AppBrandHeader from "../../components/AppBrandHeader";
 import SafeImage from "../../components/common/SafeImage";
 import {
-  getBuyerVisits,
+  fetchBuyerVisits,
+  toUiVisit,
+  toVisitPayload,
   updateBuyerVisit,
-  subscribeBuyerVisits,
-} from "../../data/visitsStore";
+} from "../../api/visits";
+import { revealContactPhone } from "../../api/contact";
+import { getAuthTokenSync } from "../../api/client";
 
 // P2 honesty: no fabricated history. Viewed properties and call records have
 // no backend source or local persistence, so both start empty and stay empty
@@ -68,184 +71,10 @@ function cleanPhoneOrNull(raw) {
   return digits.length > 0 ? digits : null;
 }
 
-const INITIAL_CALL_HISTORY = [
-  {
-    id: "call-1",
-    agentName: "Suresh Babu",
-    agency: "RESTAMP Certified Agent • Anna Nagar",
-    agentPhone: "+91 97909 88123",
-    callTime: "Today, 11:30 AM",
-    callType: "outgoing",
-    duration: "2m 45s",
-    property: {
-      id: "chennai-1",
-      title: "2 BHK Luxury Apartment in Anna Nagar",
-      price: "₹45,000/mo",
-      location: "Anna Nagar, Chennai",
-      image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80",
-    },
-  },
-  {
-    id: "call-2",
-    agentName: "Arun Kumar",
-    agency: "Direct Property Owner • Kilpauk",
-    agentPhone: "+91 98840 55667",
-    callTime: "Yesterday, 04:15 PM",
-    callType: "outgoing",
-    duration: "4m 10s",
-    property: {
-      id: "chennai-2",
-      title: "2 BHK Flat with Balcony in Kilpauk",
-      price: "₹38,000/mo",
-      location: "Kilpauk, Chennai",
-      image: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=600&q=80",
-    },
-  },
-];
 
-const INITIAL_MESSAGES = [
-  {
-    id: "msg-1",
-    recipientName: "Suresh Babu",
-    recipientRole: "Certified Agent",
-    recipientPhone: "+91 97909 88123",
-    propertyTitle: "2 BHK Luxury Apartment in Anna Nagar",
-    propertyLocation: "Anna Nagar, Chennai",
-    propertyPrice: "₹45,000/mo",
-    propertyImage: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80",
-    lastMessage: "I would like to schedule a site visit for this 2 BHK apartment on Saturday at 4:30 PM. Please confirm.",
-    timestamp: "Today, 10:15 AM",
-    status: "Confirmed",
-  },
-  {
-    id: "msg-2",
-    recipientName: "Arun Kumar",
-    recipientRole: "Property Owner",
-    recipientPhone: "+91 98840 55667",
-    propertyTitle: "2 BHK Flat with Balcony in Kilpauk",
-    propertyLocation: "Kilpauk, Chennai",
-    propertyPrice: "₹38,000/mo",
-    propertyImage: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=600&q=80",
-    lastMessage: "Is covered car parking available with this flat? Also, what is the maintenance fee?",
-    timestamp: "Yesterday, 3:40 PM",
-    status: "Replied",
-  },
-];
-
-const INITIAL_BUYER_VISITS = [
-  {
-    id: "visit-1",
-    agentName: "Suresh Babu",
-    agentRole: "Verified Agent",
-    agentPhone: "+91 97909 88123",
-    propertyTitle: "2 BHK Luxury Apartment in Anna Nagar",
-    propertyLocation: "Anna Nagar, Chennai",
-    propertyPrice: "₹45,000/mo",
-    date: "30 Sep 2026",
-    time: "04:30 PM",
-    status: "upcoming",
-    notes: "Inspection of keys and apartment interior. Meeting near Anna Nagar Tower Park.",
-  },
-  {
-    id: "visit-2",
-    agentName: "Arun Kumar",
-    agentRole: "Property Owner",
-    agentPhone: "+91 98840 55667",
-    propertyTitle: "2 BHK Flat with Balcony in Kilpauk",
-    propertyLocation: "Kilpauk, Chennai",
-    propertyPrice: "₹38,000/mo",
-    date: "01 Oct 2026",
-    time: "11:00 AM",
-    status: "upcoming",
-    notes: "Owner requested a 15-minute prior call before reaching the location.",
-  },
-  {
-    id: "visit-3",
-    agentName: "Sundar Raman",
-    agentRole: "Property Owner",
-    agentPhone: "+91 98400 12345",
-    propertyTitle: "3 BHK Luxury Villa in Adyar",
-    propertyLocation: "Adyar, Chennai",
-    propertyPrice: "₹2.5 Cr",
-    date: "25 Sep 2026",
-    time: "03:00 PM",
-    status: "completed",
-    notes: "Full walkthrough completed. CMDA approval documents inspected.",
-  },
-  {
-    id: "visit-4",
-    agentName: "Meera Krishnan",
-    agentRole: "RESTAMP Agent",
-    agentPhone: "+91 98401 33445",
-    propertyTitle: "3 BHK Apartment in T. Nagar",
-    propertyLocation: "T. Nagar, Chennai",
-    propertyPrice: "₹65,000/mo",
-    date: "22 Sep 2026",
-    time: "10:30 AM",
-    status: "completed",
-    notes: "Site visit successfully concluded.",
-  },
-];
-
-const INITIAL_AGENTS = [
-  {
-    id: "agent-1",
-    name: "Suresh Babu",
-    agency: "Chennai Prime Realtors",
-    role: "Senior Property Specialist",
-    rating: 4.9,
-    reviewsCount: 128,
-    phone: "+91 97909 88123",
-    email: "suresh.babu@restamp.in",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80",
-    reraNumber: "TN/AGENT/2024/00842",
-    dealsClosed: 42,
-    experience: "8+ Years",
-    activeListingsCount: 15,
-    localities: ["Anna Nagar", "Kilpauk", "Mogappair"],
-    specialty: "Luxury 2 & 3 BHK Apartments, Builder Floors",
-    bio: "Certified RESTAMP area specialist for Anna Nagar & Central Chennai. Specialized in clear CMDA title properties, verified site visits, and end-to-end lease execution.",
-    officeAddress: "4th Avenue, Shanthi Colony, Anna Nagar, Chennai - 600040",
-  },
-  {
-    id: "agent-2",
-    name: "Vikram Prabhu",
-    agency: "Adyar Prime Realty",
-    role: "Premium Villa & Commercial Advisor",
-    rating: 5.0,
-    reviewsCount: 94,
-    phone: "+91 98400 99888",
-    email: "vikram.prabhu@restamp.in",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
-    reraNumber: "TN/AGENT/2024/00915",
-    dealsClosed: 65,
-    experience: "10+ Years",
-    activeListingsCount: 22,
-    localities: ["Adyar", "Besant Nagar", "OMR"],
-    specialty: "Gated Community Villas, High-Rise Penthouses",
-    bio: "Over a decade of property advisory in South Chennai. Specializing in CMDA/DTCP approved villas, commercial spaces, and legal due diligence.",
-    officeAddress: "Gandhi Nagar 2nd Main Road, Adyar, Chennai - 600020",
-  },
-  {
-    id: "agent-3",
-    name: "Meera Krishnan",
-    agency: "Metro Property Advisory",
-    role: "Residential Consultant",
-    rating: 4.8,
-    reviewsCount: 76,
-    phone: "+91 98401 33445",
-    email: "meera.krishnan@restamp.in",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80",
-    reraNumber: "TN/AGENT/2024/00731",
-    dealsClosed: 38,
-    experience: "6+ Years",
-    activeListingsCount: 11,
-    localities: ["Velachery", "Guindy", "Tambaram"],
-    specialty: "Ready-to-Move Flats, Rental Apartments",
-    bio: "Dedicated home search specialist for IT corridor and South Chennai. Assists with home loans, bank legal scrutiny, and fast-track token agreements.",
-    officeAddress: "100 Feet Bypass Road, Velachery, Chennai - 600042",
-  },
-];
+// No backend agent directory exists: the Agents tab starts empty and
+// shows the honest empty state below. Fabricated agent entries were removed.
+const INITIAL_AGENTS = [];
 
 export default function SavedScreen({ navigation, route }) {
   const { wishlist, removeFromWishlist, isWishlisted, toggleWishlist, refreshWishlist } = useWishlist();
@@ -279,38 +108,72 @@ export default function SavedScreen({ navigation, route }) {
   const [viewedProperties, setViewedProperties] = useState([]);
 
   // Call history state with both Call and WhatsApp actions
-  const [callHistory, setCallHistory] = useState(INITIAL_CALL_HISTORY);
+  // No backend call-log API exists: the Calls tab starts empty and
+// shows the honest empty state below. Nothing here is seeded.
+  const [callHistory, setCallHistory] = useState([]);
 
   // Messages and enquiries state
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState([]);
 
-  // Site visits state synchronized with visitsStore
-  const [siteVisits, setSiteVisits] = useState(getBuyerVisits);
+  // Site visits are server-backed (GET /buyer/visits) for authenticated
+  // buyers; guests and logged-out users see the honest empty state. The
+  // local mock store is no longer a source — no seeded visits, no invented
+  // agent details.
+  const [siteVisits, setSiteVisits] = useState([]);
+  const [visitsLoading, setVisitsLoading] = useState(false);
   const [visitFilter, setVisitFilter] = useState("upcoming");
   const [selectedVisitForDetails, setSelectedVisitForDetails] = useState(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
 
-  useEffect(() => {
-    return subscribeBuyerVisits((updated) => setSiteVisits(updated));
+  const loadServerVisits = useCallback(() => {
+    if (!getAuthTokenSync()) {
+      setSiteVisits([]);
+      return Promise.resolve([]);
+    }
+    setVisitsLoading(true);
+    return fetchBuyerVisits({ page: 1, pageSize: 50 }).then(
+      (resp) => {
+        const mapped = (resp?.items || []).map(toUiVisit);
+        setSiteVisits(mapped);
+        setVisitsLoading(false);
+        return mapped;
+      },
+      () => {
+        setVisitsLoading(false);
+        return [];
+      }
+    );
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshWishlist().catch(() => {});
+      loadServerVisits().catch(() => {});
+    }, [refreshWishlist, loadServerVisits])
+  );
 
   // Agents state (Agent Page Detail Tab)
   const [agents, setAgents] = useState(INITIAL_AGENTS);
   const [selectedAgentForModal, setSelectedAgentForModal] = useState(null);
 
   const handleCallAgent = (agent) => {
-    const raw = agent?.phone || "+919790988123";
-    handleCall(raw, agent?.name || "Agent");
+    handleCall(agent?.phone, agent?.name || "Agent");
   };
 
   const handleWhatsAppAgent = (agent) => {
-    const raw = agent?.phone || "+919790988123";
-    const clean = raw.replace(/[^0-9]/g, "");
+    const clean = cleanPhoneOrNull(agent?.phone);
+    if (!clean) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The contact number for this agent is not available."
+      );
+      return;
+    }
     const text = encodeURIComponent(
       `Hello ${agent?.name}! I found your profile on RESTAMP. I am looking for property assistance in ${agent?.localities ? agent.localities.join(", ") : "Chennai"}.`
     );
     Linking.openURL(`https://wa.me/${clean}?text=${text}`).catch(() => {
-      Alert.alert("WhatsApp Agent", `Chat with ${agent?.name} at ${raw}`);
+      Alert.alert("WhatsApp Agent", `Chat with ${agent?.name} at ${agent?.phone}`);
     });
   };
 
@@ -418,20 +281,86 @@ export default function SavedScreen({ navigation, route }) {
     });
   };
 
-  const handleWhatsAppVisit = (visit) => {
-    const raw = visit.agentPhone || "+919790988123";
-    const digits = cleanPhoneOrNull(raw) || "919790988123";
-    const text = encodeURIComponent(
-      `Hello ${visit.agentName}! I am contacting you regarding our scheduled site visit for "${visit.propertyTitle}" on ${visit.date} at ${visit.time}.`
+  // Visit contact goes through the authorized reveal endpoint only: the
+  // server stores no agent phones on visits, so there is never a number to
+  // fall back to. Failures show an honest message instead of a sample number.
+  const handleVisitCall = (visit) => {
+    const listingId = visit?.property_listing_id;
+    if (typeof listingId !== "number") {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The contact number for this visit is not available."
+      );
+      return;
+    }
+    revealContactPhone(listingId).then(
+      (phone) => {
+        if (!phone) {
+          Alert.alert(
+            "Phone Number Unavailable",
+            "The contact number for this visit is not available."
+          );
+          return;
+        }
+        handleCall(phone, "Property Owner");
+      },
+      (e) => {
+        if (e && (e.status === 401 || e.kind === "login")) {
+          requireAuth(() => handleVisitCall(visit));
+          return;
+        }
+        Alert.alert(
+          "Phone Number Unavailable",
+          "The contact number for this visit is not available."
+        );
+      }
     );
-    Linking.openURL(`https://wa.me/${digits}?text=${text}`).catch(() => {
-      Alert.alert("WhatsApp Unavailable", `Could not open WhatsApp for ${visit.agentName}.`);
-    });
+  };
+
+  const handleWhatsAppVisit = (visit) => {
+    const listingId = visit?.property_listing_id;
+    if (typeof listingId !== "number") {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The contact number for this visit is not available."
+      );
+      return;
+    }
+    revealContactPhone(listingId).then(
+      (phone) => {
+        const digits = cleanPhoneOrNull(phone);
+        if (!digits) {
+          Alert.alert(
+            "Phone Number Unavailable",
+            "The contact number for this visit is not available."
+          );
+          return;
+        }
+        const text = encodeURIComponent(
+          `Hello! I am contacting you regarding our scheduled site visit for "${visit.propertyTitle}" on ${visit.date} at ${visit.time}.`
+        );
+        Linking.openURL(`https://wa.me/${digits}?text=${text}`).catch(() => {
+          Alert.alert("WhatsApp Unavailable", "Could not open WhatsApp for this visit.");
+        });
+      },
+      () => {
+        Alert.alert(
+          "Phone Number Unavailable",
+          "The contact number for this visit is not available."
+        );
+      }
+    );
   };
 
   const handleWhatsAppEnquiry = (msg) => {
-    const raw = msg.recipientPhone || "+919790988123";
-    const digits = cleanPhoneOrNull(raw) || "919790988123";
+    const digits = cleanPhoneOrNull(msg.recipientPhone);
+    if (!digits) {
+      Alert.alert(
+        "Phone Number Unavailable",
+        "The contact number for this enquiry is not available."
+      );
+      return;
+    }
     const text = encodeURIComponent(
       `Hello ${msg.recipientName}! I am following up on my enquiry for "${msg.propertyTitle}".`
     );
@@ -440,30 +369,135 @@ export default function SavedScreen({ navigation, route }) {
     });
   };
 
-  const handleMarkVisitCompleted = (visit) => {
-    updateBuyerVisit(visit.id, { status: "completed" });
-    setSelectedVisitForDetails(null);
-    Alert.alert(
-      "Visit Completed! ✅",
-      `Site visit with ${visit.agentName} has been marked as Completed.`
+  const refreshVisitsQuietly = () => {
+    loadServerVisits().catch(() => {});
+  };
+
+  // Buyers cannot mark visits completed (owner-only transition): the button
+  // is gone and this handler is removed. Cancel + reschedule below hit the
+  // real PATCH /buyer/visits/{id} endpoint with honest failure states.
+
+  const handleCancelVisit = (visit) => {
+    if (typeof visit?.id !== "number") return;
+    updateBuyerVisit(visit.id, { status: "CANCELLED" }).then(
+      () => {
+        setSelectedVisitForDetails(null);
+        refreshVisitsQuietly();
+        Alert.alert("Visit Cancelled", "The site visit has been cancelled.");
+      },
+      (e) => {
+        if (e && (e.status === 401 || e.kind === "login")) {
+          requireAuth(() => handleCancelVisit(visit));
+          return;
+        }
+        Alert.alert(
+          "Couldn't cancel visit",
+          "Please check your connection and try again."
+        );
+      }
     );
   };
 
-  const handleCancelVisit = (visit) => {
-    updateBuyerVisit(visit.id, { status: "cancelled" });
-    setSelectedVisitForDetails(null);
-    Alert.alert("Visit Cancelled", "The site visit has been marked as cancelled.");
+  const submitBuyerVisitStatus = (visit, status) => {
+    if (typeof visit?.id !== "number") return;
+    updateBuyerVisit(visit.id, { status }).then(
+      () => {
+        setSelectedVisitForDetails(null);
+        refreshVisitsQuietly();
+        Alert.alert(
+          status === "CONFIRMED" ? "Visit Confirmed" : "Visit Declined",
+          status === "CONFIRMED"
+            ? "The site visit is confirmed for the proposed time."
+            : "The proposed site visit has been declined."
+        );
+      },
+      (e) => {
+        if (e && (e.status === 401 || e.kind === "login")) {
+          requireAuth(() => submitBuyerVisitStatus(visit, status));
+          return;
+        }
+        if (e && (e.status === 403 || e.kind === "denied")) {
+          Alert.alert(
+            "Buyer Mode Required",
+            "Your account is currently in Owner/Agent mode. Switch back to Buyer mode and try again.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+        Alert.alert(
+          status === "CONFIRMED" ? "Couldn't confirm visit" : "Couldn't decline visit",
+          "The visit may have changed. Refresh and try again."
+        );
+      }
+    );
+  };
+
+  const handleConfirmProposal = (visit) => {
+    Alert.alert(
+      "Confirm Site Visit",
+      `Confirm the visit on ${visit.date} at ${visit.time}?`,
+      [
+        { text: "Not Now", style: "cancel" },
+        { text: "Confirm", onPress: () => submitBuyerVisitStatus(visit, "CONFIRMED") },
+      ]
+    );
+  };
+
+  const handleDeclineProposal = (visit) => {
+    Alert.alert(
+      "Decline Site Visit",
+      "Decline this proposed visit? You can still request another time later.",
+      [
+        { text: "Keep", style: "cancel" },
+        {
+          text: "Decline",
+          style: "destructive",
+          onPress: () => submitBuyerVisitStatus(visit, "DECLINED"),
+        },
+      ]
+    );
   };
 
   const handleConfirmReschedule = (visit, reschedData) => {
-    const d = reschedData?.date || "15 Oct 2026";
-    const t = reschedData?.time || "04:30 PM";
-    updateBuyerVisit(visit.id, { date: d, time: t, status: "upcoming" });
-    setIsRescheduling(false);
-    setSelectedVisitForDetails(null);
-    Alert.alert(
-      "Visit Rescheduled! 📅",
-      `Site visit rescheduled to ${d} at ${t}. Notification sent to ${visit.agentName}.`
+    if (typeof visit?.id !== "number") return;
+    let scheduledAtISO;
+    try {
+      scheduledAtISO = toVisitPayload({
+        date: reschedData?.date,
+        time: reschedData?.time,
+      }).scheduled_at;
+    } catch (e) {
+      Alert.alert("Invalid Date/Time", e?.message || "Please choose a future date and time.");
+      return;
+    }
+    updateBuyerVisit(visit.id, { scheduledAtISO }).then(
+      () => {
+        setIsRescheduling(false);
+        setSelectedVisitForDetails(null);
+        refreshVisitsQuietly();
+        Alert.alert(
+          "Visit Rescheduled! 📅",
+          `Site visit rescheduled to ${reschedData?.date} at ${reschedData?.time}.`
+        );
+      },
+      (e) => {
+        if (e && (e.status === 401 || e.kind === "login")) {
+          requireAuth(() => handleConfirmReschedule(visit, reschedData));
+          return;
+        }
+        if (e && (e.status === 403 || e.kind === "denied")) {
+          Alert.alert(
+            "Buyer Mode Required",
+            "Your account is currently in Owner/Agent mode. Switch back to Buyer mode and try again.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+        Alert.alert(
+          "Couldn't reschedule visit",
+          "Please check your connection and try again."
+        );
+      }
     );
   };
 
@@ -1119,7 +1153,7 @@ export default function SavedScreen({ navigation, route }) {
             <View style={styles.visitScreenHeader}>
               <Text style={styles.visitHeaderTitle}>Site Visits</Text>
               <Text style={styles.visitHeaderSubtitle}>
-                Coordinate customer inspections and property walkthroughs
+                Track your property visits and respond to owner-proposed times
               </Text>
             </View>
 
@@ -1161,7 +1195,7 @@ export default function SavedScreen({ navigation, route }) {
                 </View>
                 <Text style={styles.emptyTitle}>No {visitFilter} site visits</Text>
                 <Text style={styles.emptyText}>
-                  Scheduled property inspections with verified agents will appear here.
+                  Site visits you request or receive from an owner will appear here.
                 </Text>
               </View>
             ) : (
@@ -1174,9 +1208,9 @@ export default function SavedScreen({ navigation, route }) {
                       <View style={styles.visitCardHeader}>
                         <View style={styles.visitPersonRow}>
                           <User size={15} color="#2563EB" style={{ marginRight: 6 }} />
-                          <Text style={styles.visitPersonName}>{item.agentName}</Text>
-                          {item.agentRole ? (
-                            <Text style={styles.visitPersonRole}> • {item.agentRole}</Text>
+                          <Text style={styles.visitPersonName}>Visit #{item.id}</Text>
+                          {item.serverStatus ? (
+                            <Text style={styles.visitPersonRole}> • {item.serverStatus}</Text>
                           ) : null}
                         </View>
 
@@ -1212,13 +1246,6 @@ export default function SavedScreen({ navigation, route }) {
                           </Text>
                         </View>
 
-                        <View style={styles.bodyField}>
-                          <Text style={styles.fieldLabel}>Location:</Text>
-                          <Text style={styles.fieldValue}>
-                            {item.propertyLocation}
-                          </Text>
-                        </View>
-
                         <View style={styles.dateTimeRow}>
                           <View style={styles.dateTimeBadge}>
                             <Calendar size={13} color="#2563EB" style={{ marginRight: 5 }} />
@@ -1239,7 +1266,7 @@ export default function SavedScreen({ navigation, route }) {
                       <View style={styles.visitCardActionsRow}>
                         <TouchableOpacity
                           style={styles.visitCallBtn}
-                          onPress={() => handleCall(item.agentPhone, item.agentName)}
+                          onPress={() => handleVisitCall(item)}
                           activeOpacity={0.8}
                         >
                           <Phone size={13} color="#0F172A" style={{ marginRight: 4 }} />
@@ -1253,15 +1280,6 @@ export default function SavedScreen({ navigation, route }) {
                         >
                           <MessageCircle size={13} color="#16A34A" style={{ marginRight: 4 }} />
                           <Text style={styles.visitWhatsAppBtnText}>WhatsApp</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.visitAgentBtn}
-                          onPress={() => setSelectedAgentForModal(findAgentByName(item.agentName))}
-                          activeOpacity={0.8}
-                        >
-                          <User size={13} color="#2563EB" style={{ marginRight: 4 }} />
-                          <Text style={styles.visitAgentBtnText}>Agent Info</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -1290,102 +1308,16 @@ export default function SavedScreen({ navigation, route }) {
               </Text>
             </View>
 
-            <View style={styles.agentsList}>
-              {agents.map((agent) => (
-                <View key={agent.id} style={styles.agentCard}>
-                  {/* Card Header: Avatar, Name, Verified Badge, Agency, Rating */}
-                  <View style={styles.agentCardHeader}>
-                    <Image source={{ uri: agent.avatar }} style={styles.agentAvatar} />
-
-                    <View style={styles.agentHeaderInfo}>
-                      <View style={styles.agentNameRow}>
-                        <Text style={styles.agentNameText}>{agent.name}</Text>
-                        <View style={styles.agentVerifiedBadge}>
-                          <ShieldCheck size={11} color="#16A34A" style={{ marginRight: 3 }} />
-                          <Text style={styles.agentVerifiedText}>Verified Agent</Text>
-                        </View>
-                      </View>
-
-                      <Text style={styles.agentAgencyText}>{agent.agency}</Text>
-                      <Text style={styles.agentRoleText}>{agent.role}</Text>
-
-                      <View style={styles.agentRatingRow}>
-                        <Star size={12} color="#EAB308" fill="#EAB308" style={{ marginRight: 4 }} />
-                        <Text style={styles.agentRatingText}>{agent.rating}</Text>
-                        <Text style={styles.agentReviewsText}>({agent.reviewsCount} reviews)</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Key Stats Bar */}
-                  <View style={styles.agentStatsGrid}>
-                    <View style={styles.agentStatItem}>
-                      <Text style={styles.agentStatNumber}>{agent.dealsClosed}+</Text>
-                      <Text style={styles.agentStatLabel}>Deals Closed</Text>
-                    </View>
-                    <View style={[styles.agentStatItem, styles.agentStatItemBorder]}>
-                      <Text style={styles.agentStatNumber}>{agent.experience}</Text>
-                      <Text style={styles.agentStatLabel}>Experience</Text>
-                    </View>
-                    <View style={styles.agentStatItem}>
-                      <Text style={styles.agentStatNumber}>{agent.activeListingsCount}</Text>
-                      <Text style={styles.agentStatLabel}>Active Listings</Text>
-                    </View>
-                  </View>
-
-                  {/* Localities Served */}
-                  <View style={styles.agentLocalitiesRow}>
-                    <MapPin size={12} color="#2563EB" style={{ marginRight: 4 }} />
-                    <Text style={styles.agentLocalitiesLabel}>Serving:</Text>
-                    <View style={styles.agentLocalitiesChips}>
-                      {agent.localities.map((loc, i) => (
-                        <View key={i} style={styles.agentLocChip}>
-                          <Text style={styles.agentLocChipText}>{loc}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* Specialty */}
-                  <Text style={styles.agentSpecialtyText} numberOfLines={2}>
-                    <Text style={{ fontWeight: "700" }}>Focus: </Text>
-                    {agent.specialty}
-                  </Text>
-
-                  {/* Divider */}
-                  <View style={styles.cardDivider} />
-
-                  {/* Action Buttons: Call, Message (WhatsApp), View Agent Details */}
-                  <View style={styles.agentCardActionsRow}>
-                    <TouchableOpacity
-                      style={styles.agentCallBtn}
-                      onPress={() => handleCallAgent(agent)}
-                      activeOpacity={0.8}
-                    >
-                      <Phone size={13} color="#0F172A" style={{ marginRight: 5 }} />
-                      <Text style={styles.agentCallBtnText}>Call</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.agentMsgBtn}
-                      onPress={() => handleWhatsAppAgent(agent)}
-                      activeOpacity={0.8}
-                    >
-                      <MessageCircle size={14} color="#16A34A" style={{ marginRight: 5 }} />
-                      <Text style={styles.agentMsgBtnText}>WhatsApp</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.agentDetailBtn}
-                      onPress={() => setSelectedAgentForModal(agent)}
-                      activeOpacity={0.8}
-                    >
-                      <Eye size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
-                      <Text style={styles.agentDetailBtnText}>Agent Details</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
+            {/* No backend agent directory exists: show the honest empty
+                state instead of fabricated agent profiles. */}
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconCircle}>
+                <User size={32} color="#CBD5E1" strokeWidth={1.5} />
+              </View>
+              <Text style={styles.emptyTitle}>No agents yet</Text>
+              <Text style={styles.emptyText}>
+                Verified partner profiles will appear here once the agent directory is available.
+              </Text>
             </View>
           </View>
         )}
@@ -1608,9 +1540,12 @@ export default function SavedScreen({ navigation, route }) {
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.detailsList}>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Contact</Text>
+                    <Text style={styles.detailLabel}>Booking</Text>
                     <Text style={styles.detailValueBold}>
-                      {selectedVisitForDetails.agentName} ({selectedVisitForDetails.agentPhone})
+                      Visit #{selectedVisitForDetails.id}
+                      {selectedVisitForDetails.serverStatus
+                        ? ` · ${selectedVisitForDetails.serverStatus}`
+                        : ""}
                     </Text>
                   </View>
 
@@ -1618,13 +1553,6 @@ export default function SavedScreen({ navigation, route }) {
                     <Text style={styles.detailLabel}>Property</Text>
                     <Text style={styles.detailValueBold}>
                       {selectedVisitForDetails.propertyTitle}
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Location</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedVisitForDetails.propertyLocation}
                     </Text>
                   </View>
 
@@ -1645,30 +1573,32 @@ export default function SavedScreen({ navigation, route }) {
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Notes</Text>
                     <Text style={styles.detailValue}>
-                      {selectedVisitForDetails.notes || "Inspection walkthrough confirmed."}
+                      {selectedVisitForDetails.note || "No notes added."}
                     </Text>
                   </View>
                 </View>
 
-                {/* Assigned Agent Box */}
+                {/* Contact Box — numbers come only from the authorized
+                    reveal endpoint (see Call/WhatsApp buttons); the server
+                    stores no agent identity on visits. */}
                 <View style={styles.modalAgentBox}>
                   <View style={styles.modalAgentHeader}>
                     <View style={styles.modalAgentAvatarCircle}>
                       <User size={18} color="#2563EB" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.modalAgentName}>
-                        {selectedVisitForDetails.agentName || "Suresh Babu"}
+                      <Text style={styles.modalAgentName} numberOfLines={1}>
+                        {selectedVisitForDetails.propertyTitle || "Property visit"}
                       </Text>
                       <Text style={styles.modalAgentAgency}>
-                        {selectedVisitForDetails.agentRole || "Senior Property Consultant"} • RESTAMP Partner
+                        {selectedVisitForDetails.date} · {selectedVisitForDetails.time}
                       </Text>
                     </View>
                   </View>
                   <View style={styles.modalAgentActionsRow}>
                     <TouchableOpacity
                       style={styles.modalAgentCallBtn}
-                      onPress={() => handleCall(selectedVisitForDetails.agentPhone, selectedVisitForDetails.agentName)}
+                      onPress={() => handleVisitCall(selectedVisitForDetails)}
                       activeOpacity={0.8}
                     >
                       <Phone size={12} color="#0F172A" style={{ marginRight: 4 }} />
@@ -1682,52 +1612,54 @@ export default function SavedScreen({ navigation, route }) {
                       <MessageCircle size={12} color="#16A34A" style={{ marginRight: 4 }} />
                       <Text style={styles.modalAgentMsgBtnText}>WhatsApp</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.modalAgentProfileBtn}
-                      onPress={() => {
-                        const agentObj = findAgentByName(selectedVisitForDetails.agentName);
-                        setSelectedVisitForDetails(null);
-                        setSelectedAgentForModal(agentObj);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Eye size={12} color="#2563EB" style={{ marginRight: 4 }} />
-                      <Text style={styles.modalAgentProfileBtnText}>Full Profile</Text>
-                    </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Modal Action Buttons */}
+                {/* Modal Action Buttons — buyers may reschedule open visits
+                    and cancel; completion is owner-only on the backend, so no
+                    Mark Completed action exists here. */}
                 <View style={styles.detailsModalActions}>
-                  <TouchableOpacity
-                    style={styles.btnReschedule}
-                    onPress={() => setIsRescheduling(true)}
-                    activeOpacity={0.8}
-                  >
-                    <RotateCcw size={14} color="#2563EB" style={{ marginRight: 4 }} />
-                    <Text style={styles.btnRescheduleText}>Reschedule</Text>
-                  </TouchableOpacity>
-
-                  {selectedVisitForDetails.status !== "completed" && (
-                    <TouchableOpacity
-                      style={styles.btnComplete}
-                      onPress={() => handleMarkVisitCompleted(selectedVisitForDetails)}
-                      activeOpacity={0.88}
-                    >
-                      <CheckCircle2 size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                      <Text style={styles.btnCompleteText}>Mark Completed</Text>
-                    </TouchableOpacity>
+                  {selectedVisitForDetails.serverStatus === "PROPOSED" && (
+                    <>
+                      <TouchableOpacity
+                        style={styles.btnReschedule}
+                        onPress={() => handleConfirmProposal(selectedVisitForDetails)}
+                        activeOpacity={0.8}
+                      >
+                        <CheckCircle2 size={14} color="#2563EB" style={{ marginRight: 4 }} />
+                        <Text style={styles.btnRescheduleText}>Confirm Visit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.btnCancel}
+                        onPress={() => handleDeclineProposal(selectedVisitForDetails)}
+                        activeOpacity={0.8}
+                      >
+                        <XCircle size={14} color="#DC2626" style={{ marginRight: 4 }} />
+                        <Text style={styles.btnCancelText}>Decline</Text>
+                      </TouchableOpacity>
+                    </>
                   )}
 
-                  {selectedVisitForDetails.status !== "cancelled" && (
-                    <TouchableOpacity
-                      style={styles.btnCancel}
-                      onPress={() => handleCancelVisit(selectedVisitForDetails)}
-                      activeOpacity={0.8}
-                    >
-                      <XCircle size={14} color="#DC2626" style={{ marginRight: 4 }} />
-                      <Text style={styles.btnCancelText}>Cancel Visit</Text>
-                    </TouchableOpacity>
+                  {(selectedVisitForDetails.serverStatus === "REQUESTED" ||
+                    selectedVisitForDetails.serverStatus === "CONFIRMED") && (
+                    <>
+                      <TouchableOpacity
+                        style={styles.btnReschedule}
+                        onPress={() => setIsRescheduling(true)}
+                        activeOpacity={0.8}
+                      >
+                        <RotateCcw size={14} color="#2563EB" style={{ marginRight: 4 }} />
+                        <Text style={styles.btnRescheduleText}>Reschedule</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.btnCancel}
+                        onPress={() => handleCancelVisit(selectedVisitForDetails)}
+                        activeOpacity={0.8}
+                      >
+                        <XCircle size={14} color="#DC2626" style={{ marginRight: 4 }} />
+                        <Text style={styles.btnCancelText}>Cancel Visit</Text>
+                      </TouchableOpacity>
+                    </>
                   )}
                 </View>
               </ScrollView>
@@ -1738,16 +1670,14 @@ export default function SavedScreen({ navigation, route }) {
 
       {/* ================= RESCHEDULE VISIT MODAL ================= */}
       <ScheduleVisitModal
+        key={selectedVisitForDetails ? `visit-${selectedVisitForDetails.id}-${selectedVisitForDetails.scheduledAt}` : "none"}
         visible={isRescheduling && !!selectedVisitForDetails}
         onClose={() => setIsRescheduling(false)}
         title="Reschedule Visit"
-        lead={{
-          customerName: selectedVisitForDetails?.agentName,
-          phone: selectedVisitForDetails?.agentPhone,
-        }}
+        lead={{ customerName: selectedVisitForDetails?.propertyTitle }}
         property={{
           title: selectedVisitForDetails?.propertyTitle,
-          location: selectedVisitForDetails?.propertyLocation,
+          location: "",
         }}
         initialTime={selectedVisitForDetails?.time || "10:00 am"}
         onConfirm={(reschedData) => {

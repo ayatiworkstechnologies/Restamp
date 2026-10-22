@@ -57,11 +57,17 @@ export default function OwnerProfileScreen({ navigation }) {
     if (logout) {
       await logout();
     }
-    // Logout action resets to Buyer or shows logged out state
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "MainTabs" }],
-    });
+    // Sign-out drops the whole stack on the logged-out auth entry route, so
+    // no owner screen (and no previous owner's data) stays reachable and
+    // Back cannot return to one.
+    try {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+    } catch {
+      // The navigator may not be mounted; AuthContext already reset it.
+    }
     Alert.alert("Logged Out", "You have been signed out of your owner account.");
   };
 
@@ -206,7 +212,7 @@ export default function OwnerProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 0 }]}
-            onPress={() => navigation.navigate("Leads", { initialTab: "Visit Scheduled" })}
+            onPress={() => navigation.navigate("Visits")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>

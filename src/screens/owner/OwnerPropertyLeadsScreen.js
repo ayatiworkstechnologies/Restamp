@@ -31,8 +31,11 @@ import {
 } from "../../components/common/HugeIcon";
 
 import COLORS from "../../constants/colors";
-import { useOwner } from "../../context/OwnerContext";
+import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContext";
+import { useAuth } from "../../context/AuthContext";
 import { selectPropertyLeads, fetchOwnerLeads, toOwnerLead, updateOwnerLeadStatus } from "../../api/owner";
+import { fetchOwnerVisits, toUiVisit, toVisitPayload, updateOwnerVisit } from "../../api/visits";
+import { ownerVisitErrorMessage, proposeVisitForLead } from "../../utils/ownerVisits";
 import StatusBadge from "../../components/owner/StatusBadge";
 import EmptyState from "../../components/owner/EmptyState";
 import OwnerSiteVisitModal from "./OwnerSiteVisitModal";
@@ -51,7 +54,14 @@ const LEAD_TABS = [
 ];
 
 export default function OwnerPropertyLeadsScreen({ route, navigation }) {
-  const { properties, leads, updateLeadStatus, scheduleVisit, closeLead } = useOwner();
+  const { properties, leads, updateLeadStatus, closeLead } = useOwner();
+  const { user: authUser } = useAuth();
+  // Only the signed-in owner's rows are ever shown (defence in depth on top
+  // of the backend's ownership scoping).
+  const scopedProperties = useMemo(
+    () => selectOwnerScopedProperties(properties, authUser?.id ?? null),
+    [properties, authUser]
+  );
 
   // Selected property passed from My Properties
   const routeProperty = route?.params?.property;
@@ -60,10 +70,10 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
   const property = useMemo(() => {
     if (routeProperty) return routeProperty;
     if (routePropertyId) {
-      return properties.find((p) => p.id === routePropertyId) || properties[0];
+      return scopedProperties.find((p) => p.id === routePropertyId) || scopedProperties[0];
     }
-    return properties[0] || null;
-  }, [routeProperty, routePropertyId, properties]);
+    return scopedProperties[0] || null;
+  }, [routeProperty, routePropertyId, scopedProperties]);
 
   const [activeTab, setActiveTab] = useState("All");
   const [showSearch, setShowSearch] = useState(false);
@@ -133,10 +143,30 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
     loadLeads();
   }, [loadLeads]);
 
+  const [ownerVisits, setOwnerVisits] = useState([]);
+
+  const loadOwnerVisits = useCallback(() => {
+    if (routeListingId == null) {
+      setOwnerVisits([]);
+      return;
+    }
+    fetchOwnerVisits({ propertyListingId: routeListingId, page: 1, pageSize: 100 }).then(
+      (resp) => setOwnerVisits((resp?.items || []).map(toUiVisit)),
+      () => setOwnerVisits([])
+    );
+  }, [routeListingId]);
+
   useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", loadLeads);
+    loadOwnerVisits();
+  }, [loadOwnerVisits]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      loadLeads();
+      loadOwnerVisits();
+    });
     return unsubscribe;
-  }, [navigation, loadLeads]);
+  }, [navigation, loadLeads, loadOwnerVisits]);
 
   // Invalidate in-flight fetches on unmount.
   useEffect(() => {
@@ -190,13 +220,27 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
     return selectPropertyLeads([...server, ...localOnly], property);
   }, [serverLeads, leads, property]);
 
+  const activeVisitByBuyer = useMemo(() => {
+    const map = new Map();
+    (ownerVisits || [])
+      .filter((visit) => ["REQUESTED", "PROPOSED", "CONFIRMED"].includes(visit.serverStatus))
+      .forEach((visit) => {
+        const key = Number(visit.buyer_user_id);
+        const existing = map.get(key);
+        if (!existing || Number(visit.id) > Number(existing.id)) map.set(key, visit);
+      });
+    return map;
+  }, [ownerVisits]);
+
   // Tab and search filtered leads
   const filteredLeads = useMemo(() => {
     let list = projectLeads;
     if (activeTab !== "All") {
       const normalizedTab = activeTab.toLowerCase().replace(" ", "_");
       list = list.filter((l) => {
-        if (activeTab === "Visit Scheduled") return l.status === "visit_scheduled";
+        if (activeTab === "Visit Scheduled") {
+          return activeVisitByBuyer.has(Number(l.buyer_user_id));
+        }
         return l.status === normalizedTab;
       });
     }
@@ -211,7 +255,7 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
       );
     }
     return list;
-  }, [projectLeads, activeTab, searchQuery]);
+  }, [projectLeads, activeTab, searchQuery, activeVisitByBuyer]);
 
   const handleCall = (lead) => {
     if (!lead.phone) {
@@ -252,7 +296,7 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
   const handleMoreOptions = (lead) => {
     Alert.alert(
       lead.customerName,
-      `Status: ${(lead.status || "NEW").toUpperCase()} • ${lead.phone || ""}`,
+      lead.message ? String(lead.message).slice(0, 180) : `Status: ${(lead.status || "NEW").toUpperCase()}`,
       [
         {
           text: "Schedule Visit",
@@ -280,13 +324,15 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
       } else {
         const normalizedTab = tab.toLowerCase().replace(" ", "_");
         counts[tab] = projectLeads.filter((l) => {
-          if (tab === "Visit Scheduled") return l.status === "visit_scheduled";
+          if (tab === "Visit Scheduled") {
+            return activeVisitByBuyer.has(Number(l.buyer_user_id));
+          }
           return l.status === normalizedTab;
         }).length;
       }
     });
     return counts;
-  }, [projectLeads]);
+  }, [projectLeads, activeVisitByBuyer]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -360,10 +406,7 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
           >
             <Image
               source={{
-                uri:
-                  property.coverPhoto ||
-                  property.images?.[0] ||
-                  "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=400&q=80",
+                uri: property.coverPhoto || property.images?.[0] || null,
               }}
               style={styles.propertyThumb}
             />
@@ -456,7 +499,7 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
         ) : (
           <View style={styles.leadsList}>
             {filteredLeads.map((lead) => {
-              const isVisitScheduled = lead.status === "visit_scheduled";
+              const leadVisit = activeVisitByBuyer.get(Number(lead.buyer_user_id));
 
               return (
                 <TouchableOpacity
@@ -538,24 +581,23 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
                     {lead.message || "No message provided."}
                   </Text>
 
-                  {/* Visit Scheduled Alert Chip (Preserving visit details) */}
-                  {isVisitScheduled && lead.visitData && (
+                  {/* Real backend visit state only. */}
+                  {leadVisit ? (
                     <View style={styles.visitChipRow}>
                       <Calendar size={13} color="#D97706" style={{ marginRight: 5 }} />
                       <Text style={styles.visitChipText}>
-                        Visit Booked: {lead.visitData.date}, {lead.visitData.time}
+                        {leadVisit.serverStatus}: {leadVisit.date}, {leadVisit.time}
                       </Text>
                     </View>
-                  )}
+                  ) : null}
 
-                  {/* Dedicated "Schedule a Visit" Button matching user's design */}
                   <TouchableOpacity
                     style={styles.scheduleVisitBtn}
                     onPress={() => setSelectedLeadForVisit(lead)}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.scheduleVisitBtnText}>
-                      {lead.status === "visit_scheduled" ? "Reschedule Visit" : "Schedule a Visit"}
+                      {leadVisit ? "Update Visit" : "Propose a Visit"}
                     </Text>
                   </TouchableOpacity>
                 </TouchableOpacity>
@@ -573,12 +615,43 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
           visible={!!selectedLeadForVisit}
           lead={selectedLeadForVisit}
           onClose={() => setSelectedLeadForVisit(null)}
-          onVisitScheduled={(leadId, visitDetails) => {
-            // Visit scheduling persistence is on hold (no backend support):
-            // device-local flip only, documented in the P4 report.
-            scheduleVisit(leadId, visitDetails);
-            patchServerLead(leadId, { status: "visit_scheduled", visitData: visitDetails });
-            setSelectedLeadForVisit(null);
+          onVisitScheduled={async (leadId, visitDetails) => {
+            const lead = selectedLeadForVisit;
+            const existingVisit = lead
+              ? activeVisitByBuyer.get(Number(lead.buyer_user_id))
+              : null;
+            try {
+              if (existingVisit && typeof existingVisit.id === "number") {
+                let scheduledAtISO;
+                try {
+                  scheduledAtISO = toVisitPayload({
+                    date: visitDetails?.date || visitDetails?.fullDate,
+                    time: visitDetails?.time,
+                  }).scheduled_at;
+                } catch (error) {
+                  Alert.alert("Invalid Date/Time", error?.message || "Please choose a future date and time.");
+                  return;
+                }
+                await updateOwnerVisit(existingVisit.id, { scheduledAtISO });
+                Alert.alert("Visit Rescheduled", "The proposed time was updated.");
+              } else {
+                await proposeVisitForLead(lead, visitDetails);
+                Alert.alert("Visit Proposed", "The buyer can now confirm or decline the proposed time.");
+              }
+              setSelectedLeadForVisit(null);
+              loadOwnerVisits();
+            } catch (error) {
+              if (error?.kind === "invalid_lead") {
+                Alert.alert("Couldn't propose visit", error.message);
+                return;
+              }
+              if (error?.kind === "invalid_time") {
+                Alert.alert("Invalid Date/Time", error.message);
+                return;
+              }
+              const copy = ownerVisitErrorMessage(error, existingVisit ? "reschedule" : "propose");
+              Alert.alert(copy.title, copy.message);
+            }
           }}
         />
       )}

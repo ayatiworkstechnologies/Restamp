@@ -66,9 +66,6 @@ const TIME_SECTIONS = [
   },
 ];
 
-// Default disabled slot to match reference design (e.g. "11:00 am" booked)
-const DEFAULT_DISABLED_SLOTS = ["11:00 am"];
-
 function isSameDay(d1, d2) {
   if (!d1 || !d2) return false;
   return (
@@ -335,7 +332,7 @@ function ScheduleVisitModal({
                 <View style={styles.slotsGrid}>
                   {section.slots.map((slot) => {
                     const isSelected = selectedTime === slot;
-                    const isDisabled = DEFAULT_DISABLED_SLOTS.includes(slot);
+                    const isDisabled = false;
 
                     return (
                       <TouchableOpacity

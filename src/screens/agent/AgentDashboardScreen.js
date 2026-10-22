@@ -77,15 +77,15 @@ export default function AgentDashboardScreen({ navigation }) {
       ? "Good Afternoon,"
       : "Good Evening,";
 
-  const rawAgentName = agentProfile?.name || "Vikram Prabhu";
+  const rawAgentName = agentProfile?.name || "Agent";
   const agentName = rawAgentName.endsWith(",") ? rawAgentName : `${rawAgentName},`;
 
   // Calculate summary counts
-  const availablePropertiesCount = localityProperties.length || 126;
+  const availablePropertiesCount = localityProperties.length;
   const newLeadsCount = leads.filter((l) => l.status === "new").length || leads.length;
   const todaysVisitsCount = visits.filter(
     (v) => v.date === "Today" || v.status === "upcoming"
-  ).length || 3;
+  ).length;
   const totalEarned = useMemo(() => {
     return (earningsTransactions || []).reduce(
       (acc, curr) => acc + (curr.commissionAmount || 0),
@@ -259,7 +259,7 @@ export default function AgentDashboardScreen({ navigation }) {
               <ArrowRight size={14} color="#94A3B8" />
             </View>
             <Text style={styles.metricNumber}>
-              {formattedEarned || "₹2.4L"}
+              {formattedEarned || "₹0"}
             </Text>
             <Text style={styles.metricLabel} numberOfLines={1}>
               Earnings & Comm.
@@ -275,7 +275,7 @@ export default function AgentDashboardScreen({ navigation }) {
               <Text style={styles.sectionTitle}>Covered Locations</Text>
               <View style={styles.locBadge}>
                 <Text style={styles.locBadgeText}>
-                  {selectedLocalities.length}/{agentPlan?.locationLimit || 10}
+                  {selectedLocalities.length}/{agentPlan?.locationLimit || 0}
                 </Text>
               </View>
             </View>
@@ -466,13 +466,13 @@ export default function AgentDashboardScreen({ navigation }) {
           <View style={styles.minimalListCard}>
             <View style={styles.planRowItem}>
               <Text style={styles.planKey}>Current Plan</Text>
-              <Text style={styles.planVal}>{agentPlan?.name || "Agent Pro Plan"}</Text>
+              <Text style={styles.planVal}>{agentPlan?.name || "No active plan"}</Text>
             </View>
             <View style={styles.planRowDivider} />
             <View style={styles.planRowItem}>
               <Text style={styles.planKey}>Coverage Limit</Text>
               <Text style={styles.planVal}>
-                {selectedLocalities.length} of {agentPlan?.locationLimit || 10} Locations Used
+                {selectedLocalities.length} of {agentPlan?.locationLimit || 0} Locations Used
               </Text>
             </View>
             <View style={styles.planRowDivider} />
@@ -507,7 +507,7 @@ export default function AgentDashboardScreen({ navigation }) {
               <View>
                 <Text style={styles.modalTitle}>Your Covered Locations</Text>
                 <Text style={styles.modalSubtitle}>
-                  {selectedLocalities.length} of {agentPlan?.locationLimit || 10} locations assigned
+                  {selectedLocalities.length} of {agentPlan?.locationLimit || 0} locations assigned
                 </Text>
               </View>
               <TouchableOpacity

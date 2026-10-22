@@ -22,9 +22,7 @@ export default function LeadCard({
       <View style={styles.topRow}>
         <Image
           source={{
-            uri:
-              lead.avatar ||
-              "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
+            uri: lead.avatar || null,
           }}
           style={styles.avatar}
         />

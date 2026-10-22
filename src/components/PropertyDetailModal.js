@@ -12,6 +12,7 @@ import {
   Dimensions,
   Platform,
   Share,
+  Linking,
   ActivityIndicator,
   StatusBar,
 } from "react-native";
@@ -47,13 +48,19 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import COLORS from "../constants/colors";
 import TYPOGRAPHY from "../constants/typography";
-import ALL_PROPERTIES, { RECOMMENDED_PROPERTIES } from "../data/properties";
 import { fetchListingDetail, fetchSimilar } from "../api/listings";
+import {
+  createBuyerVisit,
+  fetchBuyerVisits,
+  toUiVisit,
+  toVisitPayload,
+  updateBuyerVisit,
+} from "../api/visits";
 import SafeImage from "./common/SafeImage";
 import PropertyGalleryModal from "./PropertyGalleryModal";
 import ScheduleVisitModal from "./ScheduleVisitModal";
-import { getBuyerVisits, addBuyerVisit } from "../data/visitsStore";
 import { createEnquiry } from "../api/enquiries";
+import { revealContactPhone } from "../api/contact";
 import { getAuthTokenSync } from "../api/client";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -168,18 +175,40 @@ function PropertyDetailModal({
 
   useEffect(() => {
     if (property) {
-      const existing = getBuyerVisits().find(
-        (v) =>
-          (v.propertyTitle === property.title || (v.propertyId && v.propertyId === property.id)) &&
-          v.status === "upcoming"
-      );
-      setScheduledVisit(existing || null);
       setEnquirySent(false);
       setEnquiryTopic("Interested in buying");
       setEnquiryMessage(
         `Hello, I am interested in ${property.title}. Please share further details.`
       );
     }
+    // Existing server visit for this listing (authenticated buyers only).
+    // Guests and mock-sourced cards keep no local visit: nothing is
+    // scheduled until the backend confirms it.
+    setScheduledVisit(null);
+    const backendId = property && property.backendId;
+    if (typeof backendId !== "number" || !getAuthTokenSync()) return;
+    let cancelled = false;
+    fetchBuyerVisits({ page: 1, pageSize: 50 }).then(
+      (resp) => {
+        if (cancelled) return;
+        const match = (resp?.items || [])
+          .map(toUiVisit)
+          .find(
+            (v) =>
+              v.property_listing_id === backendId &&
+              (v.serverStatus === "REQUESTED" ||
+                v.serverStatus === "PROPOSED" ||
+                v.serverStatus === "CONFIRMED")
+          );
+        if (!cancelled) setScheduledVisit(match || null);
+      },
+      () => {
+        if (!cancelled) setScheduledVisit(null);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
   }, [property]);
 
   // Live similar-properties state (Phase 4). Declared with the other hooks,
@@ -296,59 +325,22 @@ function PropertyDetailModal({
     tags = ["CMDA Approved", "Corner Property", "2 Side Open", "Clear Title"];
   }
 
-  // Build photo gallery (main image + alternate architectural angles).
-  // Backend-backed listings show ONLY real stored photos (fetched when the
-  // opening card carries no gallery); sample Unsplash padding applies solely
-  // to mock flows with no backend record.
-  const isBackendBacked = property && typeof property.backendId === "number";
+  // Only real stored photos are shown. A live detail fetch may supply the
+  // gallery when the opening card carried only its cover; failures stay empty.
   const effectiveGallery =
     property.gallery && property.gallery.length > 0
       ? property.gallery
       : Array.isArray(liveGallery) && liveGallery.length > 0
         ? liveGallery
         : null;
-  const images =
-    effectiveGallery ||
-    (isBackendBacked
-      ? [property.image]
-      : [
-          property.image,
-          "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80",
-          "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1000&q=80",
-          "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1000&q=80",
-        ]);
+  const displayImages =
+    effectiveGallery && effectiveGallery.length > 0
+      ? [...effectiveGallery]
+      : [property.image].filter(Boolean);
+  const morePhotosCount = Math.max(0, displayImages.length - 5);
 
-  const sampleArchitecturePhotos = [
-    property.image,
-    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80",
-    "https://images.unsplash.com/photo-1600566753376-12c8ab7fb75b?auto=format&fit=crop&w=1000&q=80",
-    "https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=1000&q=80",
-    "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1000&q=80",
-    "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=1000&q=80",
-    "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1000&q=80",
-    "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1000&q=80",
-  ];
-
-  let displayImages = images && images.length > 0 ? [...images] : [property.image];
-  for (let i = 0; i < sampleArchitecturePhotos.length && displayImages.length < 6; i++) {
-    if (!displayImages.includes(sampleArchitecturePhotos[i])) {
-      displayImages.push(sampleArchitecturePhotos[i]);
-    }
-  }
-  const morePhotosCount = Math.max(10, (effectiveGallery?.length || 16) - 5);
-
-  // Similar properties: live API result wins once loaded (even when empty).
-  // A failed fetch for a backend-backed listing renders no similar cards
-  // (honest empty, never mock substitution). Mock-sourced flows with no
-  // backend record keep their existing local behavior.
-  const mockSimilarProps = (RECOMMENDED_PROPERTIES || ALL_PROPERTIES)
-    .filter((p) => p.id !== (property && property.id))
-    .slice(0, 5);
-  const similarProps = Array.isArray(liveSimilar)
-    ? liveSimilar
-    : liveSimilar === null && isBackendBacked
-      ? []
-      : mockSimilarProps;
+  // Live similar results only; failures render an honest empty state.
+  const similarProps = Array.isArray(liveSimilar) ? liveSimilar : [];
 
   const handleSendQuestion = () => {
     if (!questionText.trim()) {
@@ -358,30 +350,80 @@ function PropertyDetailModal({
       );
       return;
     }
+    // Questions persist as enquiries: server-confirmed only, never claimed
+    // on failure. Guests log in first with resume (same continuation
+    // contract as Send Enquiry).
     const backendId = property && property.backendId;
-    if (typeof backendId === "number" && getAuthTokenSync()) {
-      createEnquiry(backendId, questionText.trim()).catch(() => {});
+    const question = questionText.trim();
+    if (typeof backendId !== "number" || !getAuthTokenSync()) {
+      handleLoginRequired(
+        "Log in to send your question for this property. It is only shared after a successful submission.",
+        () => handleSendQuestion()
+      );
+      return;
     }
-    setEnquirySent(true);
-    Alert.alert(
-      "Question Sent to Seller! 🚀",
-      `Your question: "${questionText}" has been sent to the property seller. You will receive a response shortly.`,
-      [{ text: "OK", onPress: () => setQuestionText("") }]
+    createEnquiry(backendId, question).then(
+      () => {
+        setEnquirySent(true);
+        Alert.alert(
+          "Question Sent to Seller! 🚀",
+          `Your question: "${question}" has been sent to the property seller. You will receive a response shortly.`,
+          [{ text: "OK", onPress: () => setQuestionText("") }]
+        );
+      },
+      (e) => {
+        if (e && e.status === 404) {
+          Alert.alert(
+            "No Longer Available",
+            "This property is no longer available, so the question was not sent.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+        if (e && (e.status === 401 || e.kind === "login")) {
+          handleLoginRequired(
+            "Your session has expired. Log in again to send your question for this property.",
+            () => handleSendQuestion()
+          );
+          return;
+        }
+        if (e && (e.status === 403 || e.kind === "denied")) {
+          // The request already tried to put the account in Buyer mode
+          // (src/api/buyerMode.js) and the server still refused it, so the
+          // question was NOT sent. Say so instead of implying a partial send.
+          Alert.alert(
+            "Question Not Sent",
+            "Your account could not be switched to Buyer mode, so the question was not sent. Please switch to Buyer mode and try again.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+        Alert.alert(
+          "Couldn't send question",
+          "Please check your connection and try again.",
+          [{ text: "OK" }]
+        );
+      }
     );
   };
 
   const handleRequestSiteVisit = () => {
     if (scheduledVisit) {
+      const visitState =
+        scheduledVisit.status === "CONFIRMED"
+          ? "confirmed"
+          : scheduledVisit.status === "PROPOSED"
+            ? "proposed"
+            : "requested";
       Alert.alert(
-        "Visit Scheduled 📅",
-        `You have an upcoming site visit for "${property.title}" on ${scheduledVisit.date} at ${scheduledVisit.time}.\n\nWould you like to reschedule or cancel?`,
+        "Site Visit",
+        `Your site visit for "${property.title}" is ${visitState} for ${scheduledVisit.date} at ${scheduledVisit.time}.\n\nWould you like to reschedule or cancel?`,
         [
           {
             text: "Cancel Visit",
             style: "destructive",
             onPress: () => {
-              setScheduledVisit(null);
-              Alert.alert("Visit Cancelled", "Your scheduled visit has been cancelled.");
+              cancelScheduledVisit();
             },
           },
           {
@@ -393,31 +435,144 @@ function PropertyDetailModal({
       );
       return;
     }
+    const backendId = property && property.backendId;
+    if (typeof backendId !== "number") {
+      Alert.alert(
+        "Site Visits Not Supported Yet",
+        `Visits for "${property.title}" can't be booked yet. Please use Send Enquiry and the seller will contact you.`,
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    if (!getAuthTokenSync()) {
+      handleLoginRequired(
+        "Log in to schedule a site visit for this property. It is only booked after a successful submission.",
+        () => handleRequestSiteVisit()
+      );
+      return;
+    }
     setIsScheduleVisitOpen(true);
   };
 
+  const cancelScheduledVisit = () => {
+    const visitId = scheduledVisit && scheduledVisit.id;
+    if (typeof visitId !== "number") {
+      setScheduledVisit(null);
+      return;
+    }
+    updateBuyerVisit(visitId, { status: "CANCELLED" }).then(
+      () => {
+        setScheduledVisit(null);
+        Alert.alert("Visit Cancelled", "Your scheduled visit has been cancelled.");
+      },
+      (e) => {
+        if (e && (e.status === 401 || e.kind === "login")) {
+          handleLoginRequired(
+            "Your session has expired. Log in again to manage your visit.",
+            () => cancelScheduledVisit()
+          );
+          return;
+        }
+        Alert.alert(
+          "Couldn't cancel visit",
+          "Please check your connection and try again."
+        );
+      }
+    );
+  };
+
   const handleConfirmVisit = (visitData) => {
-    setIsScheduleVisitOpen(false);
-    const newVisit = {
-      id: `visit-${Date.now()}`,
-      propertyId: property.id,
-      agentName: property.agent?.name || "Verified Specialist",
-      agentRole: property.agent?.agency || "Property Specialist",
-      agentPhone: property.agent?.phone || "+91 97909 88123",
-      propertyTitle: property.title,
-      propertyLocation: property.location || property.address || "Chennai",
-      propertyPrice: property.price || "",
-      date: visitData.dateString || "Tomorrow",
-      time: visitData.time || "10:00 am",
-      status: "upcoming",
-      notes: visitData.notes || "Requested via Property Details page.",
-    };
-    addBuyerVisit(newVisit);
-    setScheduledVisit(newVisit);
-    Alert.alert(
-      "Site Visit Scheduled! 🚀",
-      `Your site visit for "${property.title}" has been confirmed for ${newVisit.date} at ${newVisit.time}.\n\nThe seller has been notified. You can manage this visit anytime under Saved > Visits.`,
-      [{ text: "Great, Got It!" }]
+    // Real backend scheduling only: guests log in first (resume re-opens
+    // this same confirmation), then POST or PATCH /buyer/visits. Nothing is
+    // shown as scheduled until the server confirms it — no local ids, no
+    // invented agent details, no free-slot claims.
+    const backendId = property && property.backendId;
+    if (typeof backendId !== "number" || !getAuthTokenSync()) {
+      setIsScheduleVisitOpen(false);
+      handleLoginRequired(
+        "Log in to schedule a site visit for this property. It is only booked after a successful submission.",
+        () => {
+          setIsScheduleVisitOpen(true);
+        }
+      );
+      return;
+    }
+    let payload;
+    try {
+      payload = toVisitPayload({
+        date: visitData.date || visitData.dateString,
+        time: visitData.time,
+        note: visitData.notes || "Requested via Property Details page.",
+      });
+    } catch (e) {
+      Alert.alert("Invalid Date/Time", e?.message || "Please choose a future date and time.");
+      return;
+    }
+    const existingId = scheduledVisit && scheduledVisit.id;
+    const request =
+      typeof existingId === "number"
+        ? updateBuyerVisit(existingId, { scheduledAtISO: payload.scheduled_at })
+        : createBuyerVisit({
+            listingId: backendId,
+            scheduledAtISO: payload.scheduled_at,
+            note: payload.note,
+          });
+    request.then(
+      (row) => {
+        setIsScheduleVisitOpen(false);
+        const ui = toUiVisit(row);
+        setScheduledVisit(ui);
+        const confirmed = row.status === "CONFIRMED";
+        const proposed = row.status === "PROPOSED";
+        Alert.alert(
+          confirmed
+            ? "Site Visit Confirmed"
+            : proposed
+              ? "Visit Proposal Sent"
+              : "Site Visit Requested",
+          confirmed
+            ? `Your site visit for "${property.title}" is confirmed for ${ui.date} at ${ui.time}. You can manage it under Saved > Visits.`
+            : proposed
+              ? `The owner proposed ${ui.date} at ${ui.time} for "${property.title}". Review and confirm it under Saved > Visits.`
+              : `Your visit request for "${property.title}" is recorded for ${ui.date} at ${ui.time}. The owner can confirm it or propose another time under Saved > Visits.`,
+          [{ text: "OK" }]
+        );
+      },
+      (e) => {
+        if (e && e.status === 404) {
+          setIsScheduleVisitOpen(false);
+          setScheduledVisit(null);
+          Alert.alert(
+            "No Longer Available",
+            "This property is no longer available for visits.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+        if (e && (e.status === 401 || e.kind === "login")) {
+          handleLoginRequired(
+            "Your session has expired. Log in again to schedule this visit.",
+            () => handleConfirmVisit(visitData)
+          );
+          return;
+        }
+        if (e && (e.status === 403 || e.kind === "denied")) {
+          // The request already tried to put the account in Buyer mode
+          // (src/api/buyerMode.js) and the server still refused it, so no
+          // visit was booked.
+          setIsScheduleVisitOpen(false);
+          Alert.alert(
+            "Visit Not Scheduled",
+            "Your account could not be switched to Buyer mode, so the visit was not scheduled. Please switch to Buyer mode and try again.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+        Alert.alert(
+          "Couldn't schedule visit",
+          "Please check your connection and try again."
+        );
+      }
     );
   };
 
@@ -431,6 +586,64 @@ function PropertyDetailModal({
         },
       },
     ]);
+  };
+
+  // Secure call flow: guests see the owner name but never the number. A tap
+  // sends guests to login (resuming here afterwards); after login the number
+  // is fetched through the authorized reveal endpoint and handed to the
+  // device dialler. The dialler opens only on user tap with a server-issued
+  // number — never automatically, never from mock data.
+  const handleCallOwner = () => {
+    const backendId = property && property.backendId;
+    if (typeof backendId !== "number" || !getAuthTokenSync()) {
+      handleLoginRequired(
+        "Log in to call the owner of this property. The number is only shared after a successful login.",
+        () => handleCallOwner()
+      );
+      return;
+    }
+    revealContactPhone(backendId).then(
+      (phone) => {
+        if (!phone) {
+          Alert.alert(
+            "Contact Number Unavailable",
+            "The owner's contact number is not available for this property."
+          );
+          return;
+        }
+        Linking.openURL(`tel:${phone}`).catch(() => {
+          Alert.alert("Call Unavailable", "Could not place this call.");
+        });
+      },
+      (e) => {
+        if (e && e.status === 404) {
+          Alert.alert(
+            "Contact Number Unavailable",
+            "The owner's contact number is not available for this property."
+          );
+          return;
+        }
+        if (e && (e.status === 401 || e.kind === "login")) {
+          handleLoginRequired(
+            "Your session has expired. Log in again to call the owner.",
+            () => handleCallOwner()
+          );
+          return;
+        }
+        if (e && (e.status === 403 || e.kind === "denied")) {
+          Alert.alert(
+            "Buyer Mode Required",
+            "Your account is currently in Owner/Agent mode. Switch back to Buyer mode to call the owner.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+        Alert.alert(
+          "Couldn't fetch number",
+          "Please check your connection and try again."
+        );
+      }
+    );
   };
 
   const handleOpenEnquiryModal = () => {
@@ -453,46 +666,69 @@ function PropertyDetailModal({
     const msgToSend = enquiryMessage.trim() || `I am interested in ${property.title}.`;
     const backendId = property && property.backendId;
 
+    if (typeof backendId !== "number") {
+      Alert.alert(
+        "Enquiries Not Supported Yet",
+        "This listing has no live backend record, so an enquiry cannot be sent.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    if (!getAuthTokenSync()) {
+      handleLoginRequired(
+        "Log in to send an enquiry for this property. It is only sent after a successful submission.",
+        () => handleSubmitEnquiry()
+      );
+      return;
+    }
+
     setEnquirySending(true);
-    if (typeof backendId === "number" && getAuthTokenSync()) {
-      createEnquiry(backendId, msgToSend)
-        .then(() => {
-          setEnquirySent(true);
-          setIsEnquiryModalOpen(false);
-          Alert.alert(
-            "Enquiry Sent Successfully! 🚀",
-            `Your enquiry for "${property.title}" (${property.price}) has been sent to the property seller. They will contact you shortly.`,
-            [{ text: "Done" }]
-          );
-        })
-        .catch((e) => {
-          if (e && e.status === 404) {
-            Alert.alert("No Longer Available", "This property is no longer active.");
-            return;
-          }
-          setEnquirySent(true);
-          setIsEnquiryModalOpen(false);
-          Alert.alert(
-            "Enquiry Received! 🚀",
-            `Your interest in "${property.title}" has been shared with the property seller.`,
-            [{ text: "Done" }]
-          );
-        })
-        .finally(() => {
-          setEnquirySending(false);
-        });
-    } else {
-      setTimeout(() => {
-        setEnquirySending(false);
+    createEnquiry(backendId, msgToSend)
+      .then(() => {
         setEnquirySent(true);
         setIsEnquiryModalOpen(false);
         Alert.alert(
           "Enquiry Sent Successfully! 🚀",
-          `Your interest in "${property.title}" (${property.price}) has been shared with the property seller.`,
+          `Your enquiry for "${property.title}" (${property.price}) has been sent to the property seller. They will contact you shortly.`,
           [{ text: "Done" }]
         );
-      }, 400);
-    }
+      })
+      .catch((e) => {
+        if (e && e.status === 404) {
+          Alert.alert("No Longer Available", "This property is no longer active.");
+          return;
+        }
+        if (e && (e.status === 401 || e.kind === "login")) {
+          // Expired/invalid session despite a cached token: re-login, then
+          // resume this exact enquiry (same login-continuation contract as
+          // the logged-out path).
+          handleLoginRequired(
+            "Your session has expired. Log in again to send the enquiry for this property.",
+            () => handleSubmitEnquiry()
+          );
+          return;
+        }
+        if (e && (e.status === 403 || e.kind === "denied")) {
+          // Authenticated but the server still refused the buyer action. The
+          // request already asked the backend to switch the account into
+          // Buyer mode (src/api/buyerMode.js) and it did not take effect, so
+          // the enquiry was NOT sent. Report that honestly.
+          Alert.alert(
+            "Enquiry Not Sent",
+            "Your account could not be switched to Buyer mode, so the enquiry was not sent. Please switch to Buyer mode and try again.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+        Alert.alert(
+          "Couldn't send enquiry",
+          "Please check your connection and try again.",
+          [{ text: "OK" }]
+        );
+      })
+      .finally(() => {
+        setEnquirySending(false);
+      });
   };
 
   const quickQuestions = [
@@ -601,7 +837,8 @@ function PropertyDetailModal({
                 </View>
               )}
 
-              {/* Floating Bottom Thumbnail Card (Matches Screenshot with 6 Thumbnails & +10 Overlay) */}
+              {/* Floating bottom thumbnails (only when real photos exist) */}
+              {displayImages.length > 1 ? (
               <View style={styles.floatingThumbCard}>
                 {displayImages.slice(0, 5).map((imgUri, idx) => (
                   <TouchableOpacity
@@ -621,7 +858,7 @@ function PropertyDetailModal({
                   </TouchableOpacity>
                 ))}
 
-                {/* 6th Slot: Thumbnail with +10 Overlay */}
+                {/* Final slot opens the full real gallery */}
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={() => setIsGalleryOpen(true)}
@@ -632,11 +869,14 @@ function PropertyDetailModal({
                     style={styles.thumbCardImg}
                     resizeMode="cover"
                   />
-                  <View style={styles.thumbOverlay}>
-                    <Text style={styles.thumbOverlayText}>+{morePhotosCount}</Text>
-                  </View>
+                  {morePhotosCount > 0 ? (
+                    <View style={styles.thumbOverlay}>
+                      <Text style={styles.thumbOverlayText}>+{morePhotosCount}</Text>
+                    </View>
+                  ) : null}
                 </TouchableOpacity>
               </View>
+              ) : null}
             </View>
 
             {/* 2. MAIN INFO CARD (Matching Image 2 + Adapted Details from Image 1) */}
@@ -1010,7 +1250,7 @@ function PropertyDetailModal({
               )}
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={styles.ownerName}>
-                  {property.agent?.name || "Property Owner"}
+                  {property.ownerName || property.agent?.name || "Property Owner"}
                 </Text>
                 {property.agent?.agency ? (
                   <Text style={styles.ownerRole}>
@@ -1020,12 +1260,7 @@ function PropertyDetailModal({
               </View>
               <TouchableOpacity
                 style={styles.ownerCallBtn}
-                onPress={() =>
-                  Alert.alert(
-                    "Contact Number Unavailable",
-                    "Owner contact details are shared only through the authorized View Number flow on Search.",
-                  )
-                }
+                onPress={() => handleCallOwner()}
               >
                 <Phone size={18} color="#FFFFFF" />
               </TouchableOpacity>

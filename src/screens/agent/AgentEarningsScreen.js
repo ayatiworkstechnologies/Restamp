@@ -93,7 +93,7 @@ export default function AgentEarningsScreen({ navigation }) {
   const handleShareInvoice = async (invoice) => {
     try {
       await Share.share({
-        message: `RESTAMP Agent Commission Statement\nInvoice: ${invoice.invoiceId}\nAgent: ${agentProfile?.name || "Vikram Prabhu"}\nAmount: ${invoice.commissionFormatted}\nStatus: ${invoice.payoutStatus.toUpperCase()}\nClient: ${invoice.clientName}`,
+        message: `RESTAMP Agent Commission Statement\nInvoice: ${invoice.invoiceId}\nAgent: ${agentProfile?.name || "Agent"}\nAmount: ${invoice.commissionFormatted}\nStatus: ${invoice.payoutStatus.toUpperCase()}\nClient: ${invoice.clientName}`,
       });
     } catch (e) {
       // Fallback
@@ -459,9 +459,9 @@ export default function AgentEarningsScreen({ navigation }) {
                 <View style={styles.slipPartyRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.partyRole}>AGENT PARTNER</Text>
-                    <Text style={styles.partyName}>{agentProfile?.name || "Vikram Prabhu"}</Text>
+                    <Text style={styles.partyName}>{agentProfile?.name || "Agent"}</Text>
                     <Text style={styles.partyMeta}>
-                      RERA: {agentProfile?.reraNumber || "TN/AGENT/2024/00842"}
+                      RERA: {agentProfile?.reraNumber || "Not provided"}
                     </Text>
                   </View>
                   <View style={{ flex: 1, alignItems: "flex-end" }}>

@@ -52,7 +52,7 @@ import {
 import COLORS from "../../constants/colors";
 import { useOwner } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
-import { createOwnerListing, updateOwnerListing, buildUpdatePayload, resolveEditingListingId, toEditForm, headerExitAction, isValidChennaiPincode, CHENNAI_PINCODE_ERROR, isValidOwnerEmail, OWNER_EMAIL_ERROR, freshAddParams, fetchOwnerListing, isLocalPhotoUri, uploadListingPhoto, createDraft, updateDraft, fetchDraft, deleteDraft, syncIdSetWithPhotos, pendingLocalPhotos } from "../../api/owner";
+import { createOwnerListing, updateOwnerListing, buildUpdatePayload, resolveEditingListingId, toEditForm, headerExitAction, isValidChennaiPincode, CHENNAI_PINCODE_ERROR, isValidOwnerEmail, OWNER_EMAIL_ERROR, freshAddParams, fetchOwnerListing, submitListing, isLocalPhotoUri, uploadListingPhoto, createDraft, updateDraft, fetchDraft, deleteDraft, syncIdSetWithPhotos, pendingLocalPhotos } from "../../api/owner";
 import RestampLogo from "../../components/RestampLogo";
 import StepIndicator from "../../components/owner/StepIndicator";
 import FormInput from "../../components/owner/FormInput";
@@ -804,7 +804,19 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     // Server-confirmed: refetch for gallery/cover truth, then exit to the
     // list (which refetches on focus). No addProperty (no duplicate), no
     // draft delete, no subscription increment — nothing new was created.
-    await fetchOwnerListing(serverId).catch(() => null);
+    // A listing that was REJECTED is resubmitted for re-review now that the
+    // owner fixed it (backend REJECTED -> PENDING); other states are untouched.
+    const fresh = await fetchOwnerListing(serverId).catch(() => null);
+    if (fresh && fresh.verification_status === "REJECTED") {
+      try {
+        await submitListing(serverId);
+      } catch (e) {
+        Alert.alert(
+          "Saved, But Not Resubmitted",
+          "Your changes were saved. Resubmission for re-review failed — please resubmit from My Properties."
+        );
+      }
+    }
     setPendingListingId(null);
     setFailedUploadIds([]);
     setUploadedOkIds([]);

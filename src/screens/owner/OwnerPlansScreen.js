@@ -296,7 +296,7 @@ export default function OwnerPlansScreen({ navigation }) {
         <View style={styles.assuranceBox}>
           <ShieldCheck size={16} color="#16A34A" style={{ marginRight: 8 }} />
           <Text style={styles.assuranceText}>
-            100% money-back guarantee if you don't receive buyer inquiries in 30 days.
+            Plan prices are indicative; no payment or refund flow is available.
           </Text>
         </View>
 

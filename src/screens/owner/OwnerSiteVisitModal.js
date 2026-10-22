@@ -16,7 +16,7 @@ export default function OwnerSiteVisitModal({
       lead={lead}
       property={{
         title: lead.propertyTitle || "Property Site Visit",
-        location: lead.preferredLocality || lead.locality || "Prime Location",
+        location: lead.preferredLocality || lead.locality || "",
       }}
       title="Schedule Visit"
       onConfirm={({ date, fullDate, time, notes }) => {

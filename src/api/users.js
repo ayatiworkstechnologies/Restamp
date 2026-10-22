@@ -11,14 +11,23 @@
  */
 import { Alert } from "react-native";
 import { apiGetAuth, apiPost, getAuthTokenSync } from "./client";
+import { createRoleGuard } from "./roleSwitchCore";
+import { noteServerRole } from "./buyerMode";
 
 /**
  * Update the authenticated user's role on the backend.
+ *
+ * The confirmed role is recorded for the buyer-mode guard (src/api/buyerMode.js)
+ * so the next buyer action does not need an extra round trip and, more
+ * importantly, so a switch away from BUYER is never mistaken for one.
+ *
  * @param {"BUYER" | "OWNER" | "BROKER"} role
  * @returns {Promise<{user_id: number, role: string}>}
  */
 export async function setMyRole(role) {
-  return apiPost("/users/me/role", { role });
+  const result = await apiPost("/users/me/role", { role });
+  noteServerRole(result && result.role ? result.role : role);
+  return result;
 }
 
 /**
@@ -29,8 +38,10 @@ export async function fetchMyRole() {
   return apiGetAuth("/users/me/role");
 }
 
-// Guard against double-tap role switches racing each other.
-let _roleSwitchInFlight = false;
+const roleGuard = createRoleGuard({
+  setMyRole,
+  getToken: getAuthTokenSync,
+});
 
 /**
  * Ensure the backend holds the given role before entering a role-gated flow.
@@ -39,47 +50,17 @@ let _roleSwitchInFlight = false;
  * switching to OWNER drops BUYER access and vice versa, so every direction
  * must go through this helper — there are no one-way doors.
  *
- * - If auth.user.role already matches, no network call is made.
- * - Otherwise POSTs /users/me/role with the existing token.
- * - Best-effort refreshes the AuthContext user (via auth.refreshMe) so the UI
- *   role matches the backend; a refresh failure does NOT fail the switch
- *   because the server-side role was already updated.
- * - Never clears the token and never logs the user out.
+ * Concurrent taps share one POST for the same target role. A caller asking
+ * for a different role waits for the active switch and then performs a fresh
+ * server-side switch rather than trusting a stale auth snapshot. Timeouts and
+ * failures reject, so callers never navigate on an unconfirmed role.
  *
  * @param {object} auth - the value returned by useAuth() ({ user, refreshMe })
  * @param {"BUYER" | "OWNER"} role
  * @returns {Promise<{ already: boolean }>}
  */
 export async function ensureRole(auth, role) {
-  // If not authenticated on the backend, do not attempt to POST unauthenticated
-  if (!getAuthTokenSync()) {
-    return { already: true };
-  }
-  if (auth?.user?.role === role) {
-    return { already: true };
-  }
-  if (_roleSwitchInFlight) {
-    // A switch is already running (e.g. double tap); wait for it to finish.
-    const startedAt = Date.now();
-    while (_roleSwitchInFlight && Date.now() - startedAt < 3000) {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    return { already: auth?.user?.role === role };
-  }
-  _roleSwitchInFlight = true;
-  try {
-    const setRolePromise = setMyRole(role);
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Role update timeout")), 3000)
-    );
-    await Promise.race([setRolePromise, timeoutPromise]);
-    if (auth && typeof auth.refreshMe === "function") {
-      auth.refreshMe().catch(() => {});
-    }
-    return { already: false };
-  } finally {
-    _roleSwitchInFlight = false;
-  }
+  return roleGuard.ensureRole(auth, role);
 }
 
 /**
@@ -106,6 +87,12 @@ function roleSwitchErrorMessage(e, role) {
   }
   if (e.kind === "denied" || e.status === 403) {
     return "This account is not allowed to switch roles. Please contact support.";
+  }
+  if (e.kind === "timeout") {
+    return "The server did not confirm the role change. Please try again.";
+  }
+  if (e.kind === "role-unconfirmed") {
+    return "The server did not confirm the role change. Please try again.";
   }
   if (e.kind === "validation" || e.status === 400 || e.status === 422) {
     return "The server rejected the role change. Please update the app and try again.";
@@ -158,10 +145,15 @@ export async function enterOwnerFlow(navigation, auth, ownerScreen = "Dashboard"
  * @returns {Promise<boolean>} true when navigation happened
  */
 export async function enterBuyerFlow(navigation, auth) {
-  // Sync BUYER role in background without delaying immediate UI navigation
-  ensureRole(auth, "BUYER").catch((e) => {
-    console.warn("Could not sync BUYER role to server:", e?.message);
-  });
+  // Race-safe ordering (ported from fork): the BUYER role must be confirmed
+  // on the server BEFORE navigating — buyer endpoints 403 while the account
+  // still holds OWNER. On failure, stay put with a clean error.
+  try {
+    await ensureRole(auth, "BUYER");
+  } catch (e) {
+    Alert.alert("Could not open Buyer mode", roleSwitchErrorMessage(e, "BUYER"));
+    return false;
+  }
   try {
     const rootNav = navigation?.getParent?.() || navigation;
     try {

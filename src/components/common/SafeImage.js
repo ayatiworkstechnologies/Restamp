@@ -1,8 +1,7 @@
 import React, { useState, memo } from "react";
 import { Image } from "react-native";
 
-export const DEFAULT_PROPERTY_FALLBACK =
-  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80";
+export const DEFAULT_PROPERTY_FALLBACK = null;
 
 /**
  * Robust, high-performance image wrapper that intercepts broken URLs (like seed.local)

@@ -13,7 +13,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Search, X, XCircle, Check, ChevronDown, Bed, Maximize2 } from "./common/HugeIcon";
 import SafeImage from "./common/SafeImage";
-import ALL_PROPERTIES from "../data/properties";
 import COLORS from "../constants/colors";
 import TYPOGRAPHY from "../constants/typography";
 import { apiGet } from "../api/client";
@@ -164,7 +163,7 @@ function SearchPropertyModal({
     const text = (localityInput || "").trim().replace(/\s+/g, " ");
     if (text.length === 0) {
       suggReqId.current++;
-      setLiveSuggestions((ALL_PROPERTIES || []).slice(0, 3));
+      setLiveSuggestions([]);
       setSuggLoading(false);
       return undefined;
     }
@@ -188,32 +187,12 @@ function SearchPropertyModal({
         (data) => {
           if (suggReqId.current !== myReq) return;
           const items = Array.isArray(data.items) ? data.items : [];
-          if (items.length > 0) {
-            setLiveSuggestions(items.map(toUiProperty).slice(0, 6));
-          } else {
-            const localMatches = (ALL_PROPERTIES || [])
-              .filter(
-                (p) =>
-                  (p.title && p.title.toLowerCase().includes(text.toLowerCase())) ||
-                  (p.location && p.location.toLowerCase().includes(text.toLowerCase())) ||
-                  (p.address && p.address.toLowerCase().includes(text.toLowerCase()))
-              )
-              .slice(0, 6);
-            setLiveSuggestions(localMatches);
-          }
+          setLiveSuggestions(items.map(toUiProperty).slice(0, 6));
           setSuggLoading(false);
         },
         () => {
           if (suggReqId.current !== myReq) return;
-          const localMatches = (ALL_PROPERTIES || [])
-            .filter(
-              (p) =>
-                (p.title && p.title.toLowerCase().includes(text.toLowerCase())) ||
-                (p.location && p.location.toLowerCase().includes(text.toLowerCase())) ||
-                (p.address && p.address.toLowerCase().includes(text.toLowerCase()))
-            )
-            .slice(0, 6);
-          setLiveSuggestions(localMatches);
+          setLiveSuggestions([]);
           setSuggLoading(false);
         }
       );
@@ -480,7 +459,7 @@ function SearchPropertyModal({
             {(suggLoading || liveSuggestions.length > 0) ? (
               <View style={styles.suggestionsListContainer}>
                 <Text style={styles.suggestionsHeading}>
-                  {suggLoading && liveSuggestions.length === 0 ? "Searching…" : "Listings"}
+                  {suggLoading && liveSuggestions.length === 0 ? "Searching…" : "Matching Properties"}
                 </Text>
                 {suggLoading && liveSuggestions.length === 0 ? (
                   <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 14 }} />
@@ -491,11 +470,11 @@ function SearchPropertyModal({
                         style={styles.suggestionItemRow}
                         activeOpacity={0.88}
                         onPress={() => {
-                          if (onSelectProperty) {
+                          if (onSelectProperty && typeof s.backendId === "number") {
                             onSelectProperty(s);
                           } else {
-                            setSelectedLocality(s.address || s.title || s.location);
-                            setLocalityInput(s.address || s.title || s.location);
+                            setSelectedLocality(s.title);
+                            setLocalityInput(s.title);
                           }
                         }}
                       >
@@ -511,17 +490,20 @@ function SearchPropertyModal({
                           <View style={styles.suggestionSpecsRow}>
                             <Bed size={16} color="#64748B" strokeWidth={1.8} style={{ marginRight: 6 }} />
                             <Text style={styles.suggestionSpecText}>
-                              {s.beds ? `${s.beds} ${s.beds === 1 ? "Bedroom" : "Bedrooms"}` : "3 Bedrooms"}
+                              {s.beds
+                                ? `${s.beds} ${s.beds === 1 ? "Bedroom" : "Bedrooms"}`
+                                : "Bedrooms not specified"}
                             </Text>
-                            <View style={{ width: 14 }} />
-                            <AreaSquareIcon size={14} color="#64748B" />
-                            <Text style={styles.suggestionSpecText}>
-                              {s.sqft ? `${s.sqft} sqft` : "1,150 sqft"}
-                            </Text>
+                            {s.sqft ? (
+                              <>
+                                <View style={{ width: 14 }} />
+                                <AreaSquareIcon size={14} color="#64748B" />
+                                <Text style={styles.suggestionSpecText}>{s.sqft} sqft</Text>
+                              </>
+                            ) : null}
                           </View>
                           <Text style={styles.suggestionPriceText}>
-                            {s.price || "$756/mo"}
-                            {s.pricePeriod ? `/${s.pricePeriod}` : ""}
+                            {s.price || "Price unavailable"}
                           </Text>
                         </View>
                       </TouchableOpacity>

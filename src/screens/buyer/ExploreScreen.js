@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -35,7 +35,8 @@ import {
 } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import TYPOGRAPHY from "../../constants/typography";
-import ALL_PROPERTIES, { CHENNAI_LOCALITIES } from "../../data/properties";
+import { apiGet } from "../../api/client";
+import { toUiProperty } from "../../api/mappers";
 import { useWishlist } from "../../context/WishlistContext";
 import { useRequireAuth } from "../../auth/useRequireAuth";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
@@ -167,6 +168,9 @@ export default function ExploreScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [contactProperty, setContactProperty] = useState(null);
+  const [localityProperties, setLocalityProperties] = useState([]);
+  const [propertiesLoading, setPropertiesLoading] = useState(false);
+  const [propertiesFailed, setPropertiesFailed] = useState(false);
 
   // Filtered localities by region and search query
   const filteredLocalities = useMemo(() => {
@@ -181,17 +185,34 @@ export default function ExploreScreen({ navigation }) {
     });
   }, [selectedRegion, searchQuery]);
 
-  // Properties matching selected locality
-  const localityProperties = useMemo(() => {
-    const locName = selectedLocality?.name?.toLowerCase() || "";
-    const matched = ALL_PROPERTIES.filter((p) => {
-      const locStr = (p.location || p.address || "").toLowerCase();
-      return locStr.includes(locName);
-    });
-
-    // Fallback: if very few direct matches, take top properties
-    return matched.length > 0 ? matched : ALL_PROPERTIES.slice(0, 6);
-  }, [selectedLocality]);
+  // Live listings for the selected locality. Never substitute a mock catalog.
+  useEffect(() => {
+    let cancelled = false;
+    const locality = selectedLocality?.name;
+    if (!locality) {
+      setLocalityProperties([]);
+      return undefined;
+    }
+    setPropertiesLoading(true);
+    setPropertiesFailed(false);
+    apiGet("/buyer/listings", { locality, page: 1, page_size: 12 }).then(
+      (data) => {
+        if (cancelled) return;
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setLocalityProperties(items.map(toUiProperty));
+        setPropertiesLoading(false);
+      },
+      () => {
+        if (cancelled) return;
+        setLocalityProperties([]);
+        setPropertiesFailed(true);
+        setPropertiesLoading(false);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLocality?.name]);
 
   // Honest contact: Explore rows are sample catalog entries with no backend
   // record, so their numbers never came from an authorized reveal and must
@@ -199,14 +220,14 @@ export default function ExploreScreen({ navigation }) {
   const handleCall = (phone, name) => {
     Alert.alert(
       "Contact Number Unavailable",
-      "Explore listings are samples. Use Search to find live properties and View Number for genuine contact."
+      "Contact details are shared only through the authorized View Number flow on a live property listing."
     );
   };
 
   const handleWhatsApp = (property) => {
     Alert.alert(
       "Contact Number Unavailable",
-      "Explore listings are samples. Use Search to find live properties and View Number for genuine contact."
+      "Contact details are shared only through the authorized View Number flow on a live property listing."
     );
   };
 
@@ -218,7 +239,7 @@ export default function ExploreScreen({ navigation }) {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Explore by Location</Text>
         <Text style={styles.headerSubtitle}>
-          Discover Chennai neighborhoods, price trends & verified listings
+          Editorial locality guide with live listings loaded from RESTAMP
         </Text>
 
         {/* Locality Search Input */}
@@ -299,9 +320,9 @@ export default function ExploreScreen({ navigation }) {
                 <SafeImage source={{ uri: loc.image }} style={styles.localityImage} />
                 <View style={styles.localityOverlay} />
 
-                {/* Top Badge: Property Count */}
+                {/* Top Badge: Guide Region */}
                 <View style={styles.localityCountBadge}>
-                  <Text style={styles.localityCountText}>{loc.count}</Text>
+                  <Text style={styles.localityCountText}>{loc.region}</Text>
                 </View>
 
                 {/* Active Selection Check Indicator */}
@@ -316,13 +337,6 @@ export default function ExploreScreen({ navigation }) {
                   <Text style={styles.localityName} numberOfLines={1}>
                     {loc.name}
                   </Text>
-
-                  <View style={styles.localityMetricsRow}>
-                    <Text style={styles.localityPriceText}>{loc.avgPrice}</Text>
-                    <View style={styles.growthBadge}>
-                      <Text style={styles.growthText}>{loc.growth}</Text>
-                    </View>
-                  </View>
                 </View>
               </TouchableOpacity>
             );
@@ -345,23 +359,10 @@ export default function ExploreScreen({ navigation }) {
               </View>
             </View>
 
-            {/* Quick Metrics Grid */}
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>AVERAGE PRICE</Text>
-                <Text style={styles.metricValue}>{selectedLocality.avgPrice}</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>RENTAL YIELD</Text>
-                <Text style={styles.metricValue}>{selectedLocality.yield}</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>PRICE GROWTH</Text>
-                <Text style={[styles.metricValue, { color: "#16A34A" }]}>
-                  {selectedLocality.growth}
-                </Text>
-              </View>
-            </View>
+            <Text style={styles.indicativeNote}>
+              Indicative neighborhood guide — not live market data. Figures
+              shown here are illustrative and not verified market data.
+            </Text>
 
             {/* Metro & Highlights Bar */}
             <View style={styles.highlightsBar}>
@@ -395,18 +396,36 @@ export default function ExploreScreen({ navigation }) {
           <Text style={styles.sectionTitle}>
             Properties in {selectedLocality?.name || "Chennai"}
           </Text>
-          <Text style={styles.sectionMeta}>{localityProperties.length} Available</Text>
+          <Text style={styles.sectionMeta}>
+            {propertiesLoading
+              ? "Loading..."
+              : `${localityProperties.length} Available`}
+          </Text>
         </View>
 
         <View style={styles.cardsList}>
+          {!propertiesLoading && localityProperties.length === 0 && (
+            <View style={styles.emptyPropertiesCard}>
+              <Text style={styles.emptyPropertiesTitle}>
+                {propertiesFailed
+                  ? "Could not load live listings"
+                  : "No live listings in this locality yet"}
+              </Text>
+              <Text style={styles.emptyPropertiesText}>
+                {propertiesFailed
+                  ? "Check your connection and try again, or search all live properties."
+                  : "Try another neighborhood or filter this locality in Search."}
+              </Text>
+            </View>
+          )}
           {localityProperties.map((property) => {
             const saved = isWishlisted(property.id);
-            const statusText = property.constructionStatus || "Ready to move";
-            const sqftNum = parseInt(String(property.sqft || 1500).replace(/,/g, "")) || 1500;
+            const statusText = property.constructionStatus || "Verified listing";
+            const sqftNum = parseInt(String(property.sqft || "").replace(/,/g, ""), 10);
             const perSqft =
               property.rawPrice && sqftNum
                 ? `₹${Math.round(property.rawPrice / sqftNum).toLocaleString("en-IN")}/sqft`
-                : "₹7,200/sqft";
+                : null;
 
             return (
               <TouchableOpacity
@@ -465,14 +484,19 @@ export default function ExploreScreen({ navigation }) {
 
                   {/* Specs */}
                   <Text style={styles.specsText} numberOfLines={1}>
-                    {property.beds > 0 ? `${property.beds} BHK` : "3 BHK"} • {property.sqft} sq ft
+                    {property.beds > 0
+                      ? `${property.beds} BHK`
+                      : "Bedrooms not specified"}
+                    {property.sqft ? ` • ${property.sqft} sq ft` : ""}
                   </Text>
 
                   {/* Price & Contact Row */}
                   <View style={styles.priceRow}>
                     <Text style={styles.propertyPrice}>
                       {property.price}
-                      <Text style={styles.propertyPriceSub}> • {perSqft}</Text>
+                      {perSqft ? (
+                        <Text style={styles.propertyPriceSub}> • {perSqft}</Text>
+                      ) : null}
                     </Text>
 
                     <TouchableOpacity
@@ -557,7 +581,7 @@ export default function ExploreScreen({ navigation }) {
               onPress={() => {
                 Alert.alert(
                   "Contact Number Unavailable",
-                  "Explore listings are samples. Use Search to find live properties and View Number for genuine contact."
+                  "Contact details are shared only through the authorized View Number flow on a live property listing."
                 );
               }}
             >
@@ -860,6 +884,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 14,
+  },
+  indicativeNote: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+    marginBottom: 10,
+    fontStyle: "italic",
+  },
+  emptyPropertiesCard: {
+    marginHorizontal: 16,
+    padding: 18,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+  },
+  emptyPropertiesTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  emptyPropertiesText: {
+    fontSize: 13,
+    color: "#64748B",
+    marginTop: 6,
+    lineHeight: 19,
   },
   highlightsText: {
     fontSize: 13,

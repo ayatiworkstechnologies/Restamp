@@ -88,19 +88,27 @@ export default function AgentLeadDetailScreen({ route, navigation }) {
   }, [localityProperties, lead]);
 
   const handleCall = () => {
-    const rawPhone = lead?.phone || "+919876543210";
-    Linking.openURL(`tel:${rawPhone.replace(/[^0-9+]/g, "")}`).catch(() => {
-      Alert.alert("Call", `Call ${lead?.customerName} at ${rawPhone}`);
+    const digits = String(lead?.phone || "").replace(/[^0-9+]/g, "");
+    if (!digits) {
+      Alert.alert("Contact Number Unavailable", "No phone number is available for this lead.");
+      return;
+    }
+    Linking.openURL(`tel:${digits}`).catch(() => {
+      Alert.alert("Call Unavailable", "Could not place this call.");
     });
   };
 
   const handleMessage = () => {
-    const rawPhone = lead?.phone || "+919876543210";
+    const digits = String(lead?.phone || "").replace(/[^0-9]/g, "");
+    if (!digits) {
+      Alert.alert("Contact Number Unavailable", "No phone number is available for this lead.");
+      return;
+    }
     const text = encodeURIComponent(
-      `Hello ${lead?.customerName}! I am Vikram Prabhu from RESTAMP regarding your inquiry for ${lead?.requirement} in ${lead?.preferredLocality}. When would be a convenient time for a brief discussion?`
+      `Hello ${lead?.customerName}! I am your RESTAMP agent regarding your inquiry for ${lead?.requirement} in ${lead?.preferredLocality}. When would be a convenient time for a brief discussion?`
     );
-    Linking.openURL(`https://wa.me/${rawPhone.replace(/[^0-9]/g, "")}?text=${text}`).catch(() => {
-      Alert.alert("Message", `Contact at ${rawPhone}`);
+    Linking.openURL(`https://wa.me/${digits}?text=${text}`).catch(() => {
+      Alert.alert("WhatsApp Unavailable", "Could not launch WhatsApp.");
     });
   };
 
@@ -135,7 +143,7 @@ export default function AgentLeadDetailScreen({ route, navigation }) {
       propertyTitle: prop.title,
       propertyLocation: prop.location,
       ownerName: prop.ownerName || "Property Owner",
-      ownerPhone: prop.ownerPhone || "+91 98400 12345",
+      ownerPhone: prop.ownerPhone || null,
       date: finalDate,
       fullDate: finalFullDate,
       time: finalTime,
@@ -145,7 +153,7 @@ export default function AgentLeadDetailScreen({ route, navigation }) {
     setScheduleModalVisible(false);
     Alert.alert(
       "Site Visit Scheduled! 📅",
-      `Visit for ${prop.title} with ${lead.customerName} scheduled on ${finalDate} at ${finalTime}. Both customer and owner have been notified.`
+      `Visit for ${prop.title} with ${lead.customerName} recorded locally for ${finalDate} at ${finalTime}. No external notification was sent.`
     );
   };
 

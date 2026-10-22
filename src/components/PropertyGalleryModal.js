@@ -26,37 +26,6 @@ import SafeImage from "./common/SafeImage";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// Curated architectural room samples mapped by room category
-// These guarantee rich category sections (Living Room, Bedroom, Kitchen, etc.)
-// even when a property listing only has a basic cover photo or generic set.
-const CURATED_ROOM_SAMPLES = {
-  "Living Room": [
-    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=80",
-  ],
-  Bedroom: [
-    "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=1200&q=80",
-  ],
-  Kitchen: [
-    "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?auto=format&fit=crop&w=1200&q=80",
-  ],
-  Bathroom: [
-    "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=1200&q=80",
-  ],
-  Balcony: [
-    "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=80",
-  ],
-  Exterior: [
-    "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80",
-  ],
-  "Floor Plan": [
-    "https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=1200&q=80",
-  ],
-};
-
 const STANDARD_CATEGORIES = [
   "Living Room",
   "Bedroom",
@@ -189,26 +158,6 @@ function PropertyGalleryModal({
       };
       groups[cat].push(item);
       flatList.push(item);
-    });
-
-    // Supplement with rich room samples so tabs like Living Room, Bedroom, Kitchen, etc.
-    // are fully populated with photos!
-    STANDARD_CATEGORIES.forEach((cat) => {
-      if (!groups[cat] || groups[cat].length === 0) {
-        const samples = CURATED_ROOM_SAMPLES[cat] || [];
-        groups[cat] = [];
-        samples.forEach((url, sampleIdx) => {
-          const item = {
-            id: `sample-${cat}-${sampleIdx}`,
-            url,
-            category: cat,
-            isSample: true,
-            globalIndex: flatList.length,
-          };
-          groups[cat].push(item);
-          flatList.push(item);
-        });
-      }
     });
 
     // Order sections nicely: Living Room first, then Bedroom, Kitchen, Bathroom, Balcony, Exterior, Floor Plan

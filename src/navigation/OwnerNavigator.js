@@ -6,6 +6,7 @@ import {
   HugeBuilding,
   HugePlus,
   HugeUsers,
+  HugeCalendar,
   HugeUser,
 } from "../components/common/HugeIcon";
 
@@ -13,6 +14,7 @@ import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
 import OwnerPropertiesScreen from "../screens/owner/OwnerPropertiesScreen";
 import OwnerAddPropertyScreen from "../screens/owner/OwnerAddPropertyScreen";
 import OwnerLeadsScreen from "../screens/owner/OwnerLeadsScreen";
+import OwnerVisitsScreen from "../screens/owner/OwnerVisitsScreen";
 import OwnerProfileScreen from "../screens/owner/OwnerProfileScreen";
 
 const Tab = createBottomTabNavigator();
@@ -33,6 +35,10 @@ const ownerTabConfig = {
   Leads: {
     label: "Leads",
     Icon: HugeUsers,
+  },
+  Visits: {
+    label: "Visits",
+    Icon: HugeCalendar,
   },
   Profile: {
     label: "Profile",
@@ -111,6 +117,7 @@ export default function OwnerNavigator() {
         }}
       />
       <Tab.Screen name="Leads" component={OwnerLeadsScreen} />
+      <Tab.Screen name="Visits" component={OwnerVisitsScreen} />
       <Tab.Screen name="Profile" component={OwnerProfileScreen} />
     </Tab.Navigator>
   );

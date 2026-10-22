@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   Image,
   Alert,
   TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   ArrowLeft,
   Phone,
@@ -30,8 +32,11 @@ import {
 } from "../../components/common/HugeIcon";
 
 import COLORS from "../../constants/colors";
-import { useOwner } from "../../context/OwnerContext";
+import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContext";
+import { useAuth } from "../../context/AuthContext";
 import { updateOwnerLeadStatus, toOwnerLead } from "../../api/owner";
+import { fetchOwnerVisits, toUiVisit, toVisitPayload, updateOwnerVisit } from "../../api/visits";
+import { ownerVisitActions, ownerVisitErrorMessage, proposeVisitForLead } from "../../utils/ownerVisits";
 import StatusBadge from "../../components/owner/StatusBadge";
 import PrimaryButton from "../../components/owner/PrimaryButton";
 import SecondaryButton from "../../components/owner/SecondaryButton";
@@ -40,7 +45,14 @@ import OwnerCloseLeadModal from "./OwnerCloseLeadModal";
 import OwnerPropertyDetailModal from "./OwnerPropertyDetailModal";
 
 export default function OwnerLeadDetailScreen({ route, navigation }) {
-  const { properties, updateLeadStatus, scheduleVisit, closeLead, addLeadNote } = useOwner();
+  const { properties, updateLeadStatus, closeLead, addLeadNote } = useOwner();
+  const { user: authUser } = useAuth();
+  // Only the signed-in owner's rows are ever matched (defence in depth on top
+  // of the backend's ownership scoping).
+  const scopedProperties = useMemo(
+    () => selectOwnerScopedProperties(properties, authUser?.id ?? null),
+    [properties, authUser]
+  );
   const initialLead = route?.params?.lead;
 
   const [lead, setLead] = useState(initialLead);
@@ -48,14 +60,61 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showPropertyModal, setShowPropertyModal] = useState(false);
   const [newNoteText, setNewNoteText] = useState("");
+  const [ownerVisit, setOwnerVisit] = useState(null);
+  const [visitsLoading, setVisitsLoading] = useState(false);
+  const [visitsError, setVisitsError] = useState(false);
+  const [visitBusy, setVisitBusy] = useState(false);
+
+  const loadOwnerVisit = useCallback(() => {
+    const listingId = Number(lead?.property_listing_id);
+    const buyerUserId = Number(lead?.buyer_user_id);
+    if (!Number.isFinite(listingId) || listingId <= 0 || !Number.isFinite(buyerUserId)) {
+      setOwnerVisit(null);
+      setVisitsLoading(false);
+      setVisitsError(false);
+      return Promise.resolve(null);
+    }
+    setVisitsLoading(true);
+    setVisitsError(false);
+    return fetchOwnerVisits({ propertyListingId: listingId, page: 1, pageSize: 50 }).then(
+      (response) => {
+        const matches = (response?.items || [])
+          .filter((row) => Number(row?.buyer_user_id) === buyerUserId)
+          .map(toUiVisit);
+        const active = matches.find((row) =>
+          ["REQUESTED", "PROPOSED", "CONFIRMED"].includes(row.serverStatus)
+        );
+        const latest = active || matches.sort((a, b) => Number(b.id) - Number(a.id))[0] || null;
+        setOwnerVisit(latest);
+        setVisitsLoading(false);
+        setVisitsError(false);
+        return latest;
+      },
+      () => {
+        setVisitsLoading(false);
+        setVisitsError(true);
+        return null;
+      }
+    );
+  }, [lead?.property_listing_id, lead?.buyer_user_id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadOwnerVisit();
+    }, [loadOwnerVisit])
+  );
+
+  const ownerVisitIsOpen =
+    !!ownerVisit && ["REQUESTED", "PROPOSED", "CONFIRMED"].includes(ownerVisit.serverStatus);
 
   const matchedProperty = useMemo(() => {
     if (!lead) return null;
     // Genuine match only; otherwise null (the property modal below is
     // guarded, and the row shows an honest unavailable message). Never
-    // synthesize a property record.
+    // synthesize a property record. Only the signed-in owner's rows are
+    // considered, so a stale row from another account can never be shown.
     return (
-      properties.find(
+      scopedProperties.find(
         (p) =>
           p.id === lead.propertyId ||
           (p.title &&
@@ -63,7 +122,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
             p.title.toLowerCase().trim() === lead.propertyTitle.toLowerCase().trim())
       ) || null
     );
-  }, [properties, lead]);
+  }, [scopedProperties, lead]);
 
   if (!lead) {
     return (
@@ -83,10 +142,6 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
   const handleUpdateStatus = (newStatus) => {
     if (newStatus === "closed" || newStatus === "lost") {
       setShowCloseModal(true);
-      return;
-    }
-    if (newStatus === "visit_scheduled") {
-      setShowVisitModal(true);
       return;
     }
     persistLeadStatus(newStatus);
@@ -112,7 +167,6 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
       setLead((prev) => ({
         ...prev,
         ...mapped,
-        visitData: prev.visitData,
         internalNotes: prev.internalNotes,
       }));
     } catch {
@@ -122,6 +176,76 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         "Couldn't update lead",
         "Please check your connection and try again."
       );
+    }
+  };
+
+  const applyVisitStatus = async (status, action) => {
+    if (!ownerVisit || typeof ownerVisit.id !== "number" || visitBusy) return;
+    setVisitBusy(true);
+    try {
+      await updateOwnerVisit(ownerVisit.id, { status });
+      await loadOwnerVisit();
+    } catch (error) {
+      const copy = ownerVisitErrorMessage(error, action);
+      Alert.alert(copy.title, copy.message);
+    } finally {
+      setVisitBusy(false);
+    }
+  };
+
+  const confirmVisitStatus = (status, action) => {
+    const copy = {
+      CONFIRMED: ["Confirm Site Visit", `Confirm the visit on ${ownerVisit?.date} at ${ownerVisit?.time}?`, "Confirm"],
+      DECLINED: ["Decline Visit Request", "Decline this buyer-requested visit?", "Decline"],
+      COMPLETED: ["Complete Site Visit", "Mark this confirmed visit as completed?", "Complete"],
+      CANCELLED: ["Cancel Site Visit", "Cancel this site visit?", "Cancel Visit"],
+    }[status];
+    if (!copy) return;
+    Alert.alert(copy[0], copy[1], [
+      { text: "Not Now", style: "cancel" },
+      {
+        text: copy[2],
+        style: status === "DECLINED" || status === "CANCELLED" ? "destructive" : "default",
+        onPress: () => applyVisitStatus(status, action),
+      },
+    ]);
+  };
+
+  const handleScheduleVisit = async (visitData) => {
+    setVisitBusy(true);
+    try {
+      if (ownerVisitIsOpen && typeof ownerVisit.id === "number") {
+        let scheduledAtISO;
+        try {
+          scheduledAtISO = toVisitPayload({
+            date: visitData?.date || visitData?.fullDate,
+            time: visitData?.time,
+          }).scheduled_at;
+        } catch (error) {
+          Alert.alert("Invalid Date/Time", error?.message || "Please choose a future date and time.");
+          return;
+        }
+        await updateOwnerVisit(ownerVisit.id, { scheduledAtISO });
+        Alert.alert("Visit Rescheduled", "The proposed time was updated.");
+      } else {
+        await proposeVisitForLead(lead, visitData);
+        Alert.alert("Visit Proposed", "The buyer can now confirm or decline the proposed time.");
+      }
+      setShowVisitModal(false);
+      await loadOwnerVisit();
+    } catch (error) {
+      if (error?.kind === "invalid_lead") {
+        Alert.alert("Couldn't propose visit", error.message);
+        return;
+      }
+      if (error?.kind === "invalid_time") {
+        Alert.alert("Invalid Date/Time", error.message);
+        return;
+      }
+      const copy = ownerVisitErrorMessage(error, ownerVisitIsOpen ? "reschedule" : "propose");
+      Alert.alert(copy.title, copy.message);
+    } finally {
+      setVisitBusy(false);
     }
   };
 
@@ -376,40 +500,107 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Site Visit</Text>
 
-          {lead.visitData ? (
+          {visitsLoading ? (
+            <View style={styles.visitLoadingRow}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.visitLoadingText}>Loading site visits…</Text>
+            </View>
+          ) : visitsError ? (
+            <View style={styles.noVisitRow}>
+              <Text style={styles.noVisitText}>Couldn't load site visits for this lead.</Text>
+              <TouchableOpacity
+                style={styles.scheduleVisitSmallBtn}
+                onPress={loadOwnerVisit}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.scheduleVisitSmallBtnText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : ownerVisit ? (
             <View style={styles.visitScheduledRow}>
               <View style={styles.visitCardTop}>
                 <View style={styles.visitIconWrap}>
                   <Calendar size={18} color="#2563EB" />
                 </View>
                 <View style={styles.visitTimeCol}>
-                  <Text style={styles.visitStatusLabel}>VISIT CONFIRMED</Text>
+                  <Text style={styles.visitStatusLabel}>
+                    VISIT {ownerVisit.serverStatus || "PENDING"}
+                  </Text>
                   <Text style={styles.visitDateTime}>
-                    {lead.visitData.date} · {lead.visitData.time}
+                    {ownerVisit.date} · {ownerVisit.time}
                   </Text>
                 </View>
               </View>
 
-              {lead.visitData.note ? (
+              {ownerVisit.note ? (
                 <View style={styles.visitNotesRow}>
                   <Text style={styles.visitNotesLabel}>Notes: </Text>
-                  <Text style={styles.visitNotesText}>{lead.visitData.note}</Text>
+                  <Text style={styles.visitNotesText}>{ownerVisit.note}</Text>
                 </View>
               ) : null}
 
-              <TouchableOpacity
-                style={styles.rescheduleBtn}
-                onPress={() => setShowVisitModal(true)}
-                activeOpacity={0.8}
-              >
-                <Calendar size={14} color="#2563EB" style={{ marginRight: 6 }} />
-                <Text style={styles.rescheduleBtnText}>Reschedule Visit</Text>
-              </TouchableOpacity>
+              <View style={styles.visitActionRow}>
+                {ownerVisitActions(ownerVisit.serverStatus).confirm && (
+                  <TouchableOpacity
+                    style={styles.rescheduleBtn}
+                    onPress={() => confirmVisitStatus("CONFIRMED", "confirm")}
+                    disabled={visitBusy}
+                    activeOpacity={0.8}
+                  >
+                    <CheckCircle2 size={14} color="#2563EB" style={{ marginRight: 6 }} />
+                    <Text style={styles.rescheduleBtnText}>Confirm Visit</Text>
+                  </TouchableOpacity>
+                )}
+                {ownerVisitActions(ownerVisit.serverStatus).complete && (
+                  <TouchableOpacity
+                    style={styles.rescheduleBtn}
+                    onPress={() => confirmVisitStatus("COMPLETED", "complete")}
+                    disabled={visitBusy}
+                    activeOpacity={0.8}
+                  >
+                    <CheckCircle2 size={14} color="#2563EB" style={{ marginRight: 6 }} />
+                    <Text style={styles.rescheduleBtnText}>Complete Visit</Text>
+                  </TouchableOpacity>
+                )}
+                {ownerVisitActions(ownerVisit.serverStatus).reschedule && (
+                  <TouchableOpacity
+                    style={styles.rescheduleBtn}
+                    onPress={() => setShowVisitModal(true)}
+                    disabled={visitBusy}
+                    activeOpacity={0.8}
+                  >
+                    <Calendar size={14} color="#2563EB" style={{ marginRight: 6 }} />
+                    <Text style={styles.rescheduleBtnText}>Reschedule Visit</Text>
+                  </TouchableOpacity>
+                )}
+                {ownerVisitActions(ownerVisit.serverStatus).decline && (
+                  <TouchableOpacity
+                    style={styles.visitDangerBtn}
+                    onPress={() => confirmVisitStatus("DECLINED", "decline")}
+                    disabled={visitBusy}
+                    activeOpacity={0.8}
+                  >
+                    <XCircle size={14} color="#DC2626" style={{ marginRight: 6 }} />
+                    <Text style={styles.visitDangerBtnText}>Decline</Text>
+                  </TouchableOpacity>
+                )}
+                {ownerVisitActions(ownerVisit.serverStatus).cancel && (
+                  <TouchableOpacity
+                    style={styles.visitDangerBtn}
+                    onPress={() => confirmVisitStatus("CANCELLED", "cancel")}
+                    disabled={visitBusy}
+                    activeOpacity={0.8}
+                  >
+                    <XCircle size={14} color="#DC2626" style={{ marginRight: 6 }} />
+                    <Text style={styles.visitDangerBtnText}>Cancel Visit</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           ) : (
             <View style={styles.noVisitRow}>
               <Text style={styles.noVisitText}>
-                No site visit scheduled for this buyer yet.
+                No site visit has been requested or proposed for this buyer yet.
               </Text>
               <TouchableOpacity
                 style={styles.scheduleVisitSmallBtn}
@@ -417,7 +608,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
                 activeOpacity={0.8}
               >
                 <Calendar size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.scheduleVisitSmallBtnText}>Schedule Site Visit</Text>
+                <Text style={styles.scheduleVisitSmallBtnText}>Propose Site Visit</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -480,7 +671,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         {/* ================= BOTTOM ACTION BUTTONS ================= */}
         <View style={styles.bottomButtonsRow}>
           <PrimaryButton
-            title="Schedule Site Visit"
+            title={ownerVisitIsOpen ? "Update Site Visit" : "Propose New Site Visit"}
             onPress={() => setShowVisitModal(true)}
             icon={Calendar}
             style={{ width: "100%", marginBottom: 12 }}
@@ -502,16 +693,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         visible={showVisitModal}
         lead={lead}
         onClose={() => setShowVisitModal(false)}
-        onVisitScheduled={(leadId, visitData) => {
-          // Visit scheduling persistence is on hold (no backend support):
-          // device-local flip only, documented in the P4 report.
-          scheduleVisit(leadId, visitData);
-          setLead((prev) => ({
-            ...prev,
-            status: "visit_scheduled",
-            visitData,
-          }));
-        }}
+        onVisitScheduled={(leadId, visitData) => handleScheduleVisit(visitData)}
       />
 
       {/* Close Lead Modal */}
@@ -812,6 +994,36 @@ const styles = StyleSheet.create({
   },
 
   /* SITE VISIT */
+  visitLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 12,
+  },
+  visitLoadingText: {
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
+  },
+  visitActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+  },
+  visitDangerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#FEF2F2",
+  },
+  visitDangerBtnText: {
+    color: "#DC2626",
+    fontSize: 12.5,
+    fontWeight: "600",
+  },
   visitScheduledRow: {
     backgroundColor: "#FFFBEB",
     borderRadius: 14,

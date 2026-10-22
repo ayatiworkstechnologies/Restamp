@@ -34,8 +34,11 @@ import {
 } from "../../components/common/HugeIcon";
 
 import COLORS from "../../constants/colors";
-import { useOwner } from "../../context/OwnerContext";
+import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContext";
+import { useAuth } from "../../context/AuthContext";
 import { fetchOwnerLeads, toOwnerLead, updateOwnerLeadStatus, fetchOwnerListings, toOwnerProperty } from "../../api/owner";
+import { fetchOwnerVisits, toUiVisit, toVisitPayload, updateOwnerVisit } from "../../api/visits";
+import { ownerVisitErrorMessage, proposeVisitForLead } from "../../utils/ownerVisits";
 import StatusBadge from "../../components/owner/StatusBadge";
 import EmptyState from "../../components/owner/EmptyState";
 import OwnerSiteVisitModal from "./OwnerSiteVisitModal";
@@ -53,12 +56,17 @@ const LEAD_FILTERS = [
 ];
 
 export default function OwnerLeadsScreen({ navigation, route }) {
-  const { properties: localProperties, leads, updateLeadStatus, scheduleVisit, closeLead } = useOwner();
+  const { properties: localProperties, leads, updateLeadStatus, closeLead } = useOwner();
+  const { user: authUser } = useAuth();
+  // The owning account: local rows are only used when they belong to the
+  // authenticated owner (the backend scopes the server list).
+  const ownerUserId = authUser?.id ?? null;
 
   // Property list comes from the server (P3 leadsMVP fix): the OwnerContext
   // store holds only local pending properties and is empty on fresh
   // sessions, so selecting from it alone could never fetch real leads.
-  // Local-only records are merged in below (never fetched, never invented).
+  // Local-only records are merged in below (never fetched, never invented) —
+  // and only the ones owned by the signed-in account.
   const [serverProperties, setServerProperties] = useState(null);
   const [propsLoading, setPropsLoading] = useState(false);
   const [propsError, setPropsError] = useState(false);
@@ -67,9 +75,10 @@ export default function OwnerLeadsScreen({ navigation, route }) {
   const properties = useMemo(() => {
     const server = Array.isArray(serverProperties) ? serverProperties : [];
     const serverIds = new Set(server.map((p) => p.id));
-    const localOnly = (localProperties || []).filter((p) => !serverIds.has(p.id));
+    const scopedLocal = selectOwnerScopedProperties(localProperties, ownerUserId);
+    const localOnly = scopedLocal.filter((p) => !serverIds.has(p.id));
     return [...server, ...localOnly];
-  }, [serverProperties, localProperties]);
+  }, [serverProperties, localProperties, ownerUserId]);
 
   const loadProperties = useCallback(() => {
     const myReq = ++propsReqId.current;
@@ -171,13 +180,40 @@ export default function OwnerLeadsScreen({ navigation, route }) {
     loadLeads();
   }, [loadLeads]);
 
+  const [ownerVisits, setOwnerVisits] = useState([]);
+  const [visitsLoading, setVisitsLoading] = useState(false);
+
+  const loadOwnerVisits = useCallback(() => {
+    if (selectedListingId == null) {
+      setOwnerVisits([]);
+      setVisitsLoading(false);
+      return;
+    }
+    setVisitsLoading(true);
+    fetchOwnerVisits({ propertyListingId: selectedListingId, page: 1, pageSize: 100 }).then(
+      (resp) => {
+        setOwnerVisits((resp?.items || []).map(toUiVisit));
+        setVisitsLoading(false);
+      },
+      () => {
+        setOwnerVisits([]);
+        setVisitsLoading(false);
+      }
+    );
+  }, [selectedListingId]);
+
+  useEffect(() => {
+    loadOwnerVisits();
+  }, [loadOwnerVisits]);
+
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
       loadProperties();
       loadLeads();
+      loadOwnerVisits();
     });
     return unsubscribe;
-  }, [navigation, loadProperties, loadLeads]);
+  }, [navigation, loadProperties, loadLeads, loadOwnerVisits]);
 
   // Invalidate in-flight fetches on unmount so late responses never touch
   // state after the screen is gone.
@@ -247,13 +283,25 @@ export default function OwnerLeadsScreen({ navigation, route }) {
     );
   }, [allLeads, selectedProperty]);
 
+  const activeVisitByBuyer = useMemo(() => {
+    const map = new Map();
+    (ownerVisits || [])
+      .filter((visit) => ["REQUESTED", "PROPOSED", "CONFIRMED"].includes(visit.serverStatus))
+      .forEach((visit) => {
+        const key = Number(visit.buyer_user_id);
+        const existing = map.get(key);
+        if (!existing || Number(visit.id) > Number(existing.id)) map.set(key, visit);
+      });
+    return map;
+  }, [ownerVisits]);
+
   // Top Summary counts for the selected property
   const summaryCounts = useMemo(() => {
     const allCount = propertyLeads.length;
     const newCount = propertyLeads.filter((l) => l.status === "new").length;
     const contactedCount = propertyLeads.filter((l) => l.status === "contacted").length;
-    const siteVisitsCount = propertyLeads.filter(
-      (l) => l.status === "visit_scheduled" || l.status === "visited"
+    const siteVisitsCount = propertyLeads.filter((l) =>
+      activeVisitByBuyer.has(Number(l.buyer_user_id))
     ).length;
 
     return {
@@ -262,7 +310,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
       contacted: contactedCount,
       siteVisits: siteVisitsCount,
     };
-  }, [propertyLeads]);
+  }, [propertyLeads, activeVisitByBuyer]);
 
   // Filtered leads based on horizontal filter chips
   const filteredLeads = useMemo(() => {
@@ -274,9 +322,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
       return propertyLeads.filter((l) => l.status === "contacted");
     }
     if (activeFilter === "Visit") {
-      return propertyLeads.filter(
-        (l) => l.status === "visit_scheduled" || l.status === "visited"
-      );
+      return propertyLeads.filter((l) => activeVisitByBuyer.has(Number(l.buyer_user_id)));
     }
     if (activeFilter === "Negotiating") {
       return propertyLeads.filter((l) => l.status === "negotiating");
@@ -285,7 +331,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
       return propertyLeads.filter((l) => l.status === "closed");
     }
     return propertyLeads;
-  }, [propertyLeads, activeFilter]);
+  }, [propertyLeads, activeFilter, activeVisitByBuyer]);
 
   // Actions (P3 honesty: real leads carry no phone; contact actions show an
   // honest unavailable message instead of dialing a sample number.)
@@ -342,7 +388,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
   const handleMoreOptions = (lead) => {
     Alert.alert(
       lead.customerName,
-      `${lead.phone} • ${lead.email || ""}`,
+      lead.message ? String(lead.message).slice(0, 180) : "Buyer enquiry",
       [
         { text: "Call Buyer", onPress: () => handleCall(lead) },
         { text: "Message on WhatsApp", onPress: () => handleMessage(lead) },
@@ -527,10 +573,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
           >
             <Image
               source={{
-                uri:
-                  selectedProperty.coverPhoto ||
-                  selectedProperty.images?.[0] ||
-                  "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=400&q=80",
+                uri: selectedProperty.coverPhoto || selectedProperty.images?.[0] || null,
               }}
               style={styles.propertyThumb}
             />
@@ -667,6 +710,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
         ) : (
           <View style={styles.leadsList}>
             {filteredLeads.map((lead) => {
+              const leadVisit = activeVisitByBuyer.get(Number(lead.buyer_user_id));
               return (
                 <TouchableOpacity
                   key={lead.id}
@@ -749,24 +793,23 @@ export default function OwnerLeadsScreen({ navigation, route }) {
                     {lead.message || "No message provided."}
                   </Text>
 
-                  {/* Visit Alert Tag (if scheduled) */}
-                  {lead.visitData ? (
+                  {/* Real backend visit state only. */}
+                  {leadVisit ? (
                     <View style={styles.visitAlertTag}>
                       <Calendar size={12} color="#D97706" style={{ marginRight: 5 }} />
                       <Text style={styles.visitAlertText}>
-                        Visit Booked: {lead.visitData.date}, {lead.visitData.time}
+                        {leadVisit.serverStatus}: {leadVisit.date}, {leadVisit.time}
                       </Text>
                     </View>
                   ) : null}
 
-                  {/* Dedicated "Schedule a Visit" Button matching user's design */}
                   <TouchableOpacity
                     style={styles.scheduleVisitBtn}
                     onPress={() => setSelectedLeadForVisit(lead)}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.scheduleVisitBtnText}>
-                      {lead.status === "visit_scheduled" ? "Reschedule Visit" : "Schedule a Visit"}
+                      {leadVisit ? "Update Visit" : "Propose a Visit"}
                     </Text>
                   </TouchableOpacity>
                 </TouchableOpacity>
@@ -839,10 +882,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
                   >
                     <Image
                       source={{
-                        uri:
-                          prop.coverPhoto ||
-                          prop.images?.[0] ||
-                          "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=400&q=80",
+                        uri: prop.coverPhoto || prop.images?.[0] || null,
                       }}
                       style={styles.pickerThumb}
                     />
@@ -896,12 +936,43 @@ export default function OwnerLeadsScreen({ navigation, route }) {
           visible={Boolean(selectedLeadForVisit)}
           lead={selectedLeadForVisit}
           onClose={() => setSelectedLeadForVisit(null)}
-          onVisitScheduled={(leadId, visitData) => {
-            // Visit scheduling persistence is on hold (no backend support):
-            // device-local flip only, documented in the P4 report.
-            scheduleVisit(leadId, visitData);
-            patchServerLead(leadId, { status: "visit_scheduled", visitData });
-            setSelectedLeadForVisit(null);
+          onVisitScheduled={async (leadId, visitData) => {
+            const lead = selectedLeadForVisit;
+            const existingVisit = lead
+              ? activeVisitByBuyer.get(Number(lead.buyer_user_id))
+              : null;
+            try {
+              if (existingVisit && typeof existingVisit.id === "number") {
+                let scheduledAtISO;
+                try {
+                  scheduledAtISO = toVisitPayload({
+                    date: visitData?.date || visitData?.fullDate,
+                    time: visitData?.time,
+                  }).scheduled_at;
+                } catch (error) {
+                  Alert.alert("Invalid Date/Time", error?.message || "Please choose a future date and time.");
+                  return;
+                }
+                await updateOwnerVisit(existingVisit.id, { scheduledAtISO });
+                Alert.alert("Visit Rescheduled", "The proposed time was updated.");
+              } else {
+                await proposeVisitForLead(lead, visitData);
+                Alert.alert("Visit Proposed", "The buyer can now confirm or decline the proposed time.");
+              }
+              setSelectedLeadForVisit(null);
+              loadOwnerVisits();
+            } catch (error) {
+              if (error?.kind === "invalid_lead") {
+                Alert.alert("Couldn't propose visit", error.message);
+                return;
+              }
+              if (error?.kind === "invalid_time") {
+                Alert.alert("Invalid Date/Time", error.message);
+                return;
+              }
+              const copy = ownerVisitErrorMessage(error, existingVisit ? "reschedule" : "propose");
+              Alert.alert(copy.title, copy.message);
+            }
           }}
         />
       )}

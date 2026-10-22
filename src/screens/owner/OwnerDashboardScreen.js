@@ -30,8 +30,10 @@ import {
 } from "../../components/common/HugeIcon";
 
 import COLORS from "../../constants/colors";
-import { useOwner } from "../../context/OwnerContext";
-import { fetchOwnerListings, toOwnerProperty, freshAddParams, sumOwnerMetrics, fetchOwnerLeads, toOwnerLead } from "../../api/owner";
+import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContext";
+import { useAuth } from "../../context/AuthContext";
+import { fetchAllOwnerListings, toOwnerProperty, freshAddParams, sumOwnerMetrics, fetchOwnerLeads, toOwnerLead } from "../../api/owner";
+import { fetchOwnerVisits } from "../../api/visits";
 import RestampLogo from "../../components/RestampLogo";
 import AppBrandHeader from "../../components/AppBrandHeader";
 
@@ -43,11 +45,16 @@ export default function OwnerDashboardScreen({ navigation }) {
   );
 
   const { properties: localProperties, leads, subscription, ownerProfile } = useOwner();
+  const { user: authUser } = useAuth();
+  // The owning account of this dashboard. The backend scopes the API
+  // response; the locally cached rows are filtered by the same owner id so
+  // one owner's listing can never be rendered for another account.
+  const ownerUserId = authUser?.id ?? null;
 
   const [liveProperties, setLiveProperties] = useState(null);
 
   const loadLiveListings = useCallback(() => {
-    fetchOwnerListings(1, 50)
+    fetchAllOwnerListings()
       .then((resp) => setLiveProperties((resp.items || []).map(toOwnerProperty)))
       .catch(() => {});
   }, []);
@@ -57,6 +64,7 @@ export default function OwnerDashboardScreen({ navigation }) {
   // (honest empty post-P1) when the request fails.
   const [serverRecentLeads, setServerRecentLeads] = useState(null);
   const [serverLeadsTotal, setServerLeadsTotal] = useState(null);
+  const [serverVisitsTotal, setServerVisitsTotal] = useState(null);
   const recentLeadsReqId = useRef(0);
 
   const loadRecentLeads = useCallback(() => {
@@ -71,15 +79,23 @@ export default function OwnerDashboardScreen({ navigation }) {
       .catch(() => {});
   }, []);
 
+  const loadVisitsTotal = useCallback(() => {
+    fetchOwnerVisits({ page: 1, pageSize: 1 })
+      .then((resp) => setServerVisitsTotal(typeof resp.total === "number" ? resp.total : 0))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     loadLiveListings();
     loadRecentLeads();
+    loadVisitsTotal();
     const unsubscribe = navigation.addListener("focus", () => {
       loadLiveListings();
       loadRecentLeads();
+      loadVisitsTotal();
     });
     return unsubscribe;
-  }, [navigation, loadLiveListings, loadRecentLeads]);
+  }, [navigation, loadLiveListings, loadRecentLeads, loadVisitsTotal]);
 
   // Invalidate in-flight lead fetches on unmount.
   useEffect(() => {
@@ -89,11 +105,16 @@ export default function OwnerDashboardScreen({ navigation }) {
   }, []);
 
   const properties = useMemo(() => {
-    if (!liveProperties) return localProperties;
+    // Local rows are used only when they belong to the authenticated owner:
+    // the backend scopes the API response, and the cached rows are filtered
+    // by the same owner id so one owner's listing can never be rendered for
+    // another account.
+    const scopedLocal = selectOwnerScopedProperties(localProperties, ownerUserId);
+    if (!liveProperties) return scopedLocal;
     const liveIds = new Set(liveProperties.map((p) => p.id));
-    const localOnly = localProperties.filter((p) => !liveIds.has(p.id));
+    const localOnly = scopedLocal.filter((p) => !liveIds.has(p.id));
     return [...liveProperties, ...localOnly];
-  }, [liveProperties, localProperties]);
+  }, [liveProperties, localProperties, ownerUserId]);
 
   // Calculate summary counts
   const activeCount = properties.filter((p) => p.status === "active").length;
@@ -102,7 +123,7 @@ export default function OwnerDashboardScreen({ navigation }) {
 
   // Aggregate performance stats from genuine records only (P1): missing
   // counters count as zero, so a fresh account honestly shows 0s.
-  const { totalViews, totalEnquiries, totalVisits } = sumOwnerMetrics(properties);
+  const { totalViews, totalEnquiries } = sumOwnerMetrics(properties);
 
   // Latest leads & primary property (genuine server rows when loaded,
   // otherwise the honest-empty local store).
@@ -138,6 +159,10 @@ export default function OwnerDashboardScreen({ navigation }) {
 
   const handleViewLeads = () => {
     navigation.navigate("Leads");
+  };
+
+  const handleViewVisits = () => {
+    navigation.navigate("Visits");
   };
 
   const handleManagePlan = () => {
@@ -285,7 +310,7 @@ export default function OwnerDashboardScreen({ navigation }) {
           {/* Card 5: Site Visits Booked */}
           <TouchableOpacity
             style={styles.metricCard}
-            onPress={handleViewLeads}
+            onPress={handleViewVisits}
             activeOpacity={0.85}
           >
             <View style={styles.metricCardTop}>
@@ -295,7 +320,7 @@ export default function OwnerDashboardScreen({ navigation }) {
               <ArrowRight size={14} color="#94A3B8" />
             </View>
             <Text style={styles.metricNumber}>
-              {String(totalVisits).padStart(2, "0")}
+              {serverVisitsTotal == null ? "—" : String(serverVisitsTotal).padStart(2, "0")}
             </Text>
             <Text style={styles.metricLabel}>Site visits booked</Text>
           </TouchableOpacity>

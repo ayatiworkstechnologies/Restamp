@@ -127,12 +127,9 @@ export function getCleanImageUrl(url, propertyType = "Apartment", seed = 0) {
   ) {
     return url;
   }
-  const typeKey = titleCaseType(propertyType);
-  const pool =
-    PROPERTY_TYPE_FALLBACK_IMAGES[typeKey] ||
-    PROPERTY_TYPE_FALLBACK_IMAGES.Apartment;
-  const idx = Math.abs(Number(seed) || 0) % pool.length;
-  return pool[idx];
+  // No stock/fallback photographs: return null so callers render no image
+  // instead of presenting a stock photo as the property's picture.
+  return null;
 }
 
 export function toUiProperty(card) {
@@ -161,6 +158,13 @@ export function toUiProperty(card) {
     type: pType,
     transactionType: card.transaction_type,
     backendId: card.listing_id,
+    // Safe owner display name from the backend detail response (null when
+    // the owner has no safe saved name). Never a phone number — the server
+    // sanitizes it. Callers fall back to a neutral label when absent.
+    ownerName:
+      typeof card.owner_name === "string" && card.owner_name.trim() !== ""
+        ? card.owner_name
+        : undefined,
   };
 }
 

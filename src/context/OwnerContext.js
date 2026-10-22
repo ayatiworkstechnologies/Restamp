@@ -1,5 +1,11 @@
-import React, { createContext, useContext, useState, useMemo } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
 import { useAuth } from "./AuthContext";
+import { shouldResetAccountScope, selectOwnerScopedProperties } from "../auth/session";
+
+// Re-exported so screens can import the scoping helper from the context
+// module (the implementation lives in the pure, unit-tested auth/session
+// module).
+export { selectOwnerScopedProperties };
 
 const OwnerContext = createContext();
 
@@ -12,17 +18,22 @@ const INITIAL_PROPERTIES = [];
 
 const INITIAL_LEADS = [];
 
+// Device-side listing quota (a local guard only — it asserts no plan, price,
+// validity period, or usage history). Reset to this shape whenever the
+// account changes so one account's quota never leaks into the next one.
+const INITIAL_SUBSCRIPTION = {
+  active: true,
+  status: "Active",
+  listingLimit: 5,
+  usedListings: 0,
+};
+
 export function OwnerProvider({ children }) {
   // Local listing quota (device-side guard only). No purchased plan is
   // asserted here: no plan name, price, validity period, start/expiry dates,
   // or usage history. Quota mechanics (limit + locally published count) are
   // unchanged so the Add flow keeps working without a backend plans API.
-  const [subscription, setSubscription] = useState({
-    active: true,
-    status: "Active",
-    listingLimit: 5,
-    usedListings: 0,
-  });
+  const [subscription, setSubscription] = useState(INITIAL_SUBSCRIPTION);
 
   // Owner Profile — derived from the authenticated user (same source of
   // truth as Buyer Profile). No request is made here: AuthContext already
@@ -32,6 +43,8 @@ export function OwnerProvider({ children }) {
   // exists for them. Listing/lead/plan state below is Owner business data
   // and is intentionally separate from user identity.
   const { user: authUser } = useAuth();
+  const authUserId = authUser?.id ?? null;
+
   const ownerProfile = useMemo(
     () => ({
       name: authUser?.name || "Owner",
@@ -52,6 +65,20 @@ export function OwnerProvider({ children }) {
 
   // Pending selected plan during checkout
   const [selectedPlanForCheckout, setSelectedPlanForCheckout] = useState(null);
+
+  // Account scope: every row cached in this context belongs to ONE account.
+  // When the authenticated principal changes (logout, or signing in as a
+  // different user) the cached rows are dropped, so the next account can
+  // never see the previous owner's listings, leads or quota.
+  const scopedOwnerIdRef = useRef(authUserId);
+  useEffect(() => {
+    if (!shouldResetAccountScope(scopedOwnerIdRef.current, authUserId)) return;
+    scopedOwnerIdRef.current = authUserId;
+    setProperties([]);
+    setLeads([]);
+    setSelectedPlanForCheckout(null);
+    setSubscription(INITIAL_SUBSCRIPTION);
+  }, [authUserId]);
 
   // NOTE: drafts are server-backed (src/api/owner.js draft helpers +
   // listing_drafts table). The old in-memory rentDraft system was removed so
@@ -82,13 +109,13 @@ export function OwnerProvider({ children }) {
       usedListings: properties.filter((p) => p.status === "active").length,
       price: formattedAmount,
       amountPaid: formattedAmount,
-      active: true,
-      hasPurchased: true,
-      status: "Active",
+      active: false,
+      hasPurchased: false,
+      status: "Inactive",
       startDate: formattedStart,
       expiryDate: formattedExpiry,
-      txnId: plan?.txnId || `TXN-2026-${Math.floor(10000 + Math.random() * 90000)}`,
-      invoiceNumber: `INV-2026-OWN-${Math.floor(1000 + Math.random() * 9000)}`,
+      txnId: null,
+      invoiceNumber: null,
       category: plan?.category || "Residential",
     };
     setSubscription(newSub);
@@ -102,6 +129,9 @@ export function OwnerProvider({ children }) {
       // dedup against GET /owner/listings keeps working. Local-only drafts
       // still get a generated id. Status stays pending — never VERIFIED.
       id: newProp?.id || `own-prop-${Date.now()}`,
+      // Stamp the owning account (the authenticated principal) so a cached
+      // row can never be rendered for a different account.
+      ownerUserId: newProp?.ownerUserId ?? authUserId,
       status: newProp?.status || "pending",
       views: 0,
       enquiries: 0,
@@ -135,21 +165,6 @@ export function OwnerProvider({ children }) {
             ...lead,
             status: newStatus,
             closedOutcome: outcome || lead.closedOutcome,
-          };
-        }
-        return lead;
-      })
-    );
-  };
-
-  const scheduleVisit = (leadId, visitDetails) => {
-    setLeads((prev) =>
-      prev.map((lead) => {
-        if (lead.id === leadId) {
-          return {
-            ...lead,
-            status: "visit_scheduled",
-            visitData: visitDetails,
           };
         }
         return lead;
@@ -192,6 +207,8 @@ export function OwnerProvider({ children }) {
     setSubscription,
     activateSubscription,
     ownerProfile,
+    // The account this store's rows belong to (null when logged out).
+    ownerUserId: authUserId,
     properties,
     setProperties,
     addProperty,
@@ -200,7 +217,6 @@ export function OwnerProvider({ children }) {
     leads,
     setLeads,
     updateLeadStatus,
-    scheduleVisit,
     closeLead,
     addLeadNote,
     selectedPlanForCheckout,
@@ -208,6 +224,7 @@ export function OwnerProvider({ children }) {
   }), [
     subscription,
     ownerProfile,
+    authUserId,
     properties,
     leads,
     selectedPlanForCheckout,

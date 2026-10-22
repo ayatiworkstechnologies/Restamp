@@ -1,9 +1,10 @@
-import React, { createContext, useCallback, useContext, useRef, useState, useMemo } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, useMemo } from "react";
 import { getAuthTokenSync } from "../api/client";
 import { fetchSavedWishlist, saveListingRemote, unsaveListingRemote } from "../api/saved";
 import { useAuth } from "./AuthContext";
 import { goLogin } from "../navigation/navRef";
 import { planProtectedAction } from "../auth/requireAuth";
+import { shouldResetAccountScope } from "../auth/session";
 
 const WishlistContext = createContext();
 
@@ -129,6 +130,20 @@ export function WishlistProvider({ children }) {
   const clearWishlist = () => {
     setWishlist([]);
   };
+
+  // Account scope: a saved-property list belongs to ONE account. When the
+  // authenticated principal changes (logout, or signing in as a different
+  // user) the cached list is dropped so the next account never sees the
+  // previous account's saved properties. The next refresh re-fetches the new
+  // account's server list.
+  const scopedAccountIdRef = useRef(user?.id ?? null);
+  useEffect(() => {
+    const currentId = user?.id ?? null;
+    if (!shouldResetAccountScope(scopedAccountIdRef.current, currentId)) return;
+    scopedAccountIdRef.current = currentId;
+    setWishlist([]);
+    setWishlistSynced(false);
+  }, [user?.id]);
 
   const contextValue = useMemo(() => ({
     wishlist,

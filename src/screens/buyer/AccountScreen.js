@@ -74,12 +74,7 @@ export default function AccountScreen() {
         <View style={styles.profileCard}>
           <View style={styles.profileTopRow}>
             <View style={styles.avatarWrapper}>
-              <Image
-                source={{
-                  uri: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80",
-                }}
-                style={styles.avatar}
-              />
+                <Image source={{ uri: null }} style={styles.avatar} />
               <View style={styles.verifiedBadge}>
                 <Check size={10} color={COLORS.white} />
               </View>

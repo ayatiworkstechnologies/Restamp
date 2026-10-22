@@ -44,6 +44,32 @@ export default function StatusBadge({ status, style, textStyle }) {
       label = "DRAFT";
       break;
     // Leads Statuses
+    case "requested":
+      bg = "#FFFBEB";
+      textColor = "#B45309";
+      label = "REQUESTED";
+      break;
+    case "proposed":
+      bg = "#FAF5FF";
+      textColor = "#9333EA";
+      label = "PROPOSED";
+      break;
+    case "confirmed":
+      bg = "#EFF6FF";
+      textColor = COLORS.primary;
+      label = "CONFIRMED";
+      break;
+    case "completed":
+      bg = "#F0FDF4";
+      textColor = "#16A34A";
+      label = "COMPLETED";
+      break;
+    case "declined":
+    case "cancelled":
+      bg = "#FEF2F2";
+      textColor = "#DC2626";
+      label = normalized.toUpperCase();
+      break;
     case "new":
     case "new lead":
       bg = "#EFF6FF";

@@ -22,15 +22,17 @@ import { fileURLToPath } from "node:url";
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, "..", "src", "api");
 const tmp = mkdtempSync(join(tmpdir(), "buyer-history-test-"));
-for (const f of ["client.js", "mappers.js", "saved.js", "enquiries.js"]) {
+for (const f of ["client.js", "mappers.js", "saved.js", "enquiries.js", "buyerMode.js", "buyerModeCore.js"]) {
   copyFileSync(join(SRC, f), join(tmp, f));
 }
-for (const f of ["saved.js", "enquiries.js"]) {
+for (const f of ["saved.js", "enquiries.js", "buyerMode.js"]) {
   writeFileSync(
     join(tmp, f),
     readFileSync(join(tmp, f), "utf8")
-      .replace('from "./client"', 'from "./client.js"')
-      .replace('from "./mappers"', 'from "./mappers.js"')
+      .replaceAll('from "./client"', 'from "./client.js"')
+      .replaceAll('from "./mappers"', 'from "./mappers.js"')
+      .replaceAll('from "./buyerMode"', 'from "./buyerMode.js"')
+      .replaceAll('from "./buyerModeCore"', 'from "./buyerModeCore.js"')
   );
 }
 const savedApi = await import(join(tmp, "saved.js"));

@@ -75,9 +75,7 @@ export default function OwnerPropertyDetailModal({
     ? property.images
     : property.coverPhoto
     ? [property.coverPhoto]
-    : [
-        "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
-      ];
+    : [];
 
   // Interpolate header opacity based on scroll
   const headerBgOpacity = scrollY.interpolate({

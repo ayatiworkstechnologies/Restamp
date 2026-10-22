@@ -48,18 +48,9 @@ function AppBrandHeader({
         await enterBuyerFlow(navigation, auth);
       }
     } catch (e) {
+      // enterOwnerFlow/enterBuyerFlow report their own failures; never
+      // navigate past an unconfirmed role switch as a fallback.
       console.warn("handleSwitchPress error:", e);
-      if (currentRole !== "buyer") {
-        try {
-          const rootNav = navigation?.getParent?.() || navigation;
-          rootNav.reset({
-            index: 0,
-            routes: [{ name: "MainTabs" }],
-          });
-        } catch {
-          navigation.navigate("MainTabs");
-        }
-      }
     } finally {
       setSwitchingRole(false);
     }

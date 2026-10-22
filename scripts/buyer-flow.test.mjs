@@ -27,16 +27,16 @@ import { fileURLToPath } from "node:url";
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, "..", "src", "api");
 const tmp = mkdtempSync(join(tmpdir(), "buyer-flow-test-"));
-for (const f of ["client.js", "mappers.js", "contact.js", "enquiries.js"]) {
+for (const f of ["client.js", "mappers.js", "contact.js", "enquiries.js", "buyerMode.js", "buyerModeCore.js"]) {
   copyFileSync(join(SRC, f), join(tmp, f));
 }
-for (const f of ["contact.js", "enquiries.js"]) {
+for (const f of ["contact.js", "enquiries.js", "buyerMode.js"]) {
   writeFileSync(
     join(tmp, f),
-    readFileSync(join(tmp, f), "utf8").replace(
-      'from "./client"',
-      'from "./client.js"'
-    )
+    readFileSync(join(tmp, f), "utf8")
+      .replaceAll('from "./client"', 'from "./client.js"')
+      .replaceAll('from "./buyerMode"', 'from "./buyerMode.js"')
+      .replaceAll('from "./buyerModeCore"', 'from "./buyerModeCore.js"')
   );
 }
 const { buildListingParams, parseSmartQuery } = await import(join(tmp, "mappers.js"));
@@ -203,9 +203,12 @@ check(
     !detailSrc.includes("Otherwise the long-standing mock confirmation")
 );
 check(
-  "E2 question/site-visit never claim persistence",
-  !detailSrc.includes("Question Sent!") &&
-    !detailSrc.includes("Site Visit Requested!") &&
+  "E2 question/site-visit succeed only on server confirm (honest errors otherwise)",
+  detailSrc.includes("createEnquiry(backendId, question)") &&
+    detailSrc.includes("createBuyerVisit") &&
+    detailSrc.includes("updateBuyerVisit") &&
+    !detailSrc.includes("visit-${Date.now()}") &&
+    !detailSrc.includes('agentPhone: property.agent?.phone || "+91') &&
     !detailSrc.includes("Requested ✓") &&
     detailSrc.includes("Not Supported Yet")
 );
@@ -214,6 +217,17 @@ check(
   !detailSrc.includes("+91 98765 43210") &&
     !detailSrc.includes("Verified Owner / Seller") &&
     detailSrc.includes("Contact Number Unavailable")
+);
+check(
+  "E4 enquiry errors distinguished (expired session resumes, wrong role guided, no false success)",
+  detailSrc.includes("handleSubmitEnquiry") &&
+    detailSrc.includes("e.status === 401") &&
+    detailSrc.includes("Your session has expired. Log in again") &&
+    detailSrc.includes("() => handleSubmitEnquiry()") &&
+    detailSrc.includes("e.status === 403") &&
+    detailSrc.includes("Enquiry Not Sent") &&
+    detailSrc.includes("the enquiry was not sent") &&
+    !detailSrc.includes("Enquiry Received! 🚀")
 );
 
 // --- 6. B2 API contracts (stubbed fetch, no backend contacted) ---

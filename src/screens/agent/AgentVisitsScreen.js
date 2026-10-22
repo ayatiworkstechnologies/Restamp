@@ -57,21 +57,27 @@ export default function AgentVisitsScreen({ navigation }) {
   }, [visits, activeTab]);
 
   const handleCallCustomer = (phone, name) => {
-    const raw = phone || "+919876543210";
-    Linking.openURL(`tel:${raw.replace(/[^0-9+]/g, "")}`).catch(() => {
-      Alert.alert("Call Customer", `Call ${name} at ${raw}`);
+    const digits = String(phone || "").replace(/[^0-9+]/g, "");
+    if (!digits) {
+      Alert.alert("Contact Number Unavailable", `No phone number is available for ${name || "this contact"}.`);
+      return;
+    }
+    Linking.openURL(`tel:${digits}`).catch(() => {
+      Alert.alert("Call Unavailable", `Could not call ${name || "this contact"}.`);
     });
   };
 
   const handleMessageCustomer = (phone, name, propTitle) => {
-    const raw = phone || "+919876543210";
-    const digits = raw.replace(/[^0-9]/g, "");
+    const digits = String(phone || "").replace(/[^0-9]/g, "");
+    if (!digits) {
+      Alert.alert("Contact Number Unavailable", `No phone number is available for ${name || "this contact"}.`);
+      return;
+    }
     const text = encodeURIComponent(
       `Hello ${name || "there"}, regarding your site visit for "${propTitle || "property"}" via RESTAMP:`
     );
-    const url = `https://wa.me/${digits}?text=${text}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert("WhatsApp Unavailable", `Could not launch WhatsApp for ${raw}.`);
+    Linking.openURL(`https://wa.me/${digits}?text=${text}`).catch(() => {
+      Alert.alert("WhatsApp Unavailable", "Could not launch WhatsApp.");
     });
   };
 
@@ -310,28 +316,28 @@ export default function AgentVisitsScreen({ navigation }) {
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Customer</Text>
                     <Text style={styles.detailValueBold}>
-                      {selectedVisitForDetails.customerName} ({selectedVisitForDetails.customerPhone || "+91 98840 55667"})
+                      {selectedVisitForDetails.customerName} ({selectedVisitForDetails.customerPhone || "number unavailable"})
                     </Text>
                   </View>
 
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Property</Text>
                     <Text style={styles.detailValueBold}>
-                      {selectedVisitForDetails.propertyTitle || "2 BHK Apartment"}
+                      {selectedVisitForDetails.propertyTitle || "Property unavailable"}
                     </Text>
                   </View>
 
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Owner</Text>
                     <Text style={styles.detailValue}>
-                      {selectedVisitForDetails.ownerName || "Sundar Raman"} ({selectedVisitForDetails.ownerPhone || "+91 98400 12345"})
+                      {selectedVisitForDetails.ownerName || "Owner"} ({selectedVisitForDetails.ownerPhone || "number unavailable"})
                     </Text>
                   </View>
 
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Location</Text>
                     <Text style={styles.detailValue}>
-                      {selectedVisitForDetails.propertyLocation || "Anna Nagar, Chennai"}
+                      {selectedVisitForDetails.propertyLocation || "Location unavailable"}
                     </Text>
                   </View>
 

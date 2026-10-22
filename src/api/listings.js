@@ -6,7 +6,7 @@
  * usable photos (a visual fallback, not a fabricated property).
  */
 import { apiGet } from "./client";
-import { toUiProperty, PROPERTY_TYPE_FALLBACK_IMAGES } from "./mappers";
+import { toUiProperty } from "./mappers";
 
 export async function fetchListingDetail(listingId) {
   const data = await apiGet(`/buyer/listings/${listingId}`);
@@ -18,13 +18,9 @@ export async function fetchListingDetail(listingId) {
   const validGallery = rawGallery.filter(
     (u) => typeof u === "string" && u.startsWith("http") && !u.includes("seed.local")
   );
-  const fallbackPool =
-    PROPERTY_TYPE_FALLBACK_IMAGES[ui.type] ||
-    PROPERTY_TYPE_FALLBACK_IMAGES.Apartment;
-  const gallery =
-    validGallery.length > 0
-      ? validGallery
-      : [ui.image, ...fallbackPool.filter((img) => img !== ui.image)];
+  // No stock/fallback photographs: a detail with no real photos shows an
+  // honest empty gallery instead of presenting stock images as the property.
+  const gallery = validGallery;
   return { ...ui, gallery };
 }
 

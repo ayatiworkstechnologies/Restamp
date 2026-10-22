@@ -104,11 +104,11 @@ export default function AgentProfileScreen({ navigation }) {
 
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.agentName}>{agentProfile?.name || "Vikram Prabhu"}</Text>
+              <Text style={styles.agentName}>{agentProfile?.name || "Agent profile unavailable"}</Text>
               <Pencil size={14} color="#475569" style={styles.pencilIcon} />
             </View>
 
-            <Text style={styles.phoneText}>{agentProfile?.phone || "+91 98400 99888"}</Text>
+            <Text style={styles.phoneText}>{agentProfile?.phone || "No phone on file"}</Text>
             <Text style={styles.emailText}>{agentProfile?.email || "vikram.prabhu@restamp.com"}</Text>
 
             <View style={styles.verifiedBadge}>
@@ -295,7 +295,7 @@ export default function AgentProfileScreen({ navigation }) {
             onPress={() =>
               Alert.alert(
                 "KYC Status",
-                `Agent RERA ID: ${agentProfile?.reraNumber || "TN/AGENT/2024/00842"}\nStatus: VERIFIED & ACTIVE`
+                `Agent RERA ID: ${agentProfile?.reraNumber || "Not provided"}\nStatus: VERIFIED & ACTIVE`
               )
             }
             activeOpacity={0.7}
@@ -334,7 +334,7 @@ export default function AgentProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 0 }]}
-            onPress={() => Alert.alert("Invoices", "Invoice INV-2026-AGT-8821 downloaded.")}
+            onPress={() => Alert.alert("Invoices", "No invoice is available.")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>

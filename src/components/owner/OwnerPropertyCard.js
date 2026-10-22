@@ -33,6 +33,8 @@ function OwnerPropertyCard({
   onEditProperty,
   onPauseListing,
   onCloseListing,
+  onVerifyListing,
+  onPublishListing,
   onDeleteDraft,
   onResubmit,
 }) {
@@ -68,10 +70,7 @@ function OwnerPropertyCard({
       >
         <SafeImage
           source={{
-            uri:
-              property.coverPhoto ||
-              property.images?.[0] ||
-              "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=800&q=80",
+            uri: property.coverPhoto || property.images?.[0] || null,
           }}
           style={styles.image}
         />
@@ -141,7 +140,8 @@ function OwnerPropertyCard({
               <View style={{ flex: 1 }}>
                 <Text style={styles.pendingTitle}>Pending Verification</Text>
                 <Text style={styles.pendingReason}>
-                  {property.moderationNote || "Listing will go live once RESTAMP team validates ownership."}
+                  {property.moderationNote ||
+                    "Not visible to buyers yet. Your listing will automatically become Active after 2 minutes."}
                 </Text>
               </View>
             </View>
@@ -208,9 +208,19 @@ function OwnerPropertyCard({
               <Text style={styles.primaryBtnText}>Edit & Resubmit</Text>
             </TouchableOpacity>
           ) : isPending ? (
-            <View style={styles.moderationNoticeBar}>
-              <Text style={styles.moderationNoticeText}>Editing locked during verification</Text>
-            </View>
+            <>
+              <TouchableOpacity
+                style={[styles.primaryBtn, { width: "100%", marginBottom: 8 }]}
+                onPress={() => onVerifyListing?.(property)}
+                activeOpacity={0.8}
+              >
+                <CheckCircle2 size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.primaryBtnText}>Verify & Publish</Text>
+              </TouchableOpacity>
+              <View style={styles.moderationNoticeBar}>
+                <Text style={styles.moderationNoticeText}>Editing locked during verification</Text>
+              </View>
+            </>
           ) : (
             <>
               <TouchableOpacity
@@ -285,6 +295,19 @@ function OwnerPropertyCard({
               >
                 <PauseCircle size={18} color="#D97706" style={styles.sheetIcon} />
                 <Text style={styles.sheetItemText}>Pause Listing</Text>
+              </TouchableOpacity>
+            )}
+
+            {isClosed && (
+              <TouchableOpacity
+                style={styles.sheetItem}
+                onPress={() => {
+                  setMenuVisible(false);
+                  onPublishListing?.(property);
+                }}
+              >
+                <CheckCircle2 size={18} color="#16A34A" style={styles.sheetIcon} />
+                <Text style={styles.sheetItemText}>Publish Again</Text>
               </TouchableOpacity>
             )}
 
