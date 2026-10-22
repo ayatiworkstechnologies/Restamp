@@ -749,3 +749,96 @@ passes; full details in `report/live_owner_identity_otp_fix.md`. All 8 frontend
 suites pass; `npm run build:web` succeeds; `git diff --check` clean. No backend,
 OTP-rule, schema, or deployment changes. Render cold-start remains an unproven
 hypothesis.
+
+## 20. Owner My Leads fix (2026-10-13, frontend only, uncommitted)
+
+My Leads derived its property list from the always-empty local OwnerContext
+store, so no request was ever sent while Dashboard (unscoped) showed real
+leads. The selector now loads via existing `fetchOwnerListings` +
+`toOwnerProperty` with guarded loading/error/Retry states; validated
+`initialTab` route param honored; three profile numeric badges removed
+(layout/nav intact). No phone endpoint, no visit persistence, no schema
+changes. New Sec 6 guards in `scripts/owner-leads-honesty.test.mjs`; full
+details in `report/owner_my_leads_fix.md`. All 8 frontend suites pass;
+owner-leads backend suite 12/12 (no backend changes); `npm run build:web`
+succeeds; `git diff --check` clean.
+
+## 21. Smart Search multi-term matching (2026-10-13, frontend + backend, uncommitted)
+
+`q` is now AND-across-terms / OR-across-fields (title, description,
+locality, address, city), case-insensitive substring, max 5 terms, with
+`%`/`_` escaped literally; blank `q` adds no filter. Frontend trims and
+collapses whitespace before sending. No schema, endpoint, or AI changes;
+BHK/type text rules deliberately excluded. New backend tests
+(`test_smart_multi_term_search`,
+`test_smart_search_specials_and_blank_query`) pass; older absolute-count
+assertions still fail on pre-existing shared-DB pollution (rows untouched).
+Full details in `report/smart_search_implementation.md`. All 8 frontend
+suites pass; `npm run build:web` succeeds; `git diff --check` clean.
+
+## 22. Smart Search Phase 2 — parsing + suggestions (2026-10-14, frontend only, uncommitted)
+
+Deterministic `parseSmartQuery` (BHK, price bounds with units, conservative
+type words; ambiguous input stays text; explicit UI selections always win)
+feeds existing `useListings` params with a `Smart match` note; debounced live
+suggestions in the filter modal reuse `GET /buyer/listings` (real records
+only, req-guarded). No backend, schema, endpoint, or AI changes; ranking and
+pagination untouched. New Sec 7 tests in `scripts/buyer-flow.test.mjs`; full
+details in `report/smart_search_phase2_implementation.md`. All 8 frontend
+suites pass; backend scoped subset 4 passed; `npm run build:web` succeeds;
+`git diff --check` clean.
+
+## 23. Suggestion tap + type fix (2026-10-14, frontend only, uncommitted)
+
+Suggestion taps only filled query text (no selection callback existed), and
+suggestion fetches ignored the selected property type. Now taps with a real
+numeric `backendId` open the detail screen via a new optional
+`onSelectProperty` prop (missing ids keep fill-text fallback); fetches send
+`property_type` from the modal selection ("All Types" omits). New Sec 8
+guards in `scripts/buyer-flow.test.mjs`; full details in
+`report/smart_search_suggestion_fix.md`. All 8 frontend suites pass;
+`npm run build:web` succeeds; `git diff --check` clean. No backend changes.
+
+## 24. Search count consistency fix (2026-10-14, frontend only, uncommitted)
+
+The modal's "Show N Properties" counted the mock catalog while suggestions
+came from the backend ("Show 0" beside live matches). The button now shows
+a debounced live `count_only` total built with Apply's exact filters, plus a
+plain conflict note when query text contradicts selected controls
+(selections win). Mock count deleted. New Sec 9 guards in
+`scripts/buyer-flow.test.mjs`; full details in
+`report/smart_search_count_fix.md`. All 8 frontend suites pass;
+`npm run build:web` succeeds; `git diff --check` clean. No backend changes.
+
+---
+## 25. A-Z Testing Audit Appendix — 2026-10-14
+
+- Date: 2026-10-14 (UTC).
+- Scope: A-Z full-stack verification (testing only — no application changes, no commits, no pushes, no DB writes, no schema/migration/auth changes).
+- Initial Git audit preserved; all uncommitted feature work (P0–P4 smart-search, owner leads, buyer-flow) intact; no destructive git commands; build passes; 8 frontend test suites pass; backend smart-search and owner-leads backend tests pass; older  shared-DB pollution failures documented but untouched; no secrets exposed;  unchanged.
+- Status labels used: PASS / FAIL / BLOCKED / NOT TESTED / CODE REVIEWED / FIXED.
+- New report:  (this session). No existing sections removed or altered.
+
+## 26. Database reset preflight — 2026-10-14 (read-only)
+
+Local `restamp_dev` verified (localhost socket, reachable, 34 tables,
+test-shaped rows, behind head by 2 migrations); Render target unverifiable
+from repo (dashboard-set URL, likely external MySQL, contents unknown) —
+**Render reset BLOCKED**. Row counts, FK order, backup/restore and clearing
+proposals in `report/database_reset_preflight.md`. No writes performed.
+
+## 27. Local reset executed — 2026-10-14 (approved plan)
+
+`restamp_dev` backed up (verified row-for-row) and cleared in one
+transaction per the §8 plan; preserved tables, location chain, and alembic
+revision intact; app healthy with honest-empty feed. Full record in
+`report/database_reset_preflight.md` §9. Render untouched (still BLOCKED).
+
+## 28. Aiven preflight — 2026-10-14 (read-only, BLOCKED)
+
+Provided target `defaultdb` at the Aiven host resolves and accepts TCP, but
+no credentials exist locally (no env vars, no `~/.my.cnf`, local `.env` is
+`restamp_dev`-only), so identity, tables, and data classification are
+UNVERIFIED and no connection was attempted. Details in
+`report/database_reset_preflight.md` §10. Next step: user provides Aiven
+access via the Render dashboard reference. No writes performed.
