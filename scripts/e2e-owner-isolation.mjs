@@ -15,10 +15,17 @@
 // Optional env:
 //   RESTAMP_ROSHAN_PHONE (default +917530006460)
 //   RESTAMP_TEST1_PHONE  (default +919884105435)
+//   RESTAMP_ROSHAN_OTP / RESTAMP_TEST1_OTP — the SMS codes delivered by the
+//       configured SMS provider. When absent and the backend does not return
+//       debug_code (restricted internal-testing display mode), the script
+//       prompts on the terminal.
+//   RESTAMP_ROSHAN_TOKEN / RESTAMP_TEST1_TOKEN — pre-minted tokens that skip
+//       the OTP step entirely (e.g. per-phone request cap already reached).
 import { mkdtempSync, copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import readline from "node:readline/promises";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, "..", "src");
@@ -65,17 +72,29 @@ function check(name, cond, extra) {
   }
 }
 
-async function signIn(phone, token) {
+async function signIn(phone, token, otpEnv) {
   if (token) {
     setAuthToken(token);
     return { access_token: token, user_id: null };
   }
-  const res = await requestOtp(phone);
-  const code = res?.debug_code;
+  const resp = await requestOtp(phone);
+  // Code priority: (1) the backend-selected code the request response itself
+  // carries (only in the backend's restricted internal-testing display mode;
+  // production responses never contain it), (2) the RESTAMP_*_OTP env var
+  // (code delivered by an actual SMS provider), (3) a terminal prompt.
+  let code = (resp && resp.debug_code ? String(resp.debug_code) : "");
+  if (!code) code = process.env[otpEnv] || "";
+  if (!code) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    code = (await rl.question(`Enter the OTP delivered to ${phone}: `)).trim();
+    rl.close();
+  }
   if (!code) {
     throw new Error(
-      `No OTP code returned for ${phone} (debug mode off, or the per-phone request cap was reached). ` +
-        `Pass RESTAMP_ROSHAN_TOKEN / RESTAMP_TEST1_TOKEN to skip the OTP step.`
+      `No OTP available for ${phone}. Run the local backend with the ` +
+        `internal-testing display mode enabled (RESTAMP_OTP_DISPLAY_MODE=1) ` +
+        `so the response carries debug_code, or pass ${otpEnv} / ` +
+        `RESTAMP_ROSHAN_TOKEN / RESTAMP_TEST1_TOKEN to skip the OTP step.`
     );
   }
   const out = await verifyOtp(phone, code);
@@ -84,7 +103,7 @@ async function signIn(phone, token) {
 }
 
 // --- 1. Roshan signs in ----------------------------------------------------
-const roshan = await signIn(ROSHAN, ROSHAN_TOKEN);
+const roshan = await signIn(ROSHAN, ROSHAN_TOKEN, "RESTAMP_ROSHAN_OTP");
 check("E1 Roshan signed in with a token", !!getAuthTokenSync(), roshan.user_id);
 const roshanUserId = roshan.user_id ?? Number(JSON.parse(atob(roshan.access_token.split(".")[1])).sub);
 
@@ -124,7 +143,7 @@ setAuthToken(null);
 check("E6 sign-out clears the bearer token", getAuthTokenSync() === null);
 
 // --- 3. Test 1 signs in ----------------------------------------------------
-const test1 = await signIn(TEST1, TEST1_TOKEN);
+const test1 = await signIn(TEST1, TEST1_TOKEN, "RESTAMP_TEST1_OTP");
 const test1UserId = test1.user_id ?? Number(JSON.parse(atob(test1.access_token.split(".")[1])).sub);
 check(
   "E7 Test 1 signed in as a different account",

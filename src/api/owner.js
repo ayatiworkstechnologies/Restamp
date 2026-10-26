@@ -714,6 +714,16 @@ export async function deleteListingPhoto(listingId, mediaId) {
 }
 
 /**
+ * Permanently delete an owned listing. Returns true on 204; throws
+ * otherwise (incl. 401 login / 403 denied / 404 missing). The destructive
+ * nature of the action is confirmed by the caller before this is invoked.
+ */
+export async function deleteOwnerListing(listingId) {
+  await apiDelete(`/owner/listings/${listingId}`);
+  return true;
+}
+
+/**
  * Explicit listing lifecycle transitions (backend state machine; GETs never
  * verify). Each returns the updated OwnerListingOut. Throws ApiError with
  * `status` (401 login / 403 denied / 404 missing / 422 invalid transition).

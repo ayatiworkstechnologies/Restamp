@@ -1,6 +1,10 @@
 /**
  * Authentication API against the real backend contract:
- * - POST /auth/otp/request {phone} -> {message} (+debug_code in local OTP-debug mode)
+ * - POST /auth/otp/request {phone} -> {message} normally; in the backend's
+ *   restricted internal-testing display mode ONLY (non-production, flag-set,
+ *   also refused at production startup) the backend-selected code is returned
+ *   as `debug_code` so the login screen can show it. Production responses
+ *   never contain a code and this module adds none of its own.
  * - POST /auth/otp/verify {phone, code} -> TokenOut {access_token, ...}
  * - POST /auth/google {id_token} -> TokenOut {access_token, ...}
  *   (404 GOOGLE_UNKNOWN when the Google identity is not linked; no auto-creation)

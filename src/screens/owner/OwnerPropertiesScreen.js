@@ -24,7 +24,7 @@ import {
 import COLORS from "../../constants/colors";
 import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
-import { fetchAllOwnerListings, toOwnerProperty, fetchDrafts, deleteDraft, freshAddParams, verifyListing, publishListing, archiveListing, updateListingStatus } from "../../api/owner";
+import { fetchAllOwnerListings, toOwnerProperty, fetchDrafts, deleteDraft, freshAddParams, verifyListing, publishListing, archiveListing, updateListingStatus, deleteOwnerListing } from "../../api/owner";
 import { resetToLogin } from "../../navigation/navRef";
 import RestampLogo from "../../components/RestampLogo";
 import AppBrandHeader from "../../components/AppBrandHeader";
@@ -303,6 +303,35 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
         },
       ]
     );
+  };
+
+  // Permanent deletion: explicit confirmation, destructive, refreshes list
+  // on success. Only server-backed listings (real listing_id) can be deleted;
+  // local/mock cards fall through to the legacy local remove behavior.
+  const handleDeleteListing = (property) => {
+    const listingId = serverListingId(property);
+    if (listingId == null) {
+      // Local-only card: fall back to legacy local removal (drafts are
+      // handled separately via handleDeleteDraft).
+      updatePropertyStatus(property.id, "closed");
+      return;
+    }
+    setConfirmModal({
+      visible: true,
+      title: "Delete Listing Permanently?",
+      message: `Permanently delete "${property.title}"? This cannot be undone. All related enquiries, visits, verification records, and photos will be removed.`,
+      variant: "danger",
+      confirmText: "Delete Permanently",
+      cancelText: "Cancel",
+      onConfirm: () => {
+        setConfirmModal((prev) => ({ ...prev, visible: false }));
+        runListingTransition(
+          property,
+          () => deleteOwnerListing(listingId),
+          "deleted"
+        );
+      },
+    });
   };
 
   // Numeric backend identity for server-backed cards; local/mock cards and
@@ -595,6 +624,7 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
               onCloseListing={handleCloseListing}
               onVerifyListing={handleVerifyListing}
               onPublishListing={handlePublishListing}
+              onDeleteListing={handleDeleteListing}
               onDeleteDraft={handleDeleteDraft}
               onResubmit={handleResubmit}
             />

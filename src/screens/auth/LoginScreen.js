@@ -56,16 +56,6 @@ const COUNTRY_CODES = [
   { flag: "🇦🇺", code: "+61", name: "Australia" },
 ];
 
-const SHOW_DEBUG_OTP = process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1";
-// The backend returns debug_code ONLY in the explicitly configured demo
-// environment (RESTAMP_ENV=demo + RESTAMP_OTP_DEMO_MODE=1) or in local
-// OTP-debug mode. The bundle flag above mirrors the backend demo switch, so
-// the app shows that backend-SELECTED code (for tap-to-auto-fill) ONLY when
-// the flag is explicitly "1". In production the field never appears in the
-// response AND this guard keeps a misconfigured build from displaying any
-// code. There are no demo codes in this bundle; the frontend never chooses
-// which code is accepted — the backend does.
-
 // SVG Icons for Welcome screen buttons
 function MobileIcon({ size = 20, color = "#FFFFFF" }) {
   return (
@@ -151,6 +141,10 @@ export default function LoginScreen({ navigation }) {
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Backend-selected code for the restricted internal-testing display mode.
+  // Non-null ONLY when the backend actually returned debug_code (production
+  // responses never contain it). The app never fabricates a code locally.
   const [devCode, setDevCode] = useState(null);
 
   // Input refs
@@ -275,13 +269,13 @@ export default function LoginScreen({ navigation }) {
     setBusy(true);
     try {
       const resp = await requestOtp(fullPhone());
-      // Backend-selected code: shown ONLY in the demo configuration. In
-      // production there is no debug_code and the flag is off, so nothing
-      // is ever displayed or auto-filled.
+      // The backend includes the code in the response ONLY in the explicitly
+      // restricted internal-testing display mode (non-production, flag-set);
+      // in every shipped configuration — ALWAYS in production — the response
+      // carries no code and nothing is displayed or auto-filled. What is
+      // shown is always the backend-SELECTED code taken from the response.
       const serverCode =
-        SHOW_DEBUG_OTP && resp && resp.debug_code
-          ? String(resp.debug_code)
-          : null;
+        resp && resp.debug_code ? String(resp.debug_code) : null;
       setDevCode(serverCode);
       setOtp(["", "", "", "", "", ""]);
       setStep(2);
@@ -295,26 +289,6 @@ export default function LoginScreen({ navigation }) {
       Alert.alert("Could Not Send Code", otpErrorMessage(e));
     } finally {
       setBusy(false);
-    }
-  };
-
-  const handleAutoFill = (codeToFill) => {
-    const targetCode = codeToFill || devCode;
-    if (!targetCode) return;
-    const digits = String(targetCode)
-      .replace(/[^0-9]/g, "")
-      .slice(0, 6)
-      .split("");
-    const newOtp = ["", "", "", "", "", ""];
-    digits.forEach((d, i) => {
-      newOtp[i] = d;
-    });
-    setOtp(newOtp);
-    const nextIdx = Math.min(5, digits.length - 1);
-    setFocusedOtpIndex(nextIdx);
-    otpInputRefs.current[nextIdx]?.focus();
-    if (digits.length === 6) {
-      setTimeout(() => verifyCode(digits.join("")), 150);
     }
   };
 
@@ -407,6 +381,28 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  // Tap-to-fill the code the backend actually issued (the chip is rendered
+  // only when the backend returned a code in an internal-testing run).
+  const handleAutoFill = (codeToFill) => {
+    const targetCode = codeToFill || devCode;
+    if (!targetCode) return;
+    const digits = String(targetCode)
+      .replace(/[^0-9]/g, "")
+      .slice(0, 6)
+      .split("");
+    const newOtp = ["", "", "", "", "", ""];
+    digits.forEach((d, i) => {
+      newOtp[i] = d;
+    });
+    setOtp(newOtp);
+    const nextIdx = Math.min(5, digits.length - 1);
+    setFocusedOtpIndex(nextIdx);
+    otpInputRefs.current[nextIdx]?.focus();
+    if (digits.length === 6) {
+      setTimeout(() => verifyCode(digits.join("")), 150);
+    }
+  };
+
   const handleResendOtp = async () => {
     if (!canResend || busy) return;
     setBusy(true);
@@ -414,12 +410,11 @@ export default function LoginScreen({ navigation }) {
       const resp = await requestOtp(fullPhone());
       setTimer(30);
       setCanResend(false);
-      // Same only-inside-demo rule as the initial request: the displayed
-      // code is always the backend-SELECTED one, and only with the flag on.
+      // Same backend-driven rule as the initial request: whatever is shown
+      // is the code the backend just selected; a code-less response clears
+      // the chip (production never returns a code).
       const newCode =
-        SHOW_DEBUG_OTP && resp && resp.debug_code
-          ? String(resp.debug_code)
-          : null;
+        resp && resp.debug_code ? String(resp.debug_code) : null;
       setDevCode(newCode);
       setOtp(["", "", "", "", "", ""]);
       setFocusedOtpIndex(0);
@@ -865,7 +860,9 @@ export default function LoginScreen({ navigation }) {
                 })}
               </View>
 
-              {/* Dev / Demo Code Auto-fill Chip */}
+              {/* Internal-Testing Code Auto-fill Chip — rendered ONLY when the
+                  backend actually returned a code (restricted internal-testing
+                  display mode; never in production responses) */}
               {devCode ? (
                 <TouchableOpacity
                   style={styles.devCodeNotice}
