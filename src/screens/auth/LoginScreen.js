@@ -56,18 +56,15 @@ const COUNTRY_CODES = [
   { flag: "🇦🇺", code: "+61", name: "Australia" },
 ];
 
-const VALID_DEMO_CODES = [
-  "297569",
-  "109745",
-  "583214",
-  "741806",
-  "426391",
-  "835027",
-  "614958",
-  "372640",
-  "958163",
-  "205874",
-];
+const SHOW_DEBUG_OTP = process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1";
+// The backend returns debug_code ONLY in the explicitly configured demo
+// environment (RESTAMP_ENV=demo + RESTAMP_OTP_DEMO_MODE=1) or in local
+// OTP-debug mode. The bundle flag above mirrors the backend demo switch, so
+// the app shows that backend-SELECTED code (for tap-to-auto-fill) ONLY when
+// the flag is explicitly "1". In production the field never appears in the
+// response AND this guard keeps a misconfigured build from displaying any
+// code. There are no demo codes in this bundle; the frontend never chooses
+// which code is accepted — the backend does.
 
 // SVG Icons for Welcome screen buttons
 function MobileIcon({ size = 20, color = "#FFFFFF" }) {
@@ -246,6 +243,12 @@ export default function LoginScreen({ navigation }) {
       return "The request timed out. Please check your connection and try again.";
     if (e.kind === "offline")
       return "No connection. Check your internet and try again.";
+    // Disabled SMS / provider outage: the request DID reach the server, so
+    // do not say "could not reach" — make the real state actionable.
+    if (e.status === 503)
+      return "The code service is temporarily unavailable. Please try again in a moment.";
+    if (e.status && e.status >= 500)
+      return `The server had a problem (HTTP ${e.status}). Please try again.`;
     return "Could not reach the server. Please try again.";
   };
 
@@ -272,29 +275,24 @@ export default function LoginScreen({ navigation }) {
     setBusy(true);
     try {
       const resp = await requestOtp(fullPhone());
+      // Backend-selected code: shown ONLY in the demo configuration. In
+      // production there is no debug_code and the flag is off, so nothing
+      // is ever displayed or auto-filled.
       const serverCode =
-        resp && resp.debug_code ? String(resp.debug_code) : null;
-      setDevCode(
-        serverCode ||
-          (process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1" ? "297569" : null) ||
-          VALID_DEMO_CODES[0]
-      );
+        SHOW_DEBUG_OTP && resp && resp.debug_code
+          ? String(resp.debug_code)
+          : null;
+      setDevCode(serverCode);
       setOtp(["", "", "", "", "", ""]);
       setStep(2);
       setTimer(30);
       setCanResend(false);
       setFocusedOtpIndex(0);
     } catch (e) {
-      if (process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1" || __DEV__) {
-        setDevCode(VALID_DEMO_CODES[0]);
-        setOtp(["", "", "", "", "", ""]);
-        setStep(2);
-        setTimer(30);
-        setCanResend(false);
-        setFocusedOtpIndex(0);
-      } else {
-        Alert.alert("Could Not Send Code", otpErrorMessage(e));
-      }
+      // NEVER advance to the OTP step when the request fails — the user
+      // would have nothing to enter or verify. Stay on step 1 and surface
+      // the real API error (disabled SMS 503, throttles, network errors).
+      Alert.alert("Could Not Send Code", otpErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -416,31 +414,19 @@ export default function LoginScreen({ navigation }) {
       const resp = await requestOtp(fullPhone());
       setTimer(30);
       setCanResend(false);
+      // Same only-inside-demo rule as the initial request: the displayed
+      // code is always the backend-SELECTED one, and only with the flag on.
       const newCode =
-        resp && resp.debug_code
+        SHOW_DEBUG_OTP && resp && resp.debug_code
           ? String(resp.debug_code)
-          : VALID_DEMO_CODES[
-              Math.floor(Math.random() * VALID_DEMO_CODES.length)
-            ];
+          : null;
       setDevCode(newCode);
       setOtp(["", "", "", "", "", ""]);
       setFocusedOtpIndex(0);
       otpInputRefs.current[0]?.focus();
       Alert.alert("Code Sent", "A new verification code has been sent.");
     } catch (e) {
-      if (__DEV__ || process.env.EXPO_PUBLIC_OTP_DEMO_MODE === "1") {
-        const fallbackNewCode =
-          VALID_DEMO_CODES[Math.floor(Math.random() * VALID_DEMO_CODES.length)];
-        setDevCode(fallbackNewCode);
-        setTimer(30);
-        setCanResend(false);
-        setOtp(["", "", "", "", "", ""]);
-        setFocusedOtpIndex(0);
-        otpInputRefs.current[0]?.focus();
-        Alert.alert("Code Sent", "A new verification code has been sent.");
-      } else {
-        Alert.alert("Could Not Resend", otpErrorMessage(e));
-      }
+      Alert.alert("Could Not Resend", otpErrorMessage(e));
     } finally {
       setBusy(false);
     }
