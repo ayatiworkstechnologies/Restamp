@@ -714,9 +714,10 @@ export async function deleteListingPhoto(listingId, mediaId) {
 }
 
 /**
- * Permanently delete an owned listing. Returns true on 204; throws
- * otherwise (incl. 401 login / 403 denied / 404 missing). The destructive
- * nature of the action is confirmed by the caller before this is invoked.
+ * Remove an owned listing (soft delete). Returns true on 204; throws
+ * otherwise (incl. 401 login / 403 denied / 404 missing). The removal is
+ * confirmed by the caller before this is invoked. Removed listings are
+ * hidden from buyers but the record and its history are preserved.
  */
 export async function deleteOwnerListing(listingId) {
   await apiDelete(`/owner/listings/${listingId}`);

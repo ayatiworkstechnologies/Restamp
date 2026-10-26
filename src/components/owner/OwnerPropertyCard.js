@@ -33,6 +33,7 @@ function OwnerPropertyCard({
   onEditProperty,
   onPauseListing,
   onCloseListing,
+  onRemoveListing,
   onVerifyListing,
   onPublishListing,
   onDeleteDraft,
@@ -320,7 +321,19 @@ function OwnerPropertyCard({
                 }}
               >
                 <CheckCircle2 size={18} color={COLORS.textSecondary} style={styles.sheetIcon} />
-                <Text style={styles.sheetItemText}>Close Listing</Text>
+                <Text style={[styles.sheetItemText, { color: COLORS.textSecondary }]}>Close Listing</Text>
+              </TouchableOpacity>
+            )}
+            {isActive && !isPending && (
+              <TouchableOpacity
+                style={styles.sheetItem}
+                onPress={() => {
+                  setMenuVisible(false);
+                  onRemoveListing?.(property);
+                }}
+              >
+                <Trash2 size={18} color={COLORS.danger} style={styles.sheetIcon} />
+                <Text style={[styles.sheetItemText, { color: COLORS.danger }]}>Remove Listing</Text>
               </TouchableOpacity>
             )}
 

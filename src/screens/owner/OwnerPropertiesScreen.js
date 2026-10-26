@@ -305,9 +305,9 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
     );
   };
 
-  // Permanent deletion: explicit confirmation, destructive, refreshes list
-  // on success. Only server-backed listings (real listing_id) can be deleted;
-  // local/mock cards fall through to the legacy local remove behavior.
+  // Remove a listing from active use (soft delete). Explicit confirmation,
+  // refreshes list on success. Only server-backed listings (real listing_id)
+  // can be removed; local/mock cards fall through to the legacy local close.
   const handleDeleteListing = (property) => {
     const listingId = serverListingId(property);
     if (listingId == null) {
@@ -318,17 +318,17 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
     }
     setConfirmModal({
       visible: true,
-      title: "Delete Listing Permanently?",
-      message: `Permanently delete "${property.title}"? This cannot be undone. All related enquiries, visits, verification records, and photos will be removed.`,
-      variant: "danger",
-      confirmText: "Delete Permanently",
+      title: "Remove Listing?",
+      message: `Remove "${property.title}" from the marketplace? It will be hidden from buyers, while its record and history are retained.`,
+      variant: "primary",
+      confirmText: "Remove",
       cancelText: "Cancel",
       onConfirm: () => {
         setConfirmModal((prev) => ({ ...prev, visible: false }));
         runListingTransition(
           property,
           () => deleteOwnerListing(listingId),
-          "deleted"
+          "removed"
         );
       },
     });
@@ -622,6 +622,7 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
               }
               onPauseListing={handlePauseListing}
               onCloseListing={handleCloseListing}
+              onRemoveListing={handleDeleteListing}
               onVerifyListing={handleVerifyListing}
               onPublishListing={handlePublishListing}
               onDeleteListing={handleDeleteListing}
