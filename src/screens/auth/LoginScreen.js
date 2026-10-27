@@ -154,21 +154,23 @@ export default function LoginScreen({ navigation }) {
 
   // Restricted demo login (visible demo-mode panel on the OTP screen,
   // rendered ONLY when the OTP request itself failed — e.g. the production
-  // fail-closed 503 while SMS delivery is not connected). The demo key is
-  // typed by the authorized presenter at runtime ONLY: never hardcoded,
-  // never read from EXPO_PUBLIC_* or any bundle/env value, and never
-  // persisted anywhere — it lives solely in React state and is cleared the
-  // moment the request completes. Responses reuse the existing token
-  // contract; no fake success is ever simulated.
+  // fail-closed 503 while SMS delivery is not connected). The demo code is
+  // the LAST SIX DIGITS of the phone entered on the same screen, typed by
+  // the authorized presenter at runtime ONLY: never hardcoded, never read
+  // from EXPO_PUBLIC_* or any bundle/env value, and never persisted
+  // anywhere — it lives solely in React state (digits as a string, so
+  // leading zeros are preserved) and is cleared the moment the request
+  // completes. Responses reuse the existing token contract; no fake
+  // success is ever simulated.
   const [otpRequestError, setOtpRequestError] = useState(null);
-  const [demoKey, setDemoKey] = useState("");
+  const [demoCode, setDemoCode] = useState("");
 
   // Input refs
   const phoneInputRef = useRef(null);
   const otpInputRefs = useRef([]);
   const firstNameInputRef = useRef(null);
   const lastNameInputRef = useRef(null);
-  const demoKeyInputRef = useRef(null);
+  const demoCodeInputRef = useRef(null);
 
   const fullPhone = () =>
     `${selectedCountry.code}${phoneNumber.replace(/[^0-9]/g, "")}`;
@@ -322,10 +324,12 @@ export default function LoginScreen({ navigation }) {
   // Restricted demo login (visible demo-mode panel on the OTP screen).
   // Existing Restamp accounts ONLY — for an unknown phone the backend
   // answers 404 "No account found for this phone number." and writes
-  // nothing. Authorization stays entirely server-enforced (key + rate
-  // limits); the frontend adds nothing but the runtime-typed key header.
-  // The success path mirrors the OTP-verify flow exactly: same token
-  // contract, same post-login continuation and profile-completion steps.
+  // nothing. Authorization stays entirely server-enforced (the six-digit
+  // demo code is verified INSIDE the backend's expiry-bounded suffix-demo
+  // mode, plus its rate limits); the frontend adds nothing but that
+  // digits-only string (leading zeros preserved). The success path
+  // mirrors the OTP-verify flow exactly: same token contract, same
+  // post-login continuation and profile-completion steps.
   const handleDemoLogin = async () => {
     if (busy) return;
     if (!isPhoneValid) {
@@ -336,13 +340,16 @@ export default function LoginScreen({ navigation }) {
       );
       return;
     }
-    if (!demoKey.trim()) {
-      Alert.alert("Demo Key Required", "Enter the restricted demo key.");
+    if (demoCode.length !== 6) {
+      Alert.alert(
+        "Demo Code Required",
+        "Enter the last 6 digits of the phone number above."
+      );
       return;
     }
     setBusy(true);
     try {
-      const tokenResp = await demoLogin(fullPhone(), demoKey.trim());
+      const tokenResp = await demoLogin(fullPhone(), demoCode);
       const userObj = await loginWithToken(tokenResp.access_token, {
         phone: fullPhone(),
         countryCode: selectedCountry.code,
@@ -360,11 +367,12 @@ export default function LoginScreen({ navigation }) {
         e.kind === "missing" &&
         e.detail === "No account found for this phone number."
       ) {
-        // Explicit existing-accounts-only rejection (the server checks this
-        // strictly after the key, so it is only ever shown for a valid key).
+        // Explicit existing-accounts-only rejection (verified server-side
+        // inside the bounded window; no account is ever created).
         Alert.alert("No Account Found", e.detail);
       } else if (e && e.status === 404) {
-        // Endpoint inactive/disabled: indistinguishable from an unknown route.
+        // Endpoint inactive/disabled/window expired: indistinguishable
+        // from an unknown route.
         Alert.alert(
           "Demo Login Unavailable",
           "Demo login is not available right now."
@@ -372,7 +380,7 @@ export default function LoginScreen({ navigation }) {
       } else if (e && (e.status === 401 || e.kind === "login")) {
         Alert.alert(
           "Demo Login Failed",
-          "That key was not accepted. Please try again."
+          "That demo code was not accepted. Please try again."
         );
       } else if (e && (e.status === 403 || e.kind === "denied")) {
         Alert.alert(
@@ -386,7 +394,7 @@ export default function LoginScreen({ navigation }) {
       }
     } finally {
       setBusy(false);
-      setDemoKey(""); // the key is never persisted — cleared immediately
+      setDemoCode(""); // the code is never persisted — cleared immediately
     }
   };
 
@@ -928,11 +936,13 @@ export default function LoginScreen({ navigation }) {
               {/* DEMO-MODE PANEL — rendered ONLY when the OTP request itself
                   failed (e.g. the production fail-closed 503 while SMS
                   delivery is not connected). Clearly labelled demo
-                  authentication: the restricted demo key is typed at runtime,
-                  sent ONLY as the X-Test-Login-Key header to /auth/test-login,
-                  never stored or bundled; all authorization stays
-                  server-enforced. No fake success is simulated and no real
-                  OTP is fabricated here. */}
+                  authentication: the presenter types the LAST SIX DIGITS of
+                  the phone entered above, sent ONLY in the {phone, code}
+                  body to /auth/test-login (the backend verifies it
+                  server-side inside its expiry-bounded demo window),
+                  cleared after use; all authorization stays server-enforced.
+                  No fake success is simulated and no real OTP is fabricated
+                  here. */}
               {otpRequestError ? (
                 <View style={styles.demoLoginPanel}>
                   <Text style={styles.demoLoginBadge}>DEMO MODE</Text>
@@ -942,26 +952,32 @@ export default function LoginScreen({ navigation }) {
                       : `Verification codes cannot be sent right now: ${otpErrorMessage(
                           otpRequestError
                         )}`}{" "}
-                    For the authorized presenter, enter the restricted demo key
-                    below to sign in as {selectedCountry.code}{" "}
+                    For the authorized presenter: enter the last 6 digits of
+                    the phone number above as the demo code to sign in as{" "}
+                    {selectedCountry.code}
+                    {" "}
                     {phoneNumber} — existing accounts only (an unknown number
-                    is rejected by the server). The key is used only for this
-                    login and is never saved.
+                    is rejected by the server). The code is used only for
+                    this login and is never saved.
                   </Text>
 
                   <Pressable
                     style={styles.phoneInputCard}
-                    onPress={() => demoKeyInputRef.current?.focus()}
+                    onPress={() => demoCodeInputRef.current?.focus()}
                   >
                     <TextInput
-                      ref={demoKeyInputRef}
+                      ref={demoCodeInputRef}
                       style={styles.phoneTextInput}
-                      placeholder="Demo key"
+                      placeholder="Last 6 digits of the phone"
                       placeholderTextColor="#94A3B8"
-                      value={demoKey}
-                      onChangeText={setDemoKey}
-                      secureTextEntry
+                      value={demoCode}
+                      onChangeText={(t) =>
+                        setDemoCode(t.replace(/[^0-9]/g, "").slice(0, 6))
+                      }
+                      keyboardType="number-pad"
+                      maxLength={6}
                       autoComplete="off"
+                      inputMode="numeric"
                       underlineColorAndroid="transparent"
                     />
                   </Pressable>
@@ -969,11 +985,11 @@ export default function LoginScreen({ navigation }) {
                   <TouchableOpacity
                     style={[
                       styles.primaryActionButton,
-                      (!isPhoneValid || !demoKey.trim() || busy) &&
+                      (!isPhoneValid || demoCode.length !== 6 || busy) &&
                         styles.primaryActionButtonDisabled,
                     ]}
                     onPress={handleDemoLogin}
-                    disabled={!isPhoneValid || !demoKey.trim() || busy}
+                    disabled={!isPhoneValid || demoCode.length !== 6 || busy}
                     activeOpacity={0.85}
                   >
                     <Text style={styles.primaryActionButtonText}>
