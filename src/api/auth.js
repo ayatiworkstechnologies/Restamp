@@ -9,6 +9,9 @@
  * - POST /auth/google {id_token} -> TokenOut {access_token, ...}
  *   (404 GOOGLE_UNKNOWN when the Google identity is not linked; no auto-creation)
  * - GET  /auth/me -> MeOut {id, display_name, role, providers, is_admin}
+ * - POST /auth/test-login {phone} + X-Test-Login-Key header -> TokenOut
+ *   (restricted demo login, bounded testing window ONLY; while disabled on
+ *   the backend the endpoint answers the same 404 as an unknown route)
  * No mock tokens. No native Google flow (web-only GIS button; see
  * components/GoogleSignInButton.web.js).
  */
@@ -28,6 +31,23 @@ export async function googleSignIn(idToken) {
 
 export async function linkGoogleAccount(idToken) {
   return apiPost("/auth/google/link", { id_token: idToken });
+}
+
+/**
+ * Restricted demo login for bounded testing windows ONLY: returns the SAME
+ * TokenOut as /auth/otp/verify, authorized server-side by the backend's
+ * RESTAMP_TEST_LOGIN_KEY plus its own existing-account policy. The demo key
+ * value is supplied BY THE OPERATOR at runtime and is sent ONLY as the
+ * X-Test-Login-Key request header — it is never hardcoded, never read from
+ * EXPO_PUBLIC_* or any bundle/env value, and never stored, logged, or
+ * reflected anywhere. Server error contract (surfaced by the caller):
+ * 401 bad key, 403 denied, 404 no account for this phone / feature
+ * disabled, 429 rate limited.
+ */
+export async function demoLogin(phone, demoKey) {
+  return apiPost("/auth/test-login", { phone }, {
+    "X-Test-Login-Key": demoKey,
+  });
 }
 
 export async function fetchMe() {

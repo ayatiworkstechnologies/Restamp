@@ -75,10 +75,19 @@ if (!readIsDev() && isLocalHostUrl(API_BASE_URL)) {
 }
 
 export class ApiError extends Error {
-  constructor(kind, status, detail) {
-    super(detail || kind);
+  constructor(kind, status, detail, message) {
+    super(message ?? (detail || kind));
     this.kind = kind;
     this.status = status;
+    /**
+     * Backend-supplied error reason when the response error body was a
+     * JSON object carrying a `detail` string (e.g. "GOOGLE_UNKNOWN", the
+     * restricted test-login 404 for a phone with no account). Kept
+     * SEPARATE from `message`, which stays the generic request-failure
+     * text the UI already branches on; undefined for timeout, offline,
+     * and non-JSON error bodies. Never contains credentials.
+     */
+    this.detail = detail;
   }
 }
 
@@ -255,16 +264,39 @@ async function authedFetch(url, options = {}) {
     if (response.status === 204) return null;
     return response.json();
   }
-  throw new ApiError(
+  throw await toHttpError(response);
+}
+
+/**
+ * Non-OK response -> ApiError. The `message` stays the generic
+ * request-failure text (the UI keeps branching on its own fixed strings),
+ * while the backend's own `detail` field — when the error body is a JSON
+ * object carrying one — is attached as `ApiError.detail` for flows that
+ * need the server's reason (e.g. GOOGLE_UNKNOWN, the restricted test-login
+ * 404 for a phone with no account). The raw body is never logged; only
+ * this structured field propagates to the caller.
+ */
+async function toHttpError(response) {
+  let serverDetail;
+  try {
+    const body = await response.json();
+    serverDetail =
+      body && typeof body.detail === "string" ? body.detail : undefined;
+  } catch {
+    // Non-JSON (or empty) error body: no server reason to attach.
+  }
+  return new ApiError(
     mapStatus(response.status),
     response.status,
+    serverDetail,
     `Request failed (${response.status}).`,
   );
 }
 
-export async function apiPost(path, body) {
+export async function apiPost(path, body, extraHeaders) {
   return authedFetch(`${API_BASE_URL}${path}`, {
     method: "POST",
+    headers: extraHeaders,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }

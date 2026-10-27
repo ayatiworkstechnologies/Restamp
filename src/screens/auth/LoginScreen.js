@@ -27,7 +27,12 @@ import {
 } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useAuth } from "../../context/AuthContext";
-import { requestOtp, verifyOtp, googleSignIn } from "../../api/auth";
+import {
+  requestOtp,
+  verifyOtp,
+  googleSignIn,
+  demoLogin,
+} from "../../api/auth";
 import GoogleSignInButton from "../../components/GoogleSignInButton";
 import {
   sanitizePhoneInput,
@@ -147,11 +152,21 @@ export default function LoginScreen({ navigation }) {
   // responses never contain it). The app never fabricates a code locally.
   const [devCode, setDevCode] = useState(null);
 
+  // Restricted demo login (hidden affordance: long-press the step-1
+  // "Welcome back!" heading). The demo key is typed by the operator at
+  // runtime ONLY: never hardcoded, never read from EXPO_PUBLIC_* or any
+  // bundle/env value, and never persisted anywhere — it lives solely in
+  // React state and is cleared the moment the request completes or the
+  // modal closes. Responses reuse the existing token contract.
+  const [showDemoLogin, setShowDemoLogin] = useState(false);
+  const [demoKey, setDemoKey] = useState("");
+
   // Input refs
   const phoneInputRef = useRef(null);
   const otpInputRefs = useRef([]);
   const firstNameInputRef = useRef(null);
   const lastNameInputRef = useRef(null);
+  const demoKeyInputRef = useRef(null);
 
   const fullPhone = () =>
     `${selectedCountry.code}${phoneNumber.replace(/[^0-9]/g, "")}`;
@@ -289,6 +304,84 @@ export default function LoginScreen({ navigation }) {
       Alert.alert("Could Not Send Code", otpErrorMessage(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Restricted demo login (hidden affordance: LONG-PRESS the step-1
+  // "Welcome back!" heading). Existing Restamp accounts ONLY — for an
+  // unknown phone the backend answers 404 "No account found for this
+  // phone number." and writes nothing. Authorization stays entirely
+  // server-enforced (key + rate limits); the frontend adds nothing but
+  // the runtime-typed key header. The success path mirrors the
+  // OTP-verify flow exactly: same token contract, same post-login
+  // continuation and profile-completion steps.
+  const closeDemoLogin = () => {
+    setShowDemoLogin(false);
+    setDemoKey("");
+  };
+
+  const handleDemoLogin = async () => {
+    if (busy) return;
+    if (!isPhoneValid) {
+      setPhoneTouched(true);
+      Alert.alert(
+        "Mobile Number Required",
+        "Enter a valid registered mobile number above first."
+      );
+      return;
+    }
+    if (!demoKey.trim()) {
+      Alert.alert("Demo Key Required", "Enter the restricted demo key.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const tokenResp = await demoLogin(fullPhone(), demoKey.trim());
+      const userObj = await loginWithToken(tokenResp.access_token, {
+        phone: fullPhone(),
+        countryCode: selectedCountry.code,
+      });
+      closeDemoLogin();
+      if (userObj && userObj.isProfileComplete) {
+        enterAfterLogin();
+      } else {
+        if (userObj?.firstName) setFirstName(userObj.firstName);
+        if (userObj?.lastName) setLastName(userObj.lastName);
+        setStep(3);
+      }
+    } catch (e) {
+      if (
+        e &&
+        e.kind === "missing" &&
+        e.detail === "No account found for this phone number."
+      ) {
+        // Explicit existing-accounts-only rejection (the server checks this
+        // strictly after the key, so it is only ever shown for a valid key).
+        Alert.alert("No Account Found", e.detail);
+      } else if (e && e.status === 404) {
+        // Endpoint inactive/disabled: indistinguishable from an unknown route.
+        Alert.alert(
+          "Demo Login Unavailable",
+          "Demo login is not available right now."
+        );
+      } else if (e && (e.status === 401 || e.kind === "login")) {
+        Alert.alert(
+          "Demo Login Failed",
+          "That key was not accepted. Please try again."
+        );
+      } else if (e && (e.status === 403 || e.kind === "denied")) {
+        Alert.alert(
+          "Not Permitted",
+          "This login is not permitted for this number right now."
+        );
+      } else {
+        // 429, timeout, offline, and server problems reuse the exact
+        // user-facing patterns of the OTP flow.
+        Alert.alert("Demo Login Failed", otpErrorMessage(e));
+      }
+    } finally {
+      setBusy(false);
+      setDemoKey(""); // the key is never persisted — cleared immediately
     }
   };
 
@@ -703,7 +796,14 @@ export default function LoginScreen({ navigation }) {
 
             {/* Content Area */}
             <View style={styles.flowBody}>
-              <Text style={styles.flowHeading}>Welcome back!</Text>
+              {/* Hidden demo-login affordance: long-press ONLY — zero visual
+                  or interaction change to the normal OTP login path. */}
+              <Text
+                style={styles.flowHeading}
+                onLongPress={() => setShowDemoLogin(true)}
+              >
+                Welcome back!
+              </Text>
               <Text style={styles.flowSubheading}>
                 Enter your registered phone number to log in
               </Text>
@@ -1071,6 +1171,73 @@ export default function LoginScreen({ navigation }) {
                 </TouchableOpacity>
               )}
             />
+          </View>
+        </View>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* RESTRICTED DEMO LOGIN MODAL (hidden affordance)           */}
+      {/* Opened by long-pressing the step-1 heading. Asks for the  */}
+      {/* demo key at RUNTIME only: the key lives solely in React   */}
+      {/* state, is sent ONLY in the X-Test-Login-Key request       */}
+      {/* header, and is cleared on close/submit — never bundled,   */}
+      {/* stored, or logged. All authorization stays server-side.   */}
+      {/* ======================================================== */}
+      <Modal
+        visible={showDemoLogin}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={closeDemoLogin}
+      >
+        <View style={styles.demoModalBackdrop}>
+          <View style={styles.demoModalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Restricted Demo Login</Text>
+              <TouchableOpacity
+                onPress={closeDemoLogin}
+                style={styles.modalCloseBtn}
+              >
+                <X size={18} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.demoHintText}>
+              {isPhoneValid
+                ? `Existing accounts only · ${fullPhone()}`
+                : "Existing accounts only. Enter a valid registered mobile number above first."}
+            </Text>
+
+            <Pressable
+              style={styles.phoneInputCard}
+              onPress={() => demoKeyInputRef.current?.focus()}
+            >
+              <TextInput
+                ref={demoKeyInputRef}
+                style={styles.phoneTextInput}
+                placeholder="Demo key"
+                placeholderTextColor="#94A3B8"
+                value={demoKey}
+                onChangeText={setDemoKey}
+                secureTextEntry
+                autoComplete="off"
+                underlineColorAndroid="transparent"
+              />
+            </Pressable>
+
+            <TouchableOpacity
+              style={[
+                styles.primaryActionButton,
+                (!isPhoneValid || !demoKey.trim() || busy) &&
+                  styles.primaryActionButtonDisabled,
+              ]}
+              onPress={handleDemoLogin}
+              disabled={!isPhoneValid || !demoKey.trim() || busy}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.primaryActionButtonText}>
+                {busy ? "Signing in..." : "Sign In"}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1599,5 +1766,43 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: COLORS.primary,
+  },
+
+  /* Restricted Demo Login Modal (hidden affordance) */
+  demoModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  demoModalCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 28,
+    maxWidth: CARD_MAX_WIDTH,
+    width: "100%",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.18,
+        shadowRadius: 24,
+      },
+      android: {
+        elevation: 12,
+      },
+      web: {
+        boxShadow: "0 8px 28px rgba(0, 0, 0, 0.16)",
+      },
+    }),
+  },
+  demoHintText: {
+    fontSize: 13,
+    color: "#64748B",
+    lineHeight: 19,
+    marginBottom: 14,
   },
 });
