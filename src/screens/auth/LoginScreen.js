@@ -152,13 +152,15 @@ export default function LoginScreen({ navigation }) {
   // responses never contain it). The app never fabricates a code locally.
   const [devCode, setDevCode] = useState(null);
 
-  // Restricted demo login (hidden affordance: long-press the step-1
-  // "Welcome back!" heading). The demo key is typed by the operator at
-  // runtime ONLY: never hardcoded, never read from EXPO_PUBLIC_* or any
-  // bundle/env value, and never persisted anywhere — it lives solely in
-  // React state and is cleared the moment the request completes or the
-  // modal closes. Responses reuse the existing token contract.
-  const [showDemoLogin, setShowDemoLogin] = useState(false);
+  // Restricted demo login (visible demo-mode panel on the OTP screen,
+  // rendered ONLY when the OTP request itself failed — e.g. the production
+  // fail-closed 503 while SMS delivery is not connected). The demo key is
+  // typed by the authorized presenter at runtime ONLY: never hardcoded,
+  // never read from EXPO_PUBLIC_* or any bundle/env value, and never
+  // persisted anywhere — it lives solely in React state and is cleared the
+  // moment the request completes. Responses reuse the existing token
+  // contract; no fake success is ever simulated.
+  const [otpRequestError, setOtpRequestError] = useState(null);
   const [demoKey, setDemoKey] = useState("");
 
   // Input refs
@@ -284,6 +286,7 @@ export default function LoginScreen({ navigation }) {
     setBusy(true);
     try {
       const resp = await requestOtp(fullPhone());
+      setOtpRequestError(null);
       // The backend includes the code in the response ONLY in the explicitly
       // restricted internal-testing display mode (non-production, flag-set);
       // in every shipped configuration — ALWAYS in production — the response
@@ -298,28 +301,31 @@ export default function LoginScreen({ navigation }) {
       setCanResend(false);
       setFocusedOtpIndex(0);
     } catch (e) {
-      // NEVER advance to the OTP step when the request fails — the user
-      // would have nothing to enter or verify. Stay on step 1 and surface
-      // the real API error (disabled SMS 503, throttles, network errors).
-      Alert.alert("Could Not Send Code", otpErrorMessage(e));
+      // The OTP request failed — normally the production fail-closed 503
+      // while SMS delivery is not connected (offline/throttles/outages too).
+      // Rather than dead-ending with an alert, continue to the OTP screen
+      // with the failure recorded: the screen surfaces the real reason and,
+      // for the authorized demo, the restricted demo-login panel (a
+      // server-enforced key path; no fake success is ever simulated).
+      setDevCode(null);
+      setOtpRequestError(e);
+      setOtp(["", "", "", "", "", ""]);
+      setStep(2);
+      setTimer(30);
+      setCanResend(false);
+      setFocusedOtpIndex(0);
     } finally {
       setBusy(false);
     }
   };
 
-  // Restricted demo login (hidden affordance: LONG-PRESS the step-1
-  // "Welcome back!" heading). Existing Restamp accounts ONLY — for an
-  // unknown phone the backend answers 404 "No account found for this
-  // phone number." and writes nothing. Authorization stays entirely
-  // server-enforced (key + rate limits); the frontend adds nothing but
-  // the runtime-typed key header. The success path mirrors the
-  // OTP-verify flow exactly: same token contract, same post-login
-  // continuation and profile-completion steps.
-  const closeDemoLogin = () => {
-    setShowDemoLogin(false);
-    setDemoKey("");
-  };
-
+  // Restricted demo login (visible demo-mode panel on the OTP screen).
+  // Existing Restamp accounts ONLY — for an unknown phone the backend
+  // answers 404 "No account found for this phone number." and writes
+  // nothing. Authorization stays entirely server-enforced (key + rate
+  // limits); the frontend adds nothing but the runtime-typed key header.
+  // The success path mirrors the OTP-verify flow exactly: same token
+  // contract, same post-login continuation and profile-completion steps.
   const handleDemoLogin = async () => {
     if (busy) return;
     if (!isPhoneValid) {
@@ -341,7 +347,6 @@ export default function LoginScreen({ navigation }) {
         phone: fullPhone(),
         countryCode: selectedCountry.code,
       });
-      closeDemoLogin();
       if (userObj && userObj.isProfileComplete) {
         enterAfterLogin();
       } else {
@@ -512,9 +517,13 @@ export default function LoginScreen({ navigation }) {
       setOtp(["", "", "", "", "", ""]);
       setFocusedOtpIndex(0);
       otpInputRefs.current[0]?.focus();
+      setOtpRequestError(null);
       Alert.alert("Code Sent", "A new verification code has been sent.");
     } catch (e) {
-      Alert.alert("Could Not Resend", otpErrorMessage(e));
+      // Same policy as the initial request: record the failure for the
+      // demo-mode panel (with the real reason) instead of an alert dead-end.
+      setDevCode(null);
+      setOtpRequestError(e);
     } finally {
       setBusy(false);
     }
@@ -796,14 +805,7 @@ export default function LoginScreen({ navigation }) {
 
             {/* Content Area */}
             <View style={styles.flowBody}>
-              {/* Hidden demo-login affordance: long-press ONLY — zero visual
-                  or interaction change to the normal OTP login path. */}
-              <Text
-                style={styles.flowHeading}
-                onLongPress={() => setShowDemoLogin(true)}
-              >
-                Welcome back!
-              </Text>
+              <Text style={styles.flowHeading}>Welcome back!</Text>
               <Text style={styles.flowSubheading}>
                 Enter your registered phone number to log in
               </Text>
@@ -922,6 +924,64 @@ export default function LoginScreen({ navigation }) {
                   Did you enter the correct number?
                 </Text>
               </Text>
+
+              {/* DEMO-MODE PANEL — rendered ONLY when the OTP request itself
+                  failed (e.g. the production fail-closed 503 while SMS
+                  delivery is not connected). Clearly labelled demo
+                  authentication: the restricted demo key is typed at runtime,
+                  sent ONLY as the X-Test-Login-Key header to /auth/test-login,
+                  never stored or bundled; all authorization stays
+                  server-enforced. No fake success is simulated and no real
+                  OTP is fabricated here. */}
+              {otpRequestError ? (
+                <View style={styles.demoLoginPanel}>
+                  <Text style={styles.demoLoginBadge}>DEMO MODE</Text>
+                  <Text style={styles.demoLoginText}>
+                    {otpRequestError.status === 503
+                      ? "SMS text delivery is not connected in this environment yet, so verification codes cannot be sent."
+                      : `Verification codes cannot be sent right now: ${otpErrorMessage(
+                          otpRequestError
+                        )}`}{" "}
+                    For the authorized presenter, enter the restricted demo key
+                    below to sign in as {selectedCountry.code}{" "}
+                    {phoneNumber} — existing accounts only (an unknown number
+                    is rejected by the server). The key is used only for this
+                    login and is never saved.
+                  </Text>
+
+                  <Pressable
+                    style={styles.phoneInputCard}
+                    onPress={() => demoKeyInputRef.current?.focus()}
+                  >
+                    <TextInput
+                      ref={demoKeyInputRef}
+                      style={styles.phoneTextInput}
+                      placeholder="Demo key"
+                      placeholderTextColor="#94A3B8"
+                      value={demoKey}
+                      onChangeText={setDemoKey}
+                      secureTextEntry
+                      autoComplete="off"
+                      underlineColorAndroid="transparent"
+                    />
+                  </Pressable>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryActionButton,
+                      (!isPhoneValid || !demoKey.trim() || busy) &&
+                        styles.primaryActionButtonDisabled,
+                    ]}
+                    onPress={handleDemoLogin}
+                    disabled={!isPhoneValid || !demoKey.trim() || busy}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.primaryActionButtonText}>
+                      {busy ? "Signing in..." : "Sign in (demo)"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
 
               {/* Floating OTP Digits with Sleek Unified Underlines */}
               <View style={styles.otpDigitsRow}>
@@ -1171,73 +1231,6 @@ export default function LoginScreen({ navigation }) {
                 </TouchableOpacity>
               )}
             />
-          </View>
-        </View>
-      </Modal>
-
-      {/* ======================================================== */}
-      {/* RESTRICTED DEMO LOGIN MODAL (hidden affordance)           */}
-      {/* Opened by long-pressing the step-1 heading. Asks for the  */}
-      {/* demo key at RUNTIME only: the key lives solely in React   */}
-      {/* state, is sent ONLY in the X-Test-Login-Key request       */}
-      {/* header, and is cleared on close/submit — never bundled,   */}
-      {/* stored, or logged. All authorization stays server-side.   */}
-      {/* ======================================================== */}
-      <Modal
-        visible={showDemoLogin}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={closeDemoLogin}
-      >
-        <View style={styles.demoModalBackdrop}>
-          <View style={styles.demoModalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Restricted Demo Login</Text>
-              <TouchableOpacity
-                onPress={closeDemoLogin}
-                style={styles.modalCloseBtn}
-              >
-                <X size={18} color="#0F172A" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.demoHintText}>
-              {isPhoneValid
-                ? `Existing accounts only · ${fullPhone()}`
-                : "Existing accounts only. Enter a valid registered mobile number above first."}
-            </Text>
-
-            <Pressable
-              style={styles.phoneInputCard}
-              onPress={() => demoKeyInputRef.current?.focus()}
-            >
-              <TextInput
-                ref={demoKeyInputRef}
-                style={styles.phoneTextInput}
-                placeholder="Demo key"
-                placeholderTextColor="#94A3B8"
-                value={demoKey}
-                onChangeText={setDemoKey}
-                secureTextEntry
-                autoComplete="off"
-                underlineColorAndroid="transparent"
-              />
-            </Pressable>
-
-            <TouchableOpacity
-              style={[
-                styles.primaryActionButton,
-                (!isPhoneValid || !demoKey.trim() || busy) &&
-                  styles.primaryActionButtonDisabled,
-              ]}
-              onPress={handleDemoLogin}
-              disabled={!isPhoneValid || !demoKey.trim() || busy}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.primaryActionButtonText}>
-                {busy ? "Signing in..." : "Sign In"}
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1768,41 +1761,33 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
 
-  /* Restricted Demo Login Modal (hidden affordance) */
-  demoModalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
+  /* Demo-mode panel on the OTP screen (restricted demo login) */
+  demoLoginPanel: {
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 4,
+    marginBottom: 16,
   },
-  demoModalCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 28,
-    maxWidth: CARD_MAX_WIDTH,
-    width: "100%",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000000",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.18,
-        shadowRadius: 24,
-      },
-      android: {
-        elevation: 12,
-      },
-      web: {
-        boxShadow: "0 8px 28px rgba(0, 0, 0, 0.16)",
-      },
-    }),
+  demoLoginBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: COLORS.primary,
+    color: "#FFFFFF",
+    fontSize: 10.5,
+    fontWeight: "800",
+    letterSpacing: 1,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    overflow: "hidden",
+    marginBottom: 8,
   },
-  demoHintText: {
-    fontSize: 13,
-    color: "#64748B",
-    lineHeight: 19,
-    marginBottom: 14,
+  demoLoginText: {
+    fontSize: 12.5,
+    color: "#1E40AF",
+    lineHeight: 18,
+    marginBottom: 12,
   },
 });
