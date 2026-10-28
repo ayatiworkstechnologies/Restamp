@@ -31,7 +31,6 @@ import {
   requestOtp,
   verifyOtp,
   googleSignIn,
-  demoLogin,
 } from "../../api/auth";
 import GoogleSignInButton from "../../components/GoogleSignInButton";
 import {
@@ -162,15 +161,11 @@ export default function LoginScreen({ navigation }) {
   // leading zeros are preserved) and is cleared the moment the request
   // completes. Responses reuse the existing token contract; no fake
   // success is ever simulated.
-  const [otpRequestError, setOtpRequestError] = useState(null);
-  const [demoCode, setDemoCode] = useState("");
-
   // Input refs
   const phoneInputRef = useRef(null);
   const otpInputRefs = useRef([]);
   const firstNameInputRef = useRef(null);
   const lastNameInputRef = useRef(null);
-  const demoCodeInputRef = useRef(null);
 
   const fullPhone = () =>
     `${selectedCountry.code}${phoneNumber.replace(/[^0-9]/g, "")}`;
@@ -288,7 +283,6 @@ export default function LoginScreen({ navigation }) {
     setBusy(true);
     try {
       const resp = await requestOtp(fullPhone());
-      setOtpRequestError(null);
       // The backend includes the code in the response ONLY in the explicitly
       // restricted internal-testing display mode (non-production, flag-set);
       // in every shipped configuration — ALWAYS in production — the response
@@ -303,14 +297,10 @@ export default function LoginScreen({ navigation }) {
       setCanResend(false);
       setFocusedOtpIndex(0);
     } catch (e) {
-      // The OTP request failed — normally the production fail-closed 503
-      // while SMS delivery is not connected (offline/throttles/outages too).
-      // Rather than dead-ending with an alert, continue to the OTP screen
-      // with the failure recorded: the screen surfaces the real reason and,
-      // for the authorized demo, the restricted demo-login panel (a
-      // server-enforced key path; no fake success is ever simulated).
+      // OTP request failed — normally the production fail-closed 503
+      // while SMS delivery is not connected, or offline/throttles/outages.
       setDevCode(null);
-      setOtpRequestError(e);
+      Alert.alert("Sign-in Failed", otpErrorMessage(e));
       setOtp(["", "", "", "", "", ""]);
       setStep(2);
       setTimer(30);
@@ -318,83 +308,6 @@ export default function LoginScreen({ navigation }) {
       setFocusedOtpIndex(0);
     } finally {
       setBusy(false);
-    }
-  };
-
-  // Restricted demo login (visible demo-mode panel on the OTP screen).
-  // Existing Restamp accounts ONLY — for an unknown phone the backend
-  // answers 404 "No account found for this phone number." and writes
-  // nothing. Authorization stays entirely server-enforced (the six-digit
-  // demo code is verified INSIDE the backend's expiry-bounded suffix-demo
-  // mode, plus its rate limits); the frontend adds nothing but that
-  // digits-only string (leading zeros preserved). The success path
-  // mirrors the OTP-verify flow exactly: same token contract, same
-  // post-login continuation and profile-completion steps.
-  const handleDemoLogin = async () => {
-    if (busy) return;
-    if (!isPhoneValid) {
-      setPhoneTouched(true);
-      Alert.alert(
-        "Mobile Number Required",
-        "Enter a valid registered mobile number above first."
-      );
-      return;
-    }
-    if (demoCode.length !== 6) {
-      Alert.alert(
-        "Demo Code Required",
-        "Enter the last 6 digits of the phone number above."
-      );
-      return;
-    }
-    setBusy(true);
-    try {
-      const tokenResp = await demoLogin(fullPhone(), demoCode);
-      const userObj = await loginWithToken(tokenResp.access_token, {
-        phone: fullPhone(),
-        countryCode: selectedCountry.code,
-      });
-      if (userObj && userObj.isProfileComplete) {
-        enterAfterLogin();
-      } else {
-        if (userObj?.firstName) setFirstName(userObj.firstName);
-        if (userObj?.lastName) setLastName(userObj.lastName);
-        setStep(3);
-      }
-    } catch (e) {
-      if (
-        e &&
-        e.kind === "missing" &&
-        e.detail === "No account found for this phone number."
-      ) {
-        // Explicit existing-accounts-only rejection (verified server-side
-        // inside the bounded window; no account is ever created).
-        Alert.alert("No Account Found", e.detail);
-      } else if (e && e.status === 404) {
-        // Endpoint inactive/disabled/window expired: indistinguishable
-        // from an unknown route.
-        Alert.alert(
-          "Demo Login Unavailable",
-          "Demo login is not available right now."
-        );
-      } else if (e && (e.status === 401 || e.kind === "login")) {
-        Alert.alert(
-          "Demo Login Failed",
-          "That demo code was not accepted. Please try again."
-        );
-      } else if (e && (e.status === 403 || e.kind === "denied")) {
-        Alert.alert(
-          "Not Permitted",
-          "This login is not permitted for this number right now."
-        );
-      } else {
-        // 429, timeout, offline, and server problems reuse the exact
-        // user-facing patterns of the OTP flow.
-        Alert.alert("Demo Login Failed", otpErrorMessage(e));
-      }
-    } finally {
-      setBusy(false);
-      setDemoCode(""); // the code is never persisted — cleared immediately
     }
   };
 
@@ -525,13 +438,10 @@ export default function LoginScreen({ navigation }) {
       setOtp(["", "", "", "", "", ""]);
       setFocusedOtpIndex(0);
       otpInputRefs.current[0]?.focus();
-      setOtpRequestError(null);
       Alert.alert("Code Sent", "A new verification code has been sent.");
     } catch (e) {
-      // Same policy as the initial request: record the failure for the
-      // demo-mode panel (with the real reason) instead of an alert dead-end.
       setDevCode(null);
-      setOtpRequestError(e);
+      Alert.alert("Resend Failed", otpErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -932,72 +842,6 @@ export default function LoginScreen({ navigation }) {
                   Did you enter the correct number?
                 </Text>
               </Text>
-
-              {/* DEMO-MODE PANEL — rendered ONLY when the OTP request itself
-                  failed (e.g. the production fail-closed 503 while SMS
-                  delivery is not connected). Clearly labelled demo
-                  authentication: the presenter types the LAST SIX DIGITS of
-                  the phone entered above, sent ONLY in the {phone, code}
-                  body to /auth/test-login (the backend verifies it
-                  server-side inside its expiry-bounded demo window),
-                  cleared after use; all authorization stays server-enforced.
-                  No fake success is simulated and no real OTP is fabricated
-                  here. */}
-              {otpRequestError ? (
-                <View style={styles.demoLoginPanel}>
-                  <Text style={styles.demoLoginBadge}>DEMO MODE</Text>
-                  <Text style={styles.demoLoginText}>
-                    {otpRequestError.status === 503
-                      ? "SMS text delivery is not connected in this environment yet, so verification codes cannot be sent."
-                      : `Verification codes cannot be sent right now: ${otpErrorMessage(
-                          otpRequestError
-                        )}`}{" "}
-                    For the authorized presenter: enter the last 6 digits of
-                    the phone number above as the demo code to sign in as{" "}
-                    {selectedCountry.code}
-                    {" "}
-                    {phoneNumber} — existing accounts only (an unknown number
-                    is rejected by the server). The code is used only for
-                    this login and is never saved.
-                  </Text>
-
-                  <Pressable
-                    style={styles.phoneInputCard}
-                    onPress={() => demoCodeInputRef.current?.focus()}
-                  >
-                    <TextInput
-                      ref={demoCodeInputRef}
-                      style={styles.phoneTextInput}
-                      placeholder="Last 6 digits of the phone"
-                      placeholderTextColor="#94A3B8"
-                      value={demoCode}
-                      onChangeText={(t) =>
-                        setDemoCode(t.replace(/[^0-9]/g, "").slice(0, 6))
-                      }
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      autoComplete="off"
-                      inputMode="numeric"
-                      underlineColorAndroid="transparent"
-                    />
-                  </Pressable>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.primaryActionButton,
-                      (!isPhoneValid || demoCode.length !== 6 || busy) &&
-                        styles.primaryActionButtonDisabled,
-                    ]}
-                    onPress={handleDemoLogin}
-                    disabled={!isPhoneValid || demoCode.length !== 6 || busy}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.primaryActionButtonText}>
-                      {busy ? "Signing in..." : "Sign in (demo)"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
 
               {/* Floating OTP Digits with Sleek Unified Underlines */}
               <View style={styles.otpDigitsRow}>
@@ -1775,35 +1619,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: COLORS.primary,
-  },
-
-  /* Demo-mode panel on the OTP screen (restricted demo login) */
-  demoLoginPanel: {
-    backgroundColor: COLORS.primaryLight,
-    borderWidth: 1,
-    borderColor: COLORS.primaryBorder,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 4,
-    marginBottom: 16,
-  },
-  demoLoginBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: COLORS.primary,
-    color: "#FFFFFF",
-    fontSize: 10.5,
-    fontWeight: "800",
-    letterSpacing: 1,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    overflow: "hidden",
-    marginBottom: 8,
-  },
-  demoLoginText: {
-    fontSize: 12.5,
-    color: "#1E40AF",
-    lineHeight: 18,
-    marginBottom: 12,
   },
 });
