@@ -36,9 +36,14 @@ const MONTH_NAMES = [
 
 /**
  * Map the ScheduleVisitModal payload ({date: "30 Oct 2026", time: "04:30 PM"})
- * to a backend ISO datetime (UTC). Throws a readable Error when the date or
- * time cannot be understood — callers surface validation errors instead of
- * POSTing and must never claim the visit was scheduled.
+ * to a backend ISO datetime. Visit times are UTC everywhere: the picked
+ * date/time is the user's local wall clock, and it is sent as an explicit
+ * UTC instant (toISOString, "...Z"). The backend stores that instant as
+ * naive UTC and returns it without a suffix; toUiVisit reads it back as UTC
+ * (see parseApiDateTime) and displays it in the user's local time.
+ * Throws a readable Error when the date or time cannot be understood —
+ * callers surface validation errors instead of POSTing and must never claim
+ * the visit was scheduled.
  */
 export function toVisitPayload({ date, time, note } = {}) {
   const m = String(date || "").trim().match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
@@ -52,6 +57,9 @@ export function toVisitPayload({ date, time, note } = {}) {
   const local = new Date(Number(m[3]), month, Number(m[1]), hour, parseInt(t[2], 10), 0, 0);
   if (Number.isNaN(local.getTime())) throw new Error("Please choose a valid visit date.");
   if (local.getTime() <= Date.now()) throw new Error("Visits must be scheduled in the future.");
+  // Explicit UTC instant: the backend validates "in the future" against UTC
+  // now, which a zone-less local wall-clock string would skew by the
+  // device's UTC offset.
   const body = { scheduled_at: local.toISOString() };
   if (note !== undefined && note !== null && String(note).trim() !== "") {
     body.note = String(note).slice(0, 2000);
@@ -63,6 +71,25 @@ function pad(n) {
   return String(n).padStart(2, "0");
 }
 
+// "2030-12-30T11:00:00" style values with no zone designator.
+const NAIVE_ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
+
+/**
+ * Parse a backend datetime into an instant (Date), or null when absent or
+ * invalid. The backend stores visit times as naive UTC and returns them
+ * without a zone designator, so zone-less ISO values are read as UTC
+ * (JavaScript would otherwise treat them as device-local time). Values that
+ * already end in "Z" or an explicit offset (+05:30) are parsed unchanged —
+ * never shifted twice. No manual offset arithmetic: display code formats
+ * the resulting instant in the user's own time zone.
+ */
+export function parseApiDateTime(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const s = String(value).trim();
+  const parsed = new Date(NAIVE_ISO_DATETIME.test(s) ? `${s}Z` : s);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 /**
  * Map a backend VisitOut to the shape visit screens render. Server status
  * vocabulary (REQUESTED/PROPOSED/CONFIRMED/DECLINED/CANCELLED/COMPLETED) maps
@@ -71,8 +98,9 @@ function pad(n) {
  * are invented — contact stays behind the authorized reveal endpoint.
  */
 export function toUiVisit(row) {
-  const scheduled = row && row.scheduled_at ? new Date(row.scheduled_at) : null;
-  const valid = scheduled && !Number.isNaN(scheduled.getTime()) ? scheduled : null;
+  // UTC instant from the API; date/time below render it in local time.
+  const valid = parseApiDateTime(row?.scheduled_at);
+  const created = parseApiDateTime(row?.created_at);
   const status = String(row?.status || "").toUpperCase();
   const uiStatus =
     status === "COMPLETED" ? "completed" : status === "CANCELLED" || status === "DECLINED" ? "cancelled" : "upcoming";
@@ -98,8 +126,10 @@ export function toUiVisit(row) {
           return `${pad(h)}:${pad(valid.getMinutes())} ${suffix}`;
         })()
       : "",
-    scheduledAt: row?.scheduled_at || null,
-    createdAt: row?.created_at || null,
+    // Explicit-UTC ISO strings, so any later `new Date(scheduledAt)` (e.g.
+    // a reschedule picker's initial date) gets the right instant.
+    scheduledAt: valid ? valid.toISOString() : row?.scheduled_at || null,
+    createdAt: created ? created.toISOString() : row?.created_at || null,
   };
 }
 
