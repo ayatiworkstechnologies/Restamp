@@ -61,6 +61,7 @@ import PropertyGalleryModal from "./PropertyGalleryModal";
 import ScheduleVisitModal from "./ScheduleVisitModal";
 import { createEnquiry } from "../api/enquiries";
 import { revealContactPhone } from "../api/contact";
+import { recordViewed } from "../api/viewed";
 import { getAuthTokenSync } from "../api/client";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -152,6 +153,10 @@ function PropertyDetailModal({
   // enquiry). Callers wire this to the existing Login route; auth logic
   // itself is never changed here.
   onLoginRequired,
+  // Optional: called after this sheet has recorded a view (e.g. so a
+  // screen showing viewed history can refresh). The sheet is the ONLY
+  // place that records views, so callers never post their own.
+  onViewRecorded,
 }) {
   const insets = useSafeAreaInsets();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -210,6 +215,21 @@ function PropertyDetailModal({
       cancelled = true;
     };
   }, [property]);
+
+  // Viewed history: record that this real listing was opened (Home, Search,
+  // Explore, Saved…) — once per opening, from this sheet only. Fire-and-
+  // forget: recordViewed never throws, never blocks the sheet, and never
+  // switches the account's role. The callback is read through a ref so a
+  // new function identity on re-render never records again.
+  const onViewRecordedRef = useRef(onViewRecorded);
+  onViewRecordedRef.current = onViewRecorded;
+  useEffect(() => {
+    const backendId = property && property.backendId;
+    if (!visible || typeof backendId !== "number") return;
+    recordViewed(backendId).then((recorded) => {
+      if (recorded && onViewRecordedRef.current) onViewRecordedRef.current(recorded);
+    });
+  }, [visible, property && property.backendId]);
 
   // Live similar-properties state (Phase 4). Declared with the other hooks,
   // before any early return, to preserve hook order on every render.

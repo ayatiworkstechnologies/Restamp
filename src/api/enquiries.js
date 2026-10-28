@@ -30,3 +30,27 @@ export async function fetchMyEnquiries(page = 1, pageSize = 20) {
 export async function fetchEnquiryDetail(enquiryId) {
   return withBuyerMode(() => apiGetAuth(`/buyer/enquiries/${enquiryId}`));
 }
+
+/**
+ * Map a backend EnquiryOut to the shape the Messages tab renders.
+ * Only genuine backend fields are forwarded. Buyer phone/names are not
+ * returned by the backend for leads, so they stay undefined.
+ */
+export function toUiEnquiry(row) {
+  const listing = row && row.listing ? row.listing : null;
+  const createdAt = row && row.created_at ? new Date(row.created_at) : null;
+  return {
+    id: row.id,
+    property_listing_id: row.property_listing_id,
+    recipientName: "Owner",
+    recipientRole: "Property Owner",
+    status: String(row.status || "NEW").toLowerCase(),
+    timestamp: createdAt ? createdAt.toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "",
+    propertyImage: listing ? listing.cover_image_url : null,
+    propertyTitle: listing ? listing.title : "",
+    propertyPrice: listing ? (listing.price_paise != null ? `₹${Math.round(listing.price_paise / 100)}` : "") : "",
+    propertyLocation: listing ? `${listing.locality || ""}, ${listing.city || ""}`.replace(/^,/, "") : "",
+    lastMessage: row.message || "",
+    message: row.message || "",
+  };
+}

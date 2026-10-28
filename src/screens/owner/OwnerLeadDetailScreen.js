@@ -34,7 +34,7 @@ import {
 import COLORS from "../../constants/colors";
 import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
-import { updateOwnerLeadStatus, toOwnerLead } from "../../api/owner";
+import { updateOwnerLeadStatus, toOwnerLead, selectPropertyLeads, leadPropertyLabel, propertyTypeLabel, leadDateLabel } from "../../api/owner";
 import { fetchOwnerVisits, toUiVisit, toVisitPayload, updateOwnerVisit } from "../../api/visits";
 import { ownerVisitActions, ownerVisitErrorMessage, proposeVisitForLead } from "../../utils/ownerVisits";
 import StatusBadge from "../../components/owner/StatusBadge";
@@ -114,13 +114,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
     // synthesize a property record. Only the signed-in owner's rows are
     // considered, so a stale row from another account can never be shown.
     return (
-      scopedProperties.find(
-        (p) =>
-          p.id === lead.propertyId ||
-          (p.title &&
-            lead.propertyTitle &&
-            p.title.toLowerCase().trim() === lead.propertyTitle.toLowerCase().trim())
-      ) || null
+      scopedProperties.find((p) => selectPropertyLeads([lead], p).length > 0) || null
     );
   }, [scopedProperties, lead]);
 
@@ -429,7 +423,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
               </View>
 
               <Text style={styles.propertyTitleText} numberOfLines={1}>
-                {lead.propertyTitle || "Property enquiry"}
+                {leadPropertyLabel(lead)}
               </Text>
 
               <View style={styles.propertyLocRow}>
@@ -448,41 +442,45 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
 
         <View style={styles.sectionDivider} />
 
-        {/* ================= BUYER REQUIREMENT ================= */}
+        {/* ================= ENQUIRY DETAILS =================
+            Facts about the enquired listing and this lead only. There is no
+            buyer-requirement data (budget, preferred locality) in the
+            backend, so none is shown or implied. */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Buyer Requirement</Text>
+          <Text style={styles.sectionTitle}>Enquiry Details</Text>
 
           <View style={styles.specsGrid}>
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>PROPERTY TYPE</Text>
               <Text style={styles.specValue}>
-                {lead.propertyTitle?.includes("Villa")
-                  ? "Villa"
-                  : lead.propertyTitle?.includes("Office")
-                  ? "Commercial"
-                  : "Not available"}
+                {propertyTypeLabel(lead.propertyType) || "Not available"}
               </Text>
             </View>
 
             <View style={styles.specItem}>
-              <Text style={styles.specLabel}>BUDGET</Text>
+              <Text style={styles.specLabel}>ASKING PRICE</Text>
               <Text style={[styles.specValue, { color: "#2563EB", fontWeight: "700" }]}>
-                {lead.budget || lead.propertyPrice || "—"}
+                {lead.propertyPrice || "Not available"}
               </Text>
             </View>
 
             <View style={styles.specItem}>
-              <Text style={styles.specLabel}>PREFERRED LOCALITY</Text>
+              <Text style={styles.specLabel}>LOCALITY</Text>
               <Text style={styles.specValue}>
                 {lead.propertyLocality?.split(",")[0] || "Not available"}
               </Text>
             </View>
 
             <View style={styles.specItem}>
-              <Text style={styles.specLabel}>MOVE-IN / VISIT</Text>
+              <Text style={styles.specLabel}>SITE VISIT</Text>
               <Text style={styles.specValue}>
-                {lead.preferredVisitDate || "Not scheduled"}
+                {ownerVisitIsOpen ? `${ownerVisit.date} · ${ownerVisit.time}` : "Not scheduled"}
               </Text>
+            </View>
+
+            <View style={styles.specItem}>
+              <Text style={styles.specLabel}>ENQUIRED ON</Text>
+              <Text style={styles.specValue}>{leadDateLabel(lead)}</Text>
             </View>
           </View>
 

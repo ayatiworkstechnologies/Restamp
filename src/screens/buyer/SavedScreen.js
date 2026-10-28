@@ -56,6 +56,15 @@ import {
   toVisitPayload,
   updateBuyerVisit,
 } from "../../api/visits";
+import {
+  fetchMyEnquiries,
+  createEnquiry,
+  toUiEnquiry,
+} from "../../api/enquiries";
+import {
+  fetchViewed,
+  toUiViewed,
+} from "../../api/viewed";
 import { revealContactPhone } from "../../api/contact";
 import { getAuthTokenSync } from "../../api/client";
 
@@ -104,16 +113,20 @@ export default function SavedScreen({ navigation, route }) {
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [viewedNumberProperty, setViewedNumberProperty] = useState(null);
 
-  // Viewed properties state
+  // Viewed properties state (server-backed: GET /buyer/viewed)
   const [viewedProperties, setViewedProperties] = useState([]);
+  const [viewedLoading, setViewedLoading] = useState(false);
+  const [viewedError, setViewedError] = useState(null);
 
   // Call history state with both Call and WhatsApp actions
   // No backend call-log API exists: the Calls tab starts empty and
-// shows the honest empty state below. Nothing here is seeded.
+  // shows the honest empty state below. Nothing here is seeded.
   const [callHistory, setCallHistory] = useState([]);
 
-  // Messages and enquiries state
-  const [messages, setMessages] = useState([]);
+  // Messages/enquiries state (server-backed: GET /buyer/enquiries)
+  const [enquiries, setEnquiries] = useState([]);
+  const [enquiriesLoading, setEnquiriesLoading] = useState(false);
+  const [enquiriesError, setEnquiriesError] = useState(null);
 
   // Site visits are server-backed (GET /buyer/visits) for authenticated
   // buyers; guests and logged-out users see the honest empty state. The
@@ -145,11 +158,68 @@ export default function SavedScreen({ navigation, route }) {
     );
   }, []);
 
+  // Load enquiries (messages) from the backend
+  const loadEnquiries = useCallback(() => {
+    if (!getAuthTokenSync()) {
+      setEnquiries([]);
+      setEnquiriesError(null);
+      return Promise.resolve([]);
+    }
+    setEnquiriesLoading(true);
+    setEnquiriesError(null);
+    return fetchMyEnquiries({ page: 1, pageSize: 50 }).then(
+      (resp) => {
+        const items = Array.isArray(resp?.items) ? resp.items : [];
+        setEnquiries(items);
+        setEnquiriesLoading(false);
+        return items;
+      },
+      (err) => {
+        setEnquiriesLoading(false);
+        setEnquiriesError(err);
+        return [];
+      }
+    );
+  }, []);
+
+  // Load viewed properties from the backend
+  const loadViewedProperties = useCallback(() => {
+    if (!getAuthTokenSync()) {
+      setViewedProperties([]);
+      setViewedError(null);
+      return Promise.resolve([]);
+    }
+    setViewedLoading(true);
+    setViewedError(null);
+    return fetchViewed({ page: 1, pageSize: 50 }).then(
+      (resp) => {
+        // Rows without a listing card map to null and are dropped.
+        const mapped = (resp?.items || []).map(toUiViewed).filter(Boolean);
+        setViewedProperties(mapped);
+        setViewedLoading(false);
+        return mapped;
+      },
+      (err) => {
+        setViewedLoading(false);
+        setViewedError(err);
+        return [];
+      }
+    );
+  }, []);
+
+  // Views are recorded by PropertyDetailModal itself (once per opening, for
+  // every entry point); this screen only refreshes its Viewed list after.
+  const handleViewRecorded = useCallback(() => {
+    loadViewedProperties().catch(() => {});
+  }, [loadViewedProperties]);
+
   useFocusEffect(
     useCallback(() => {
       refreshWishlist().catch(() => {});
       loadServerVisits().catch(() => {});
-    }, [refreshWishlist, loadServerVisits])
+      loadEnquiries().catch(() => {});
+      loadViewedProperties().catch(() => {});
+    }, [refreshWishlist, loadServerVisits, loadEnquiries, loadViewedProperties])
   );
 
   // Agents state (Agent Page Detail Tab)
@@ -603,7 +673,7 @@ export default function SavedScreen({ navigation, route }) {
               </Text>
               <View style={[styles.tabCountBadge, activeTab === "messages" && styles.tabCountBadgeActive]}>
                 <Text style={[styles.tabCountText, activeTab === "messages" && styles.tabCountTextActive]}>
-                  {messages.length}
+                  {enquiries.length}
                 </Text>
               </View>
               {activeTab === "messages" && <View style={styles.activeTabIndicator} />}
@@ -695,7 +765,9 @@ export default function SavedScreen({ navigation, route }) {
                       key={property.id}
                       style={styles.propertyCard}
                       activeOpacity={0.92}
-                      onPress={() => setSelectedProperty(property)}
+                      onPress={() => {
+                        setSelectedProperty(property);
+                      }}
                     >
                       {/* 1. Large Hero Photo with Rounded Corners (Airbnb 4:3 / 220px) */}
                       <View style={styles.imageWrap}>
@@ -825,7 +897,9 @@ export default function SavedScreen({ navigation, route }) {
                       key={property.id}
                       style={styles.propertyCard}
                       activeOpacity={0.92}
-                      onPress={() => setSelectedProperty(property)}
+                      onPress={() => {
+                        setSelectedProperty(property);
+                      }}
                     >
                       {/* 1. Large Hero Photo with Rounded Corners */}
                       <View style={styles.imageWrap}>
@@ -1034,120 +1108,7 @@ export default function SavedScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* TAB 4: MESSAGES / ENQUIRIES */}
-        {activeTab === "messages" && (
-          <View style={styles.tabContentArea}>
-            <View style={styles.listHeaderRow}>
-              <Text style={styles.listSectionTitle}>
-                Messages & Enquiries ({messages.length})
-              </Text>
-            </View>
-
-            {messages.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <MessageSquare size={32} color="#CBD5E1" strokeWidth={1.5} />
-                </View>
-                <Text style={styles.emptyTitle}>No messages yet</Text>
-                <Text style={styles.emptyText}>
-                  Direct enquiries sent to property owners and verified agents will appear here.
-                </Text>
-                <TouchableOpacity
-                  style={styles.exploreBtn}
-                  activeOpacity={0.85}
-                  onPress={() => navigation.navigate("Home")}
-                >
-                  <Text style={styles.exploreBtnText}>Find Properties to Enquire</Text>
-                  <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.messagesList}>
-                {messages.map((item) => (
-                  <View key={item.id} style={styles.messageCard}>
-                    {/* Header: Recipient Name, Role & Status */}
-                    <View style={styles.messageHeaderRow}>
-                      <View style={styles.messageRecipientCol}>
-                        <View style={styles.msgIconBox}>
-                          <User size={16} color="#2563EB" />
-                        </View>
-                        <View>
-                          <Text style={styles.msgRecipientName}>{item.recipientName}</Text>
-                          <Text style={styles.msgRecipientRole}>{item.recipientRole}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.msgStatusCol}>
-                        <View style={styles.msgStatusBadge}>
-                          <Text style={styles.msgStatusText}>{item.status}</Text>
-                        </View>
-                        <Text style={styles.msgTimeText}>{item.timestamp}</Text>
-                      </View>
-                    </View>
-
-                    {/* Associated Property Snippet */}
-                    <View style={styles.msgPropertyRow}>
-                      <SafeImage
-                        source={{ uri: item.propertyImage }}
-                        style={styles.msgPropertyThumb}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.msgPropertyTitle} numberOfLines={1}>
-                          {item.propertyTitle}
-                        </Text>
-                        <Text style={styles.msgPropertyLoc} numberOfLines={1}>
-                          {item.propertyPrice} • {item.propertyLocation}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Message Preview Quote */}
-                    <View style={styles.msgBubble}>
-                      <Text style={styles.msgBubbleText} numberOfLines={2}>
-                        "{item.lastMessage}"
-                      </Text>
-                    </View>
-
-                    {/* Divider */}
-                    <View style={styles.cardDivider} />
-
-                    {/* Action Buttons: Call, WhatsApp, Agent Details */}
-                    <View style={styles.cardActionsInline}>
-                      <TouchableOpacity
-                        style={styles.callCustomerBtn}
-                        onPress={() => handleCall(item.recipientPhone, item.recipientName)}
-                        activeOpacity={0.8}
-                      >
-                        <Phone size={13} color="#0F172A" style={{ marginRight: 5 }} />
-                        <Text style={styles.callCustomerBtnText}>Call</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.whatsappActionBtn}
-                        onPress={() => handleWhatsAppEnquiry(item)}
-                        activeOpacity={0.8}
-                      >
-                        <MessageCircle size={13} color="#16A34A" style={{ marginRight: 5 }} />
-                        <Text style={styles.whatsappActionBtnText}>WhatsApp</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.msgAgentDetailBtn}
-                        onPress={() => setSelectedAgentForModal(findAgentByName(item.recipientName))}
-                        activeOpacity={0.8}
-                      >
-                        <User size={13} color="#2563EB" style={{ marginRight: 4 }} />
-                        <Text style={styles.msgAgentDetailBtnText}>Agent Info</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* TAB 5: SITE VISITS (Matching Agent/Owner Reference Design) */}
+        {/* TAB 4: MESSAGES / ENQUIRIES */}        {activeTab === "messages" && (          <View style={styles.tabContentArea}>            <View style={styles.listHeaderRow}>              <Text style={styles.listSectionTitle}>                Messages & Enquiries ({enquiries.length})              </Text>            </View>            {enquiries.length === 0 ? (              <View style={styles.emptyContainer}>                <View style={styles.emptyIconCircle}>                  <MessageSquare size={32} color="#CBD5E1" strokeWidth={1.5} />                </View>                <Text style={styles.emptyTitle}>No messages yet</Text>                <Text style={styles.emptyText}>                  Direct enquiries sent to property owners and verified agents will appear here.                </Text>                <TouchableOpacity                  style={styles.exploreBtn}                  activeOpacity={0.85}                  onPress={() => navigation.navigate("Home")}                >                  <Text style={styles.exploreBtnText}>Find Properties to Enquire</Text>                  <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />                </TouchableOpacity>              </View>            ) : (              <View style={styles.messagesList}>                {enquiries.map((row) => {                  const item = toUiEnquiry(row);                  return (                    <View key={item.id} style={styles.messageCard}>                      {/* Header: Recipient Name, Role & Status */}                      <View style={styles.messageHeaderRow}>                        <View style={styles.messageRecipientCol}>                          <View style={styles.msgIconBox}>                            <User size={16} color="#2563EB" />                          </View>                          <View>                            <Text style={styles.msgRecipientName}>{item.recipientName}</Text>                            <Text style={styles.msgRecipientRole}>{item.recipientRole}</Text>                          </View>                        </View>                        <View style={styles.msgStatusCol}>                          <View style={styles.msgStatusBadge}>                            <Text style={styles.msgStatusText}>{item.status}</Text>                          </View>                          <Text style={styles.msgTimeText}>{item.timestamp}</Text>                        </View>                      </View>                      {/* Associated Property Snippet */}                      <View style={styles.msgPropertyRow}>                        <SafeImage                          source={{ uri: item.propertyImage }}                          style={styles.msgPropertyThumb} />                        <View style={{ flex: 1 }}>                          <Text style={styles.msgPropertyTitle} numberOfLines={1}>                            {item.propertyTitle}                          </Text>                          <Text style={styles.msgPropertyLoc} numberOfLines={1}>                            {item.propertyPrice} • {item.propertyLocation}                          </Text>                        </View>                      </View>                      {/* Message Preview Quote */}                      <View style={styles.msgBubble}>                        <Text style={styles.msgBubbleText} numberOfLines={2}>                          "{item.lastMessage}"                        </Text>                      </View>                      {/* Divider */}                      <View style={styles.cardDivider} />                      {/* Action Buttons: Call, WhatsApp, Agent Details */}                      <View style={styles.cardActionsInline}>                        <TouchableOpacity                          style={styles.callCustomerBtn}                          onPress={() => handleCall(item.recipientPhone, item.recipientName)}                          activeOpacity={0.8}>                          <Phone size={13} color="#0F172A" style={{ marginRight: 5 }} />                          <Text style={styles.callCustomerBtnText}>Call</Text>                        </TouchableOpacity>                        <TouchableOpacity                          style={styles.whatsappActionBtn}                          onPress={() => handleWhatsAppEnquiry(item)}                          activeOpacity={0.8}>                          <MessageCircle size={13} color="#16A34A" style={{ marginRight: 5 }} />                          <Text style={styles.whatsappActionBtnText}>WhatsApp</Text>                        </TouchableOpacity>                        <TouchableOpacity                          style={styles.msgAgentDetailBtn}                          onPress={() => setSelectedAgentForModal(findAgentByName(item.recipientName))}                          activeOpacity={0.8}>                          <User size={13} color="#2563EB" style={{ marginRight: 4 }} />                          <Text style={styles.msgAgentDetailBtnText}>Agent Info</Text>                        </TouchableOpacity>                      </View>                    </View>                  );                })}              </View>            )}          </View>        )}        {/* TAB 5: SITE VISITS (Matching Agent/Owner Reference Design) */}
         {activeTab === "visits" && (
           <View style={styles.tabContentArea}>
             <View style={styles.visitScreenHeader}>
@@ -1515,6 +1476,7 @@ export default function SavedScreen({ navigation, route }) {
         onLoginRequired={(resume) => requireAuth(resume)}
         isWishlisted={isWishlisted}
         onToggleWishlist={toggleWishlist}
+        onViewRecorded={handleViewRecorded}
       />
 
       {/* ================= SITE VISIT DETAILS MODAL ================= */}

@@ -153,8 +153,10 @@ const leadA = { id: "l1", propertyId: 7, propertyTitle: "Sun Flat", customerName
 const leadB = { id: "l2", propertyTitle: "sun flat", customerName: "B" };
 const leadC = { id: "l3", propertyId: 9, propertyTitle: "Other", customerName: "C" };
 check("L1 matches by id", selectPropertyLeads([leadA, leadC], { id: 7 }).length === 1);
-check("L2 matches by title (case-insensitive)",
-  selectPropertyLeads([leadB, leadC], { id: 7, title: "Sun Flat" }).length === 1);
+// Stable-id contract: a title alone never attaches a lead to a property
+// (two listings can share a title; removed-listing leads must not move).
+check("L2 never matches by title alone",
+  selectPropertyLeads([leadB, leadC], { id: 7, title: "Sun Flat" }).length === 0);
 check("L3 no matches returns [] (never fakes)",
   Array.isArray(selectPropertyLeads([leadC], { id: 7, title: "Sun Flat" }))
   && selectPropertyLeads([leadC], { id: 7, title: "Sun Flat" }).length === 0);

@@ -166,7 +166,7 @@ globalThis.fetch = realFetch;
 for (const [label, s] of [["Leads", ownerLeadsSrc], ["PropertyLeads", propertyLeadsSrc]]) {
   check(
     `${label} fetches genuine leads (no local mock source)`,
-    s.includes("fetchOwnerLeads") &&
+    (s.includes("fetchOwnerLeads") || s.includes("fetchAllOwnerLeads")) &&
       s.includes("toOwnerLead") &&
       !s.includes("INITIAL_LEADS") &&
       s.includes("serverLeads")
@@ -307,7 +307,7 @@ check(
   const profileSrc = src("src/screens/owner/OwnerProfileScreen.js");
   check(
     "S1 selector loads real properties (never context-only)",
-    ownerLeadsSrc.includes("fetchOwnerListings") &&
+    ownerLeadsSrc.includes("fetchAllOwnerListings") &&
       ownerLeadsSrc.includes("toOwnerProperty") &&
       ownerLeadsSrc.includes("serverProperties") &&
       ownerLeadsSrc.includes("loadProperties") &&

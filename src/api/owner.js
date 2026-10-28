@@ -585,11 +585,17 @@ export async function fetchOwnerListings(page = 1, pageSize = 20) {
  * only the first page) keeps the tab counts and the rendered cards
  * consistent for owners with more listings than one page.
  *
+ * Listings the owner has removed (backend `removed: true`, soft-deleted)
+ * are left out by default so management screens never show them as live;
+ * pass includeRemoved to keep them. Their leads stay reachable through
+ * GET /owner/leads (see groupOwnerLeads).
+ *
  * @param {number} pageSize - server page size (max 100)
  * @param {number} maxPages - safety bound on the number of requests
+ * @param {{includeRemoved?: boolean}} opts
  * @returns {Promise<{items: Array, total: number}>}
  */
-export async function fetchAllOwnerListings(pageSize = 100, maxPages = 20) {
+export async function fetchAllOwnerListings(pageSize = 100, maxPages = 20, { includeRemoved = false } = {}) {
   const items = [];
   let total = 0;
   for (let page = 1; page <= maxPages; page += 1) {
@@ -600,7 +606,10 @@ export async function fetchAllOwnerListings(pageSize = 100, maxPages = 20) {
     if (pageItems.length < pageSize) break;
     if (items.length >= total) break;
   }
-  return { items, total: Math.max(total, items.length) };
+  if (includeRemoved) return { items, total: Math.max(total, items.length) };
+  const kept = items.filter((row) => row?.removed !== true);
+  const removedCount = items.length - kept.length;
+  return { items: kept, total: Math.max(total - removedCount, kept.length) };
 }
 
 /**
@@ -614,6 +623,103 @@ export async function fetchOwnerLeads({ propertyListingId, status, page = 1, pag
   if (propertyListingId != null) params.property_listing_id = propertyListingId;
   if (status) params.status = status;
   return apiGetAuth("/owner/leads", params);
+}
+
+/**
+ * Fetch EVERY lead of the authenticated owner (all properties), following
+ * the server's pagination until its `total` is reached — same paging rules
+ * as fetchAllOwnerListings. The backend scopes rows to the bearer token's
+ * owner, so this never returns another account's leads.
+ * @param {number} pageSize - server page size (max 100)
+ * @param {number} maxPages - safety bound on the number of requests
+ * @returns {Promise<{items: Array, total: number}>}
+ */
+export async function fetchAllOwnerLeads(pageSize = 100, maxPages = 20) {
+  const items = [];
+  let total = 0;
+  for (let page = 1; page <= maxPages; page += 1) {
+    const resp = await fetchOwnerLeads({ page, pageSize });
+    const pageItems = Array.isArray(resp?.items) ? resp.items : [];
+    items.push(...pageItems);
+    total = typeof resp?.total === "number" ? resp.total : items.length;
+    if (pageItems.length < pageSize) break;
+    if (items.length >= total) break;
+  }
+  return { items, total: Math.max(total, items.length) };
+}
+
+/** Picker id/label for leads whose listing is not one of the owner's current properties. */
+export const UNAVAILABLE_LEADS_GROUP_ID = "__unavailable_leads__";
+export const UNAVAILABLE_PROPERTY_LABEL = "Property no longer available";
+
+/**
+ * Group genuine leads under the owner's current properties (P0 matching:
+ * by listing id when both sides have one, by title only for legacy rows
+ * without an id). Leads that match no current property — e.g. a listing
+ * the owner removed — are kept, never dropped, under one extra entry
+ * labelled UNAVAILABLE_PROPERTY_LABEL. That entry carries no price,
+ * locality, photo or status: nothing is invented for it.
+ * @returns {{entries: Array, leadsFor: (entry: object) => Array}}
+ */
+export function groupOwnerLeads(properties, leads) {
+  const props = Array.isArray(properties) ? properties : [];
+  const list = Array.isArray(leads) ? leads : [];
+  const byEntry = new Map();
+  const claimed = new Set();
+  for (const p of props) {
+    const matched = list.filter((l) => leadMatchesProperty(l, p));
+    matched.forEach((l) => claimed.add(l));
+    byEntry.set(p.id, matched);
+  }
+  const orphans = list.filter((l) => !claimed.has(l));
+  const entries = [...props];
+  if (orphans.length > 0) {
+    entries.push({ id: UNAVAILABLE_LEADS_GROUP_ID, title: UNAVAILABLE_PROPERTY_LABEL, unavailable: true });
+    byEntry.set(UNAVAILABLE_LEADS_GROUP_ID, orphans);
+  }
+  return { entries, leadsFor: (entry) => (entry ? byEntry.get(entry.id) || [] : []) };
+}
+
+/**
+ * Pick the entry the Leads screen opens on: the first property (server
+ * order, newest first) that has at least one genuine lead, then the
+ * "no longer available" group when only historical leads exist, otherwise
+ * the first property, otherwise null.
+ */
+export function pickDefaultLeadProperty(properties, leads) {
+  const { entries, leadsFor } = groupOwnerLeads(properties, leads);
+  if (entries.length === 0) return null;
+  return entries.find((e) => leadsFor(e).length > 0) || entries[0];
+}
+
+/** Display names for the backend property_type enum (property_listings.property_type). */
+const PROPERTY_TYPE_LABELS = {
+  APARTMENT: "Apartment",
+  VILLA: "Villa",
+  HOUSE: "Independent House",
+  COMMERCIAL: "Commercial",
+  PLOT: "Plot",
+  AGRICULTURAL_LAND: "Agricultural Land",
+};
+
+/**
+ * Label for a listing's real property_type, or null when it is missing or
+ * unknown — callers show a neutral fallback. Never inferred from a title.
+ */
+export function propertyTypeLabel(code) {
+  const key = typeof code === "string" ? code.trim().toUpperCase() : "";
+  return PROPERTY_TYPE_LABELS[key] || null;
+}
+
+/**
+ * Property label for one lead: its real stored title, marked when the
+ * owner has since removed the listing; the neutral fallback only when no
+ * title exists. Never invents a property name.
+ */
+export function leadPropertyLabel(lead) {
+  const title = lead && typeof lead.propertyTitle === "string" ? lead.propertyTitle.trim() : "";
+  if (!title) return UNAVAILABLE_PROPERTY_LABEL;
+  return lead.propertyUnavailable ? `${title} · No longer available` : title;
 }
 
 /**
@@ -637,6 +743,42 @@ export async function updateOwnerLeadStatus(leadId, { status, closingReason } = 
 /**
  * Paise integer -> short display string (mirrors backend price_display).
  */
+// "2030-12-30T11:00:00" style values with no zone designator.
+const NAIVE_ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * Backend timestamp -> Date, or null. Same UTC rule as visits.js
+ * parseApiDateTime: zone-less ISO values are UTC; "Z"/offset values are
+ * parsed unchanged (never shifted twice).
+ */
+function parseLeadTimestamp(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const s = String(value).trim();
+  const parsed = new Date(NAIVE_ISO_DATETIME.test(s) ? `${s}Z` : s);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** "30 Dec 2030, 04:30 PM" in the user's local time zone. */
+function formatLocalDateTime(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  let h = date.getHours();
+  const suffix = h >= 12 ? "PM" : "AM";
+  h = h % 12 === 0 ? 12 : h % 12;
+  return `${pad(date.getDate())} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}, ${pad(h)}:${pad(date.getMinutes())} ${suffix}`;
+}
+
+export const LEAD_DATE_UNAVAILABLE = "Date unavailable";
+
+/**
+ * When the buyer enquired, for display: the real creation time in local
+ * time, or "Date unavailable" for leads created before the backend stored
+ * one. Never inferred from ids, listings, or any other field.
+ */
+export function leadDateLabel(lead) {
+  return (lead && lead.timestamp) || LEAD_DATE_UNAVAILABLE;
+}
+
 function formatLeadPaise(paise, period) {
   const rupees = Math.floor((paise || 0) / 100);
   const main =
@@ -650,21 +792,29 @@ function formatLeadPaise(paise, period) {
 
 /**
  * Map a backend OwnerLeadOut to the shape owner lead screens render (P3).
- * Only genuine backend fields are forwarded. Buyer phone, name, avatar,
- * rating, budget, visit, and email have no backend source and stay
- * undefined — callers render honest unavailable states instead of samples.
+ * Only genuine backend fields are forwarded. The buyer's name is their own
+ * chosen display name when the backend returns one (it withholds the
+ * phone-number default), otherwise the stable "Buyer #id" label. Buyer
+ * phone, avatar, rating, budget, visit, and email have no backend source and
+ * stay undefined — callers render honest unavailable states instead of samples.
  * propertyId is the string form of the numeric listing id so the existing
  * selectPropertyLeads matching (same property id) keeps working; status is
  * lowercased to the UI vocabulary ("new"/"contacted"/"closed").
  */
 export function toOwnerLead(row) {
   const listing = row && row.listing ? row.listing : null;
+  const created = parseLeadTimestamp(row && row.created_at);
   return {
     id: row.id,
     propertyId: row.property_listing_id != null ? String(row.property_listing_id) : undefined,
     property_listing_id: row.property_listing_id,
     buyer_user_id: row.buyer_user_id,
-    customerName: row.buyer_user_id != null ? `Buyer #${row.buyer_user_id}` : "Buyer enquiry",
+    customerName:
+      typeof row.buyer_display_name === "string" && row.buyer_display_name.trim()
+        ? row.buyer_display_name.trim()
+        : row.buyer_user_id != null
+        ? `Buyer #${row.buyer_user_id}`
+        : "Buyer enquiry",
     phone: undefined,
     avatar: undefined,
     rating: undefined,
@@ -673,11 +823,17 @@ export function toOwnerLead(row) {
     status: String(row.status || "NEW").toLowerCase(),
     closedOutcome: row.closing_reason || undefined,
     propertyTitle: listing ? listing.title : "",
+    // Removed by the owner since the enquiry (or no listing snapshot at all).
+    propertyUnavailable: row.listing_removed === true || !listing,
     propertyPrice: listing ? formatLeadPaise(listing.price_paise, listing.price_period) : "",
+    // The listing's real type (owner lead snapshot); undefined when absent.
+    propertyType: listing && listing.property_type ? listing.property_type : undefined,
     propertyLocality: "",
     propertyImage: undefined,
     budget: undefined,
-    timestamp: undefined,
+    // Real enquiry creation time (backend created_at, UTC) or absent.
+    createdAt: created ? created.toISOString() : null,
+    timestamp: created ? formatLocalDateTime(created) : undefined,
     visitData: undefined,
     agency: undefined,
   };
@@ -796,13 +952,20 @@ export function freshAddParams() {
 export function selectPropertyLeads(leads, property) {
   const list = Array.isArray(leads) ? leads : [];
   if (!property) return list;
-  return list.filter(
-    (l) =>
-      l.propertyId === property.id ||
-      (l.propertyTitle &&
-        property.title &&
-        l.propertyTitle.toLowerCase() === property.title.toLowerCase())
-  );
+  return list.filter((l) => leadMatchesProperty(l, property));
+}
+
+/**
+ * One lead belongs to one property, decided by the stable listing id only.
+ * Titles are never used: two listings can share a title, and a lead from a
+ * removed listing must never be attached to a different live one. A lead
+ * without a listing id matches no property (groupOwnerLeads keeps it under
+ * the "no longer available" entry instead of dropping it).
+ */
+function leadMatchesProperty(lead, property) {
+  if (!lead || !property) return false;
+  if (lead.propertyId == null || property.id == null) return false;
+  return String(lead.propertyId) === String(property.id);
 }
 
 /**
@@ -1034,12 +1197,14 @@ export function toOwnerProperty(apiListing) {
     })(),
     verification_status: apiListing.verification_status,
     listing_status: apiListing.listing_status,
+    removed: apiListing.removed === true,
     images: [coverPhoto],
     coverPhoto,
     description: apiListing.description || "",
-    // Stats not available from listing API (no backend counter yet)
+    // Enquiry/visit totals come from the backend's owner-scoped counters
+    // (all statuses); views have no backend counter yet.
     views: 0,
-    enquiries: 0,
-    visits: 0,
+    enquiries: typeof apiListing.enquiry_count === "number" ? apiListing.enquiry_count : 0,
+    visits: typeof apiListing.visit_count === "number" ? apiListing.visit_count : 0,
   };
 }

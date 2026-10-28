@@ -36,7 +36,7 @@ import {
 import COLORS from "../../constants/colors";
 import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
-import { fetchOwnerLeads, toOwnerLead, updateOwnerLeadStatus, fetchOwnerListings, toOwnerProperty } from "../../api/owner";
+import { fetchAllOwnerLeads, toOwnerLead, updateOwnerLeadStatus, fetchAllOwnerListings, toOwnerProperty, pickDefaultLeadProperty, groupOwnerLeads, leadPropertyLabel, leadDateLabel } from "../../api/owner";
 import { fetchOwnerVisits, toUiVisit, toVisitPayload, updateOwnerVisit } from "../../api/visits";
 import { ownerVisitErrorMessage, proposeVisitForLead } from "../../utils/ownerVisits";
 import StatusBadge from "../../components/owner/StatusBadge";
@@ -84,7 +84,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
     const myReq = ++propsReqId.current;
     setPropsLoading(true);
     setPropsError(false);
-    fetchOwnerListings(1, 50).then(
+    fetchAllOwnerListings().then(
       (resp) => {
         if (propsReqId.current !== myReq) return;
         setServerProperties((resp.items || []).map(toOwnerProperty));
@@ -103,11 +103,9 @@ export default function OwnerLeadsScreen({ navigation, route }) {
     loadProperties();
   }, [loadProperties]);
 
-  // Selected property for property-scoped leads (null = none selected yet;
-  // the list below then correctly shows no property-scoped leads).
-  const [selectedPropertyId, setSelectedPropertyId] = useState(
-    properties[0]?.id || null
-  );
+  // Selected property for property-scoped leads (null = the owner has not
+  // picked one yet; the default below opens a property that has leads).
+  const [selectedPropertyId, setSelectedPropertyId] = useState(null);
   // Honor the entry-point tab (e.g. Profile Site Visits passes
   // "Visit Scheduled"); unknown values fall back to the normal default.
   const [activeFilter, setActiveFilter] = useState(
@@ -125,43 +123,57 @@ export default function OwnerLeadsScreen({ navigation, route }) {
   const [selectedLeadForVisit, setSelectedLeadForVisit] = useState(null);
   const [selectedLeadForClose, setSelectedLeadForClose] = useState(null);
 
-  // Active property object
-  const selectedProperty = useMemo(() => {
-    return (
-      properties.find((p) => p.id === selectedPropertyId) ||
-      properties[0] ||
-      null
-    );
-  }, [properties, selectedPropertyId]);
-
-  // Genuine backend leads for the selected property (P3). The backend
-  // validates the property filter against the caller's owned properties, so
-  // a foreign id can never leak another owner's rows here.
+  // Genuine backend leads for ALL of the owner's properties (P3). Loading
+  // every lead once (instead of only the selected property's) lets the
+  // picker show real per-property counts and lets the screen open on a
+  // property that actually has leads. The backend scopes rows to the
+  // signed-in owner, so another owner's leads can never appear here.
   const [serverLeads, setServerLeads] = useState(null);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadsError, setLeadsError] = useState(false);
   const leadReqId = useRef(0);
 
+  // All leads: genuine server rows first, then any local-only records not
+  // already present (post-P1 the local store starts empty).
+  const allLeads = useMemo(() => {
+    const server = Array.isArray(serverLeads) ? serverLeads : [];
+    const serverIds = new Set(server.map((l) => l.id));
+    const localOnly = (leads || []).filter((l) => !serverIds.has(l.id));
+    return [...server, ...localOnly];
+  }, [serverLeads, leads]);
+
+  // Picker entries: the owner's current properties plus, when needed, one
+  // "Property no longer available" entry holding historical leads whose
+  // listing is not among them (e.g. removed listings) — never dropped.
+  const leadGroups = useMemo(
+    () => groupOwnerLeads(properties, allLeads),
+    [properties, allLeads]
+  );
+
+  // Active entry: the owner's explicit pick, otherwise the newest property
+  // that has leads (so existing enquiries on an older listing are never
+  // hidden behind an empty newest listing), otherwise the newest one.
+  const selectedProperty = useMemo(() => {
+    return (
+      leadGroups.entries.find((p) => p.id === selectedPropertyId) ||
+      pickDefaultLeadProperty(properties, allLeads)
+    );
+  }, [leadGroups, selectedPropertyId, properties, allLeads]);
+
   const selectedListingId = useMemo(() => {
-    if (!selectedProperty) return null;
+    if (!selectedProperty || selectedProperty.unavailable) return null;
     if (typeof selectedProperty.listing_id === "number") return selectedProperty.listing_id;
     const n = parseInt(String(selectedProperty.id ?? ""), 10);
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [selectedProperty]);
 
   const loadLeads = useCallback(() => {
-    if (selectedListingId == null) {
-      setServerLeads([]);
-      setLeadsError(false);
-      setLeadsLoading(false);
-      return;
-    }
     // Request-ID guard (same convention as useListings): a late response
-    // from a previous property selection must never overwrite newer rows.
+    // from an earlier refresh must never overwrite newer rows.
     const myReq = ++leadReqId.current;
     setLeadsLoading(true);
     setLeadsError(false);
-    fetchOwnerLeads({ propertyListingId: selectedListingId, pageSize: 100 }).then(
+    fetchAllOwnerLeads().then(
       (resp) => {
         if (leadReqId.current !== myReq) return;
         setServerLeads((resp.items || []).map(toOwnerLead));
@@ -174,7 +186,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
         setLeadsLoading(false);
       }
     );
-  }, [selectedListingId]);
+  }, []);
 
   useEffect(() => {
     loadLeads();
@@ -261,27 +273,11 @@ export default function OwnerLeadsScreen({ navigation, route }) {
     [patchServerLead, updateLeadStatus, loadLeads]
   );
 
-  // All leads: genuine server rows first, then any local-only records not
-  // already present (post-P1 the local store starts empty).
-  const allLeads = useMemo(() => {
-    const server = Array.isArray(serverLeads) ? serverLeads : [];
-    const serverIds = new Set(server.map((l) => l.id));
-    const localOnly = (leads || []).filter((l) => !serverIds.has(l.id));
-    return [...server, ...localOnly];
-  }, [serverLeads, leads]);
-
   // All leads belonging to the selected property
-  const propertyLeads = useMemo(() => {
-    if (!selectedProperty) return [];
-    return allLeads.filter(
-      (l) =>
-        l.propertyId === selectedProperty.id ||
-        (l.propertyTitle &&
-          selectedProperty.title &&
-          l.propertyTitle.toLowerCase().trim() ===
-            selectedProperty.title.toLowerCase().trim())
-    );
-  }, [allLeads, selectedProperty]);
+  const propertyLeads = useMemo(
+    () => leadGroups.leadsFor(selectedProperty),
+    [leadGroups, selectedProperty]
+  );
 
   const activeVisitByBuyer = useMemo(() => {
     const map = new Map();
@@ -568,7 +564,10 @@ export default function OwnerLeadsScreen({ navigation, route }) {
         {selectedProperty ? (
           <TouchableOpacity
             style={styles.propertyCard}
-            onPress={() => setShowPropertyDetailModal(true)}
+            // The "no longer available" entry has no property record to open.
+            onPress={() => {
+              if (!selectedProperty.unavailable) setShowPropertyDetailModal(true);
+            }}
             activeOpacity={0.88}
           >
             <Image
@@ -599,7 +598,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
               <View style={styles.propertyLocRow}>
                 <MapPin size={12} color="#64748B" style={{ marginRight: 4 }} />
                 <Text style={styles.propertyLocText} numberOfLines={1}>
-                  {selectedProperty.locality || "Anna Nagar"}, {selectedProperty.city || "Chennai"}
+                  {[selectedProperty.locality, selectedProperty.city].filter(Boolean).join(", ")}
                 </Text>
               </View>
 
@@ -734,6 +733,10 @@ export default function OwnerLeadsScreen({ navigation, route }) {
                       <Text style={styles.leadCustomerName} numberOfLines={1}>
                         {lead.customerName || "Buyer enquiry"}
                       </Text>
+                      {/* Real enquiry time (UTC from the backend, shown locally) or an honest fallback. */}
+                      <Text style={styles.propertyLocText} numberOfLines={1}>
+                        {leadDateLabel(lead)}
+                      </Text>
 
                       {/* Rating row only when a genuine rating exists (never invented) */}
                       {lead.rating ? (
@@ -792,6 +795,13 @@ export default function OwnerLeadsScreen({ navigation, route }) {
                   <Text style={styles.leadMessageText} numberOfLines={3}>
                     {lead.message || "No message provided."}
                   </Text>
+
+                  {/* Which (no longer available) listing a historical lead was for. */}
+                  {selectedProperty?.unavailable ? (
+                    <Text style={styles.propertyLocText} numberOfLines={1}>
+                      {leadPropertyLabel(lead)}
+                    </Text>
+                  ) : null}
 
                   {/* Real backend visit state only. */}
                   {leadVisit ? (
@@ -855,16 +865,9 @@ export default function OwnerLeadsScreen({ navigation, route }) {
               style={styles.pickerList}
               showsVerticalScrollIndicator={false}
             >
-              {properties.map((prop) => {
-                const isSelected = prop.id === selectedPropertyId;
-                const propLeadsCount = allLeads.filter(
-                  (l) =>
-                    l.propertyId === prop.id ||
-                    (l.propertyTitle &&
-                      prop.title &&
-                      l.propertyTitle.toLowerCase().trim() ===
-                        prop.title.toLowerCase().trim())
-                ).length;
+              {leadGroups.entries.map((prop) => {
+                const isSelected = prop.id === selectedProperty?.id;
+                const propLeadsCount = leadGroups.leadsFor(prop).length;
 
                 return (
                   <TouchableOpacity
@@ -898,7 +901,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
                         {prop.title}
                       </Text>
                       <Text style={styles.pickerLoc} numberOfLines={1}>
-                        {prop.locality || "Anna Nagar"}, {prop.city || "Chennai"}
+                        {[prop.locality, prop.city].filter(Boolean).join(", ")}
                       </Text>
                       <View style={styles.pickerBottomRow}>
                         <Text style={styles.pickerPrice}>
@@ -994,7 +997,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
       )}
 
       {/* Property Details Modal */}
-      {selectedProperty && (
+      {selectedProperty && !selectedProperty.unavailable && (
         <OwnerPropertyDetailModal
           visible={showPropertyDetailModal}
           property={selectedProperty}

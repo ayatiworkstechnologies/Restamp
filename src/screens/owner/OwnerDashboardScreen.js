@@ -32,7 +32,7 @@ import {
 import COLORS from "../../constants/colors";
 import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
-import { fetchAllOwnerListings, toOwnerProperty, freshAddParams, sumOwnerMetrics, fetchOwnerLeads, toOwnerLead } from "../../api/owner";
+import { fetchAllOwnerListings, toOwnerProperty, freshAddParams, sumOwnerMetrics, fetchOwnerLeads, toOwnerLead, leadPropertyLabel } from "../../api/owner";
 import { fetchOwnerVisits } from "../../api/visits";
 import RestampLogo from "../../components/RestampLogo";
 import AppBrandHeader from "../../components/AppBrandHeader";
@@ -123,7 +123,11 @@ export default function OwnerDashboardScreen({ navigation }) {
 
   // Aggregate performance stats from genuine records only (P1): missing
   // counters count as zero, so a fresh account honestly shows 0s.
-  const { totalViews, totalEnquiries } = sumOwnerMetrics(properties);
+  // Total inquiries prefers the server's lead total (every genuine lead,
+  // including historical ones on removed listings); per-listing counters
+  // are the fallback until it loads.
+  const { totalViews, totalEnquiries: listingEnquiries } = sumOwnerMetrics(properties);
+  const totalEnquiries = serverLeadsTotal ?? listingEnquiries;
 
   // Latest leads & primary property (genuine server rows when loaded,
   // otherwise the honest-empty local store).
@@ -419,7 +423,7 @@ export default function OwnerDashboardScreen({ navigation }) {
                     <View style={styles.enquirySubRow}>
                       <View style={styles.enquiryChip}>
                         <Text style={styles.enquiryChipText} numberOfLines={1}>
-                          {lead.propertyTitle || "Property enquiry"}
+                          {leadPropertyLabel(lead)}
                         </Text>
                       </View>
                       <Text style={styles.enquiryDot}>•</Text>

@@ -8,6 +8,9 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -38,11 +41,48 @@ import { useOwner } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
 import ConfirmationModal from "../../components/owner/ConfirmationModal";
 import AppBrandHeader from "../../components/AppBrandHeader";
+import { initialOwnerNameDraft, validateOwnerName, OWNER_NAME_MAX_LENGTH } from "../../utils/ownerProfile";
 
 export default function OwnerProfileScreen({ navigation }) {
   const { ownerProfile, subscription } = useOwner();
-  const { logout } = useAuth();
+  const { logout, saveProfileName } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Name editor (PATCH /users/me via AuthContext.saveProfileName). The
+  // profile header re-renders from the server-confirmed user; on failure the
+  // editor stays open with an honest error — success is never shown early.
+  const [nameEditorOpen, setNameEditorOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameError, setNameError] = useState(null);
+  const [savingName, setSavingName] = useState(false);
+
+  const openNameEditor = () => {
+    setNameDraft(initialOwnerNameDraft(ownerProfile.name, ownerProfile.phone));
+    setNameError(null);
+    setNameEditorOpen(true);
+  };
+
+  const handleSaveName = async () => {
+    const result = validateOwnerName(nameDraft);
+    if (!result.ok) {
+      setNameError(result.error);
+      return;
+    }
+    setSavingName(true);
+    setNameError(null);
+    try {
+      await saveProfileName(result.firstName, result.lastName);
+      setNameEditorOpen(false);
+    } catch (e) {
+      setNameError(
+        e && (e.status === 401 || e.kind === "login")
+          ? "Your session has expired. Please log in again."
+          : "Couldn't save your name. Please check your connection and try again."
+      );
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   const handleSwitchToBuyer = () => {
     // Switch to Find Property: Returns user to Buyer mode. Do NOT log them out!
@@ -96,7 +136,7 @@ export default function OwnerProfileScreen({ navigation }) {
           <View style={styles.profileInfo}>
             <TouchableOpacity
               style={styles.nameRow}
-              onPress={() => Alert.alert("Edit Profile", "Owner profile editor")}
+              onPress={openNameEditor}
               activeOpacity={0.7}
             >
               <Text style={styles.ownerName}>{ownerProfile.name}</Text>
@@ -374,6 +414,58 @@ export default function OwnerProfileScreen({ navigation }) {
         <View style={{ height: 32 }} />
       </ScrollView>
 
+      {/* Name editor */}
+      <Modal
+        visible={nameEditorOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !savingName && setNameEditorOpen(false)}
+      >
+        <View style={styles.nameModalBackdrop}>
+          <View style={styles.nameModalCard}>
+            <Text style={styles.nameModalTitle}>Edit Name</Text>
+            <TextInput
+              style={styles.nameModalInput}
+              value={nameDraft}
+              onChangeText={(t) => {
+                setNameDraft(t);
+                if (nameError) setNameError(null);
+              }}
+              placeholder="Your name"
+              placeholderTextColor="#94A3B8"
+              maxLength={OWNER_NAME_MAX_LENGTH}
+              autoFocus
+              editable={!savingName}
+              returnKeyType="done"
+              onSubmitEditing={handleSaveName}
+            />
+            {nameError ? <Text style={styles.nameModalError}>{nameError}</Text> : null}
+            <View style={styles.nameModalActions}>
+              <TouchableOpacity
+                style={styles.nameModalCancel}
+                onPress={() => setNameEditorOpen(false)}
+                disabled={savingName}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.nameModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.nameModalSave}
+                onPress={handleSaveName}
+                disabled={savingName}
+                activeOpacity={0.8}
+              >
+                {savingName ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <Text style={styles.nameModalSaveText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Confirmation Modal before Logout as required */}
       <ConfirmationModal
         visible={showLogoutModal}
@@ -391,6 +483,68 @@ export default function OwnerProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  nameModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  nameModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 20,
+  },
+  nameModalTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    marginBottom: 14,
+  },
+  nameModalInput: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  nameModalError: {
+    marginTop: 8,
+    fontSize: 13,
+    color: COLORS.danger,
+  },
+  nameModalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 18,
+  },
+  nameModalCancel: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginRight: 8,
+  },
+  nameModalCancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+  nameModalSave: {
+    minWidth: 88,
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+  },
+  nameModalSaveText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.white,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: "#FFFFFF",
