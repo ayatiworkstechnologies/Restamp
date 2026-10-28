@@ -93,8 +93,8 @@ function formatShortRupees(rupees) {
 }
 
 export default function SearchScreen({ navigation, route }) {
-  // Initial parameters passed from HomeScreen or default to Anna Nagar
-  const initialLocality = route?.params?.locality !== undefined ? route.params.locality : "Anna Nagar";
+  // Initial parameters passed from HomeScreen; default empty — never auto-search Anna Nagar
+  const initialLocality = route?.params?.locality !== undefined ? route.params.locality : "";
   const initialDeal = route?.params?.dealType || "Buy";
   const initialType = route?.params?.propertyType || route?.params?.type || "All Types";
   const initialBhk = route?.params?.bhk || "All BHK";
