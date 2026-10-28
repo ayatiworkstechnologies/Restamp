@@ -12,6 +12,11 @@
  * No mock tokens. No native Google flow (web-only GIS button; see
  * components/GoogleSignInButton.web.js).
  */
+import { apiGetAuth, apiPatchAuth, apiPost } from "./client";
+
+export async function requestOtp(phone) {
+  return apiPost("/auth/otp/request", { phone });
+}
 
 export async function verifyOtp(phone, code) {
   return apiPost("/auth/otp/verify", { phone, code });

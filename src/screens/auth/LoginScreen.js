@@ -50,6 +50,16 @@ const ACTUAL_WIDTH = Math.min(SCREEN_WIDTH, CARD_MAX_WIDTH);
 const OTP_BOX_WIDTH = Math.min(46, Math.max(38, Math.floor((ACTUAL_WIDTH - 84) / 6)));
 const OTP_BOX_HEIGHT = Math.round(OTP_BOX_WIDTH * 1.18);
 
+// react-native-web's Alert.alert is a no-op, so OTP-flow errors would be
+// invisible in the browser; fall back to window.alert there.
+function showAlert(title, message) {
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.alert) {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
 const COUNTRY_CODES = [
   { flag: "🇮🇳", code: "+91", name: "India" },
   { flag: "🇺🇸", code: "+1", name: "United States" },
@@ -299,13 +309,9 @@ export default function LoginScreen({ navigation }) {
     } catch (e) {
       // OTP request failed — normally the production fail-closed 503
       // while SMS delivery is not connected, or offline/throttles/outages.
+      // Stay on the phone step: the OTP screen claims a code was sent.
       setDevCode(null);
-      Alert.alert("Sign-in Failed", otpErrorMessage(e));
-      setOtp(["", "", "", "", "", ""]);
-      setStep(2);
-      setTimer(30);
-      setCanResend(false);
-      setFocusedOtpIndex(0);
+      showAlert("Sign-in Failed", otpErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -316,7 +322,7 @@ export default function LoginScreen({ navigation }) {
     const code = codeToVerify || otp.join("");
     if (code.length < 6 || busy) {
       if (code.length < 6) {
-        Alert.alert(
+        showAlert(
           "Incomplete Code",
           "Please enter the 6-digit code we sent you."
         );
@@ -339,12 +345,12 @@ export default function LoginScreen({ navigation }) {
       }
     } catch (e) {
       if (e && (e.status === 401 || e.kind === "login")) {
-        Alert.alert(
+        showAlert(
           "Invalid Code",
           "That code is incorrect or expired. Please try again."
         );
       } else {
-        Alert.alert("Verification Failed", otpErrorMessage(e));
+        showAlert("Verification Failed", otpErrorMessage(e));
       }
     } finally {
       setBusy(false);
@@ -438,10 +444,10 @@ export default function LoginScreen({ navigation }) {
       setOtp(["", "", "", "", "", ""]);
       setFocusedOtpIndex(0);
       otpInputRefs.current[0]?.focus();
-      Alert.alert("Code Sent", "A new verification code has been sent.");
+      showAlert("Code Sent", "A new verification code has been sent.");
     } catch (e) {
       setDevCode(null);
-      Alert.alert("Resend Failed", otpErrorMessage(e));
+      showAlert("Resend Failed", otpErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -890,7 +896,7 @@ export default function LoginScreen({ navigation }) {
                   activeOpacity={0.7}
                 >
                   <Text style={styles.devCodeNoticeText}>
-                    Testing code:{" "}
+                    Code:{" "}
                     <Text style={styles.devCodeBold}>{devCode}</Text>
                     <Text style={styles.devCodeHint}> • Tap to auto-fill</Text>
                   </Text>
