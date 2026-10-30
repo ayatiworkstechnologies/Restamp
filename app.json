@@ -3,31 +3,28 @@
     "name": "Restamp",
     "slug": "Restamp",
     "version": "1.0.0",
-
     "orientation": "portrait",
     "platforms": [
       "ios",
       "android",
       "web"
     ],
-
     "android": {
       "package": "com.restamp.app"
     },
-
     "ios": {
       "bundleIdentifier": "com.restamp.app"
     },
-
     "plugins": [
       [
         "expo-image-picker",
         {
           "photosPermission": "Allow Restamp to access your photos so you can add real property pictures to your listing."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-status-bar"
     ],
-
     "web": {
       "bundler": "metro",
       "output": "single"

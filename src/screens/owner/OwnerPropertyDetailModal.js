@@ -10,6 +10,7 @@ import {
   Dimensions,
   FlatList,
   Animated,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -149,7 +150,7 @@ export default function OwnerPropertyDetailModal({
           bounces={true}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
+            { useNativeDriver: Platform.OS !== "web" }
           )}
           scrollEventThrottle={16}
         >

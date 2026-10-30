@@ -411,7 +411,7 @@ export default function MenuScreen({ navigation, route }) {
       <View style={[styles.header, { paddingTop: safeTopPadding }]}>
         <View style={styles.logoContainer}>
           <View style={styles.logoIconBg}>
-            <RestampLogo size={26} />
+            <RestampLogo size={28} />
           </View>
           <Text style={styles.logoText}>
             Res<Text style={styles.logoTextAccent}>tamp</Text>
@@ -938,20 +938,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoIconBg: {
-    width: 30,
-    height: 30,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 6,
   },
   logoText: {
-    fontSize: 21,
+    fontSize: 22,
     fontWeight: "700",
     color: "#0F172A",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   logoTextAccent: {
-    color: COLORS.primary,
+    color: "#0E2773",
+    fontWeight: "800",
   },
   hubBadge: {
     backgroundColor: "#EFF6FF",
