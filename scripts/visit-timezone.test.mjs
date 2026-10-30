@@ -16,20 +16,26 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const SRC = join(ROOT, "..", "src", "api");
+const SHARED_API = join(ROOT, "..", "src", "shared", "api");
+const BUYER_API = join(ROOT, "..", "src", "features", "buyer", "api");
 const tmp = mkdtempSync(join(tmpdir(), "visit-timezone-test-"));
-for (const f of ["client.js", "buyerModeCore.js"]) copyFileSync(join(SRC, f), join(tmp, f));
-for (const f of ["visits.js", "buyerMode.js"]) {
+copyFileSync(join(SHARED_API, "client.js"), join(tmp, "client.js"));
+copyFileSync(join(BUYER_API, "buyerModeCore.js"), join(tmp, "buyerModeCore.js"));
+const file_sources = {
+  "visits.js": join(SHARED_API, "visits.js"),
+  "buyerMode.js": join(BUYER_API, "buyerMode.js"),
+};
+for (const [f, p] of Object.entries(file_sources)) {
   writeFileSync(
     join(tmp, f),
-    readFileSync(join(SRC, f), "utf8")
-      .replace(/from "\.\/client"/g, 'from "./client.js"')
-      .replace(/from "\.\/buyerModeCore"/g, 'from "./buyerModeCore.js"')
-      .replace(/from "\.\/buyerMode"/g, 'from "./buyerMode.js"')
+    readFileSync(p, "utf8")
+      .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
+      .replace(/from "[^"]*buyerModeCore(\.js)?"/g, 'from "./buyerModeCore.js"')
+      .replace(/from "[^"]*buyerMode(\.js)?"/g, 'from "./buyerMode.js"')
   );
 }
 const { parseApiDateTime, toUiVisit, toVisitPayload } = await import(join(tmp, "visits.js"));
-const visitsSrc = readFileSync(join(SRC, "visits.js"), "utf8");
+const visitsSrc = readFileSync(join(SHARED_API, "visits.js"), "utf8");
 
 let failures = 0;
 function check(name, cond, extra) {

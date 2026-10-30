@@ -21,17 +21,21 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "api");
+const ROOT = dirname(fileURLToPath(import.meta.url));
+const SHARED_API = join(ROOT, "..", "src", "shared", "api");
+const BUYER_API = join(ROOT, "..", "src", "features", "buyer", "api");
+const OWNER_API = join(ROOT, "..", "src", "features", "owner", "api");
 const tmp = mkdtempSync(join(tmpdir(), "feed-honesty-test-"));
-for (const f of ["owner.js", "listings.js", "client.js", "mappers.js"]) {
-  copyFileSync(join(SRC, f), join(tmp, f));
-}
+copyFileSync(join(SHARED_API, "client.js"), join(tmp, "client.js"));
+copyFileSync(join(SHARED_API, "mappers.js"), join(tmp, "mappers.js"));
+copyFileSync(join(BUYER_API, "listings.js"), join(tmp, "listings.js"));
+copyFileSync(join(OWNER_API, "owner.js"), join(tmp, "owner.js"));
 for (const f of ["owner.js", "listings.js"]) {
   writeFileSync(
     join(tmp, f),
     readFileSync(join(tmp, f), "utf8")
-      .replace('from "./client"', 'from "./client.js"')
-      .replace('from "./mappers"', 'from "./mappers.js"')
+      .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
+      .replace(/from "[^"]*mappers(\.js)?"/g, 'from "./mappers.js"')
   );
 }
 const { fetchListingDetail, fetchSimilar } = await import(join(tmp, "listings.js"));
@@ -189,7 +193,7 @@ check("O3 genuine records derive real totals (no fabrication)",
 // and cannot run in this harness, so the source text is asserted instead).
 {
   const root = dirname(fileURLToPath(import.meta.url));
-  const ctxSrc = readFileSync(join(root, "..", "src", "context", "OwnerContext.js"), "utf8");
+  const ctxSrc = readFileSync(join(root, "..", "src", "features", "owner", "context", "OwnerContext.js"), "utf8");
   check("O4 initial collections are empty",
     ctxSrc.includes("const INITIAL_PROPERTIES = [];")
     && ctxSrc.includes("const INITIAL_LEADS = [];"));

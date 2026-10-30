@@ -17,7 +17,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const SRC = join(ROOT, "..", "src", "api");
+const SRC = join(ROOT, "..", "src", "shared", "api");
 const tmp = mkdtempSync(join(tmpdir(), "identity-timeout-test-"));
 copyFileSync(join(SRC, "client.js"), join(tmp, "client.js"));
 const client = await import(join(tmp, "client.js"));
@@ -25,10 +25,10 @@ const client = await import(join(tmp, "client.js"));
 function src(rel) {
   return readFileSync(join(ROOT, "..", rel), "utf8");
 }
-const ownerCtxSrc = src("src/context/OwnerContext.js");
-const ownerProfileSrc = src("src/screens/owner/OwnerProfileScreen.js");
-const ownerDashboardSrc = src("src/screens/owner/OwnerDashboardScreen.js");
-const ownerHeaderSrc = src("src/components/owner/OwnerHeader.js");
+const ownerCtxSrc = src("src/features/owner/context/OwnerContext.js");
+const ownerProfileSrc = src("src/features/owner/screens/OwnerProfileScreen.js");
+const ownerDashboardSrc = src("src/features/owner/screens/OwnerDashboardScreen.js");
+const ownerHeaderSrc = src("src/features/owner/components/OwnerHeader.js");
 
 let failures = 0;
 function check(name, cond, extra) {

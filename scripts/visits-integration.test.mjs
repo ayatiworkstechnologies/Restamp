@@ -16,19 +16,25 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const SRC = join(ROOT, "..", "src", "api");
+const SHARED_API = join(ROOT, "..", "src", "shared", "api");
+const BUYER_API = join(ROOT, "..", "src", "features", "buyer", "api");
+const OWNER_API = join(ROOT, "..", "src", "features", "owner", "api");
 const tmp = mkdtempSync(join(tmpdir(), "visits-integration-test-"));
-for (const f of ["client.js", "mappers.js", "contact.js", "enquiries.js", "visits.js", "owner.js", "buyerMode.js", "buyerModeCore.js"]) {
-  copyFileSync(join(SRC, f), join(tmp, f));
+for (const f of ["client.js", "mappers.js", "contact.js", "visits.js"]) {
+  copyFileSync(join(SHARED_API, f), join(tmp, f));
 }
+for (const f of ["enquiries.js", "buyerMode.js", "buyerModeCore.js"]) {
+  copyFileSync(join(BUYER_API, f), join(tmp, f));
+}
+copyFileSync(join(OWNER_API, "owner.js"), join(tmp, "owner.js"));
 for (const f of ["contact.js", "enquiries.js", "visits.js", "owner.js", "mappers.js", "buyerMode.js"]) {
   writeFileSync(
     join(tmp, f),
     readFileSync(join(tmp, f), "utf8")
-      .replaceAll('from "./client"', 'from "./client.js"')
-      .replaceAll('from "./mappers"', 'from "./mappers.js"')
-      .replaceAll('from "./buyerMode"', 'from "./buyerMode.js"')
-      .replaceAll('from "./buyerModeCore"', 'from "./buyerModeCore.js"')
+      .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
+      .replace(/from "[^"]*mappers(\.js)?"/g, 'from "./mappers.js"')
+      .replace(/from "[^"]*buyerModeCore(\.js)?"/g, 'from "./buyerModeCore.js"')
+      .replace(/from "[^"]*buyerMode(\.js)?"/g, 'from "./buyerMode.js"')
   );
 }
 const visits = await import(join(tmp, "visits.js"));
@@ -173,7 +179,7 @@ function futureParts(daysAhead = 7) {
 
 // --- 4. Live-flow source guards ------------------------------------------
 {
-  const detailSrc = src("src/components/PropertyDetailModal.js");
+  const detailSrc = src("src/features/buyer/components/PropertyDetailModal.js");
   check(
     "V14 detail modal schedules only via backend (no mock ids/phones)",
     detailSrc.includes("createBuyerVisit") &&
@@ -181,7 +187,7 @@ function futureParts(daysAhead = 7) {
       !detailSrc.includes("visit-${Date.now()}") &&
       !detailSrc.includes('agentPhone: property.agent?.phone || "+91')
   );
-  const savedSrc = src("src/screens/buyer/SavedScreen.js");
+  const savedSrc = src("src/features/buyer/screens/SavedScreen.js");
   check(
     "V15 saved visits are server-backed, buyer-complete removed",
     savedSrc.includes("fetchBuyerVisits") &&
@@ -189,8 +195,8 @@ function futureParts(daysAhead = 7) {
       !savedSrc.includes("handleMarkVisitCompleted") &&
       !savedSrc.includes('|| "+919790988123"')
   );
-  const leadSrc = src("src/screens/owner/OwnerLeadDetailScreen.js");
-  const ownerVisitFlowSrc = src("src/utils/ownerVisits.js");
+  const leadSrc = src("src/features/owner/screens/OwnerLeadDetailScreen.js");
+  const ownerVisitFlowSrc = src("src/features/owner/utils/ownerVisits.js");
   check(
     "V16 owner proposes visits via backend (relationship-gated)",
     leadSrc.includes("proposeVisitForLead") &&
@@ -198,7 +204,7 @@ function futureParts(daysAhead = 7) {
       ownerVisitFlowSrc.includes("buyer_user_id") &&
       !leadSrc.includes("scheduleVisit(")
   );
-  const propsSrc = src("src/screens/owner/OwnerPropertiesScreen.js");
+  const propsSrc = src("src/features/owner/screens/OwnerPropertiesScreen.js");
   check(
     "V17 owner lifecycle wired (verify/publish/archive)",
     propsSrc.includes("verifyListing") &&
@@ -206,7 +212,7 @@ function futureParts(daysAhead = 7) {
       propsSrc.includes("archiveListing") &&
       propsSrc.includes("updateListingStatus")
   );
-  const modalSrc = src("src/components/PropertyDetailModal.js");
+  const modalSrc = src("src/features/buyer/components/PropertyDetailModal.js");
   check(
     "V18 detail shows real owner name, secure call flow (guest login-resume, no auto-dial)",
     modalSrc.includes("property.ownerName") &&
@@ -215,7 +221,7 @@ function futureParts(daysAhead = 7) {
       modalSrc.includes("tel:${phone}") &&
       !modalSrc.includes("Contact Number Unavailable\",\n                    \"Owner contact details are shared only")
   );
-  const leadDetailSrc = src("src/screens/owner/OwnerLeadDetailScreen.js");
+  const leadDetailSrc = src("src/features/owner/screens/OwnerLeadDetailScreen.js");
   check(
     "V19 owner close offers real outcomes (sold/rented/leased/archive)",
     propsSrc.includes('"SOLD"') &&
@@ -224,15 +230,15 @@ function futureParts(daysAhead = 7) {
       leadDetailSrc.includes("proposeVisitForLead") &&
       !leadDetailSrc.includes("scheduleVisit(")
   );
-  const mapperSrc = src("src/api/mappers.js");
+  const mapperSrc = src("src/shared/api/mappers.js");
   check(
     "V20 mapper forwards sanitized owner_name, never invents one",
     mapperSrc.includes("card.owner_name") && mapperSrc.includes("ownerName")
   );
 
-  const ownerVisitsSrc = src("src/screens/owner/OwnerVisitsScreen.js");
-  const ownerContextSrc = src("src/context/OwnerContext.js");
-  const ownerNavSrc = src("src/navigation/OwnerNavigator.js");
+  const ownerVisitsSrc = src("src/features/owner/screens/OwnerVisitsScreen.js");
+  const ownerContextSrc = src("src/features/owner/context/OwnerContext.js");
+  const ownerNavSrc = src("src/features/owner/navigation/OwnerNavigator.js");
   check(
     "V21 owner visits screen is server-backed and reachable",
     ownerVisitsSrc.includes("fetchOwnerVisits") &&

@@ -18,16 +18,17 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const SRC = join(ROOT, "..", "src", "api");
+const SHARED_API = join(ROOT, "..", "src", "shared", "api");
+const OWNER_API = join(ROOT, "..", "src", "features", "owner", "api");
 const tmp = mkdtempSync(join(tmpdir(), "owner-leads-display-test-"));
-for (const f of ["owner.js", "client.js", "mappers.js"]) {
-  copyFileSync(join(SRC, f), join(tmp, f));
-}
+copyFileSync(join(OWNER_API, "owner.js"), join(tmp, "owner.js"));
+copyFileSync(join(SHARED_API, "client.js"), join(tmp, "client.js"));
+copyFileSync(join(SHARED_API, "mappers.js"), join(tmp, "mappers.js"));
 writeFileSync(
   join(tmp, "owner.js"),
   readFileSync(join(tmp, "owner.js"), "utf8")
-    .replace('from "./client"', 'from "./client.js"')
-    .replace('from "./mappers"', 'from "./mappers.js"')
+    .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
+    .replace(/from "[^"]*mappers(\.js)?"/g, 'from "./mappers.js"')
 );
 const {
   fetchAllOwnerLeads,
@@ -43,12 +44,12 @@ const {
   toOwnerProperty,
 } = await import(join(tmp, "owner.js"));
 const leadsScreenSrc = readFileSync(
-  join(ROOT, "..", "src", "screens", "owner", "OwnerLeadsScreen.js"),
+  join(ROOT, "..", "src", "features", "owner", "screens", "OwnerLeadsScreen.js"),
   "utf8"
 );
-const contextSrc = readFileSync(join(ROOT, "..", "src", "context", "OwnerContext.js"), "utf8");
-const dashboardSrc = readFileSync(join(ROOT, "..", "src", "screens", "owner", "OwnerDashboardScreen.js"), "utf8");
-const leadDetailSrc = readFileSync(join(ROOT, "..", "src", "screens", "owner", "OwnerLeadDetailScreen.js"), "utf8");
+const contextSrc = readFileSync(join(ROOT, "..", "src", "features", "owner", "context", "OwnerContext.js"), "utf8");
+const dashboardSrc = readFileSync(join(ROOT, "..", "src", "features", "owner", "screens", "OwnerDashboardScreen.js"), "utf8");
+const leadDetailSrc = readFileSync(join(ROOT, "..", "src", "features", "owner", "screens", "OwnerLeadDetailScreen.js"), "utf8");
 
 let failures = 0;
 function check(name, cond, extra) {

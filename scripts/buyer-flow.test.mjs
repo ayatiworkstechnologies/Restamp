@@ -25,18 +25,22 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const SRC = join(ROOT, "..", "src", "api");
+const SHARED_API = join(ROOT, "..", "src", "shared", "api");
+const BUYER_API = join(ROOT, "..", "src", "features", "buyer", "api");
 const tmp = mkdtempSync(join(tmpdir(), "buyer-flow-test-"));
-for (const f of ["client.js", "mappers.js", "contact.js", "enquiries.js", "buyerMode.js", "buyerModeCore.js"]) {
-  copyFileSync(join(SRC, f), join(tmp, f));
+for (const f of ["client.js", "mappers.js", "contact.js"]) {
+  copyFileSync(join(SHARED_API, f), join(tmp, f));
+}
+for (const f of ["enquiries.js", "buyerMode.js", "buyerModeCore.js"]) {
+  copyFileSync(join(BUYER_API, f), join(tmp, f));
 }
 for (const f of ["contact.js", "enquiries.js", "buyerMode.js"]) {
   writeFileSync(
     join(tmp, f),
     readFileSync(join(tmp, f), "utf8")
-      .replaceAll('from "./client"', 'from "./client.js"')
-      .replaceAll('from "./buyerMode"', 'from "./buyerMode.js"')
-      .replaceAll('from "./buyerModeCore"', 'from "./buyerModeCore.js"')
+      .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
+      .replace(/from "[^"]*buyerMode(\.js)?"/g, 'from "./buyerMode.js"')
+      .replace(/from "[^"]*buyerModeCore(\.js)?"/g, 'from "./buyerModeCore.js"')
   );
 }
 const { buildListingParams, parseSmartQuery } = await import(join(tmp, "mappers.js"));
@@ -46,11 +50,11 @@ const { createEnquiry } = await import(join(tmp, "enquiries.js"));
 function src(rel) {
   return readFileSync(join(ROOT, "..", rel), "utf8");
 }
-const homeSrc = src("src/screens/buyer/HomeScreen.js");
-const searchSrc = src("src/screens/buyer/SearchScreen.js");
-const detailSrc = src("src/components/PropertyDetailModal.js");
-const exploreSrc = src("src/screens/buyer/ExploreScreen.js");
-const modalSrc = src("src/components/SearchPropertyModal.js");
+const homeSrc = src("src/features/buyer/screens/HomeScreen.js");
+const searchSrc = src("src/features/buyer/screens/SearchScreen.js");
+const detailSrc = src("src/features/buyer/components/PropertyDetailModal.js");
+const exploreSrc = src("src/features/buyer/screens/ExploreScreen.js");
+const modalSrc = src("src/features/buyer/components/SearchPropertyModal.js");
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -136,7 +140,7 @@ check(
     homeSrc.includes("allowedTypes") &&
     homeSrc.includes('{ id: "all", name: "All" }')
 );
-const appNavSrc = src("src/navigation/AppNavigator.js");
+const appNavSrc = src("src/shared/navigation/AppNavigator.js");
 check(
   "H3 bottom Search tab still opens Search normally",
   appNavSrc.includes('emit("OPEN_SEARCH_FILTER_MODAL"') &&

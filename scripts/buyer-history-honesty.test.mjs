@@ -20,19 +20,23 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const SRC = join(ROOT, "..", "src", "api");
+const SHARED_API = join(ROOT, "..", "src", "shared", "api");
+const BUYER_API = join(ROOT, "..", "src", "features", "buyer", "api");
 const tmp = mkdtempSync(join(tmpdir(), "buyer-history-test-"));
-for (const f of ["client.js", "mappers.js", "saved.js", "enquiries.js", "buyerMode.js", "buyerModeCore.js"]) {
-  copyFileSync(join(SRC, f), join(tmp, f));
+for (const f of ["client.js", "mappers.js"]) {
+  copyFileSync(join(SHARED_API, f), join(tmp, f));
+}
+for (const f of ["saved.js", "enquiries.js", "buyerMode.js", "buyerModeCore.js"]) {
+  copyFileSync(join(BUYER_API, f), join(tmp, f));
 }
 for (const f of ["saved.js", "enquiries.js", "buyerMode.js"]) {
   writeFileSync(
     join(tmp, f),
     readFileSync(join(tmp, f), "utf8")
-      .replaceAll('from "./client"', 'from "./client.js"')
-      .replaceAll('from "./mappers"', 'from "./mappers.js"')
-      .replaceAll('from "./buyerMode"', 'from "./buyerMode.js"')
-      .replaceAll('from "./buyerModeCore"', 'from "./buyerModeCore.js"')
+      .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
+      .replace(/from "[^"]*mappers(\.js)?"/g, 'from "./mappers.js"')
+      .replace(/from "[^"]*buyerMode(\.js)?"/g, 'from "./buyerMode.js"')
+      .replace(/from "[^"]*buyerModeCore(\.js)?"/g, 'from "./buyerModeCore.js"')
   );
 }
 const savedApi = await import(join(tmp, "saved.js"));
@@ -41,12 +45,12 @@ const enquiriesApi = await import(join(tmp, "enquiries.js"));
 function src(rel) {
   return readFileSync(join(ROOT, "..", rel), "utf8");
 }
-const wishlistSrc = src("src/context/WishlistContext.js");
-const savedScreenSrc = src("src/screens/buyer/SavedScreen.js");
-const enquiriesScreenSrc = src("src/screens/buyer/EnquiriesScreen.js");
-const messageScreenSrc = src("src/screens/buyer/MessageScreen.js");
-const accountScreenSrc = src("src/screens/buyer/AccountScreen.js");
-const appNavSrc = src("src/navigation/AppNavigator.js");
+const wishlistSrc = src("src/features/buyer/context/WishlistContext.js");
+const savedScreenSrc = src("src/features/buyer/screens/SavedScreen.js");
+const enquiriesScreenSrc = src("src/features/buyer/screens/EnquiriesScreen.js");
+const messageScreenSrc = src("src/features/buyer/screens/MessageScreen.js");
+const accountScreenSrc = src("src/features/buyer/screens/AccountScreen.js");
+const appNavSrc = src("src/shared/navigation/AppNavigator.js");
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -276,11 +280,11 @@ check(
 
 // --- 8. P0/P1/API-URL protections intact ---
 {
-  const useListingsSrc = readFileSync(join(ROOT, "..", "src", "api", "useListings.js"), "utf8");
-  const listingsSrc = readFileSync(join(ROOT, "..", "src", "api", "listings.js"), "utf8");
-  const ownerCtxSrc = readFileSync(join(ROOT, "..", "src", "context", "OwnerContext.js"), "utf8");
-  const ownerApiSrc = readFileSync(join(ROOT, "..", "src", "api", "owner.js"), "utf8");
-  const clientSrc = readFileSync(join(ROOT, "..", "src", "api", "client.js"), "utf8");
+  const useListingsSrc = readFileSync(join(ROOT, "..", "src", "features", "buyer", "api", "useListings.js"), "utf8");
+  const listingsSrc = readFileSync(join(ROOT, "..", "src", "features", "buyer", "api", "listings.js"), "utf8");
+  const ownerCtxSrc = readFileSync(join(ROOT, "..", "src", "features", "owner", "context", "OwnerContext.js"), "utf8");
+  const ownerApiSrc = readFileSync(join(ROOT, "..", "src", "features", "owner", "api", "owner.js"), "utf8");
+  const clientSrc = readFileSync(join(ROOT, "..", "src", "shared", "api", "client.js"), "utf8");
   check(
     "P1 P0 feed honesty intact (no mock substitution)",
     !useListingsSrc.includes("filterMockProperties") &&

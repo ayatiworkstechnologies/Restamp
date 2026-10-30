@@ -10,7 +10,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const session = await import(join(ROOT, "..", "src", "auth", "session.js"));
+const session = await import(join(ROOT, "..", "src", "features", "auth", "session.js"));
 
 function src(rel) {
   return readFileSync(join(ROOT, "..", rel), "utf8");
@@ -102,7 +102,7 @@ function check(name, cond, extra) {
 
 // ---------- Logout cleanup (AuthContext) ----------------------------------
 {
-  const authSrc = src("src/context/AuthContext.js");
+  const authSrc = src("src/features/auth/context/AuthContext.js");
   check(
     "L1 logout clears the bearer token",
     authSrc.includes("setAuthToken(null)")
@@ -118,7 +118,7 @@ function check(name, cond, extra) {
   );
   check(
     "L5 logout resets navigation to the auth entry route",
-    authSrc.includes("resetToLogin()") && authSrc.includes('from "../navigation/navRef"')
+    authSrc.includes("resetToLogin()") && authSrc.includes('shared/navigation/navRef')
   );
   check(
     "L6 the session version is exposed to account-scoped stores",
@@ -132,7 +132,7 @@ function check(name, cond, extra) {
 
 // ---------- Account-scoped stores reset on account change ------------------
 {
-  const ownerSrc = src("src/context/OwnerContext.js");
+  const ownerSrc = src("src/features/owner/context/OwnerContext.js");
   check(
     "C1 owner store resets when the account changes",
     ownerSrc.includes("shouldResetAccountScope(scopedOwnerIdRef.current, authUserId)") &&
@@ -143,7 +143,7 @@ function check(name, cond, extra) {
     "C2 locally created rows are stamped with the owning account",
     ownerSrc.includes("ownerUserId: newProp?.ownerUserId ?? authUserId")
   );
-  const wishSrc = src("src/context/WishlistContext.js");
+  const wishSrc = src("src/features/buyer/context/WishlistContext.js");
   check(
     "C3 saved properties are reset when the account changes",
     wishSrc.includes("shouldResetAccountScope(scopedAccountIdRef.current, currentId)") &&
@@ -153,7 +153,7 @@ function check(name, cond, extra) {
 
 // ---------- Owner screens merge only the signed-in account's rows ---------
 {
-  const propsSrc = src("src/screens/owner/OwnerPropertiesScreen.js");
+  const propsSrc = src("src/features/owner/screens/OwnerPropertiesScreen.js");
   check(
     "M1 My Properties merges only owner-scoped local rows",
     propsSrc.includes("selectOwnerScopedProperties(localProperties, ownerUserId)") &&
@@ -171,22 +171,22 @@ function check(name, cond, extra) {
     "M4 an expired session leaves the owner list and returns to Login",
     propsSrc.includes("resetToLogin()")
   );
-  const dashSrc = src("src/screens/owner/OwnerDashboardScreen.js");
+  const dashSrc = src("src/features/owner/screens/OwnerDashboardScreen.js");
   check(
     "M5 the owner dashboard merges only owner-scoped local rows",
     dashSrc.includes("selectOwnerScopedProperties(localProperties, ownerUserId)")
   );
-  const leadsSrc = src("src/screens/owner/OwnerLeadsScreen.js");
+  const leadsSrc = src("src/features/owner/screens/OwnerLeadsScreen.js");
   check(
     "M6 the owner leads screen merges only owner-scoped local rows",
     leadsSrc.includes("selectOwnerScopedProperties(localProperties, ownerUserId)")
   );
-  const leadDetailSrc = src("src/screens/owner/OwnerLeadDetailScreen.js");
+  const leadDetailSrc = src("src/features/owner/screens/OwnerLeadDetailScreen.js");
   check(
     "M7 the owner lead detail only matches the signed-in owner's rows",
     leadDetailSrc.includes("selectOwnerScopedProperties(properties, authUser?.id ?? null)")
   );
-  const propLeadsSrc = src("src/screens/owner/OwnerPropertyLeadsScreen.js");
+  const propLeadsSrc = src("src/features/owner/screens/OwnerPropertyLeadsScreen.js");
   check(
     "M8 the owner property-leads screen only matches the signed-in owner's rows",
     propLeadsSrc.includes("selectOwnerScopedProperties(properties, authUser?.id ?? null)")
@@ -195,7 +195,7 @@ function check(name, cond, extra) {
 
 // ---------- Logged-out navigation + Login visibility ----------------------
 {
-  const navSrc = src("src/navigation/AppNavigator.js");
+  const navSrc = src("src/shared/navigation/AppNavigator.js");
   check(
     "N1 the navigator waits for the session instead of flashing a screen",
     navSrc.includes("if (isLoading)") && navSrc.includes("backgroundColor: \"#FFFFFF\"")
@@ -215,23 +215,23 @@ function check(name, cond, extra) {
       navSrc.includes("GuardedNotifications") &&
       navSrc.includes("GuardedEnquiries")
   );
-  const guardSrc = src("src/navigation/RequireAuth.js");
+  const guardSrc = src("src/shared/navigation/RequireAuth.js");
   check(
     "N5 the guard renders nothing while logged out and resets the stack",
     guardSrc.includes("if (isLoading || !isAuthenticated) return null;") &&
       guardSrc.includes("resetToLogin()")
   );
-  const navRefSrc = src("src/navigation/navRef.js");
+  const navRefSrc = src("src/shared/navigation/navRef.js");
   check(
     "N6 resetToLogin clears the whole stack",
     navRefSrc.includes("navigationRef.reset({ index: 0, routes: [{ name: AUTH_ENTRY_ROUTE }] })")
   );
-  const ownerProfileSrc = src("src/screens/owner/OwnerProfileScreen.js");
+  const ownerProfileSrc = src("src/features/owner/screens/OwnerProfileScreen.js");
   check(
     "N7 owner sign-out lands on the auth entry route",
     ownerProfileSrc.includes('routes: [{ name: "Login" }]')
   );
-  const profileSrc = src("src/screens/buyer/ProfileScreen.js");
+  const profileSrc = src("src/features/buyer/screens/ProfileScreen.js");
   const logoutHandler = profileSrc.slice(
     profileSrc.indexOf("const handleLogout"),
     profileSrc.indexOf("const handleLogout") + 700
@@ -250,7 +250,7 @@ function check(name, cond, extra) {
     "N10 no mock identity is shown for the signed-out visitor",
     !profileSrc.includes("Alex Smith") && !profileSrc.includes("alex.smith@restamp.in")
   );
-  const homeSrc = src("src/screens/buyer/HomeScreen.js");
+  const homeSrc = src("src/features/buyer/screens/HomeScreen.js");
   check(
     "N11 the Home Login action stays logged-out only",
     homeSrc.includes("!auth.isLoading && !auth.isAuthenticated")
@@ -259,8 +259,8 @@ function check(name, cond, extra) {
 
 // ---------- Verification lifecycle copy (no false promises) ---------------
 {
-  const cardSrc = src("src/components/owner/OwnerPropertyCard.js");
-  const successSrc = src("src/screens/owner/OwnerPublishSuccessScreen.js");
+  const cardSrc = src("src/features/owner/components/OwnerPropertyCard.js");
+  const successSrc = src("src/features/owner/screens/OwnerPublishSuccessScreen.js");
   check(
     "V1 the pending card names the real next step",
     cardSrc.includes("Verify & Publish") && !cardSrc.includes("RESTAMP team validates")
@@ -271,7 +271,7 @@ function check(name, cond, extra) {
       !successSrc.includes("verification team") &&
       successSrc.includes("Pending Verification")
   );
-  const ownerApiSrc = src("src/api/owner.js");
+  const ownerApiSrc = src("src/features/owner/api/owner.js");
   check(
     "V3 the explicit lifecycle transitions stay available",
     ownerApiSrc.includes("export async function verifyListing") &&

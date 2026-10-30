@@ -12,7 +12,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const AUTH = join(ROOT, "..", "src", "auth");
+const AUTH = join(ROOT, "..", "src", "features", "auth");
 const tmp = mkdtempSync(join(tmpdir(), "auth-guard-test-"));
 for (const f of ["phone.js", "continuation.js", "requireAuth.js"]) {
   copyFileSync(join(AUTH, f), join(tmp, f));
@@ -114,17 +114,17 @@ check(
 }
 
 // ---------- Wiring: source assertions ----------
-const loginSrc = src("src/screens/auth/LoginScreen.js");
+const loginSrc = src("src/features/auth/screens/LoginScreen.js");
 check("W1 login sanitizes input + caps length", loginSrc.includes("sanitizePhoneInput") && loginSrc.includes("handlePhoneChange"));
 check("W2 login gates submit on exact validity", loginSrc.includes("isPhoneValidForCountry(phoneNumber"));
 check("W3 login shows inline message", loginSrc.includes("phoneValidationMessage") && loginSrc.includes("phoneErrorText"));
 check("W4 login resumes or enters on every success path", (loginSrc.match(/enterAfterLogin\(\)/g) || []).length >= 3);
 check("W5 skip + unmount abandon drop the action", loginSrc.includes("clearPendingAction") && loginSrc.includes("loginSucceededRef"));
-const wishSrc = src("src/context/WishlistContext.js");
+const wishSrc = src("src/features/buyer/context/WishlistContext.js");
 check("W6 wishlist toggle defers guests centrally", wishSrc.includes("planProtectedAction") && wishSrc.includes("goLogin()") && wishSrc.includes("setPendingAction"));
-const modalSrc = src("src/components/PropertyDetailModal.js");
+const modalSrc = src("src/features/buyer/components/PropertyDetailModal.js");
 check("W7 modal passes a resume thunk", modalSrc.includes("onLoginRequired(resume)") && modalSrc.includes("() => handleSubmitEnquiry()"));
-const usersSrc = src("src/api/users.js");
+const usersSrc = src("src/shared/api/users.js");
 check(
   "W14 role entry waits for server confirmation before navigation",
   usersSrc.includes("await ensureOwnerRole(auth)") &&
@@ -132,18 +132,18 @@ check(
     usersSrc.indexOf('await ensureRole(auth, "BUYER")') < usersSrc.indexOf('rootNav.reset(')
 );
 for (const [label, rel] of [
-  ["W8a home", "src/screens/buyer/HomeScreen.js"],
-  ["W8b search", "src/screens/buyer/SearchScreen.js"],
-  ["W8c saved", "src/screens/buyer/SavedScreen.js"],
-  ["W8d enquiries", "src/screens/buyer/EnquiriesScreen.js"],
-  ["W8e explore", "src/screens/buyer/ExploreScreen.js"],
+  ["W8a home", "src/features/buyer/screens/HomeScreen.js"],
+  ["W8b search", "src/features/buyer/screens/SearchScreen.js"],
+  ["W8c saved", "src/features/buyer/screens/SavedScreen.js"],
+  ["W8d enquiries", "src/features/buyer/screens/EnquiriesScreen.js"],
+  ["W8e explore", "src/features/buyer/screens/ExploreScreen.js"],
 ]) {
   const s = src(rel);
   check(`${label} modal caller routes through guard`, s.includes("onLoginRequired={(resume) => requireAuth(resume)}"));
 }
-const headerSrc = src("src/components/AppBrandHeader.js");
+const headerSrc = src("src/shared/components/AppBrandHeader.js");
 check("W9 header role switch guarded", headerSrc.includes("requireAuth(doSwitch)"));
-const homeSrc = src("src/screens/buyer/HomeScreen.js");
+const homeSrc = src("src/features/buyer/screens/HomeScreen.js");
 check("W10 home owner entries guarded", homeSrc.includes("requireAuth(doOpenOwnerDashboard)") && homeSrc.includes("requireAuth(doPostProperty)"));
 check(
   "W11 login button logged-out only, no flash",
@@ -151,9 +151,9 @@ check(
     homeSrc.includes(">Login</Text>") &&
     homeSrc.includes("navigation.navigate(\"Login\")")
 );
-const authSrc = src("src/context/AuthContext.js");
+const authSrc = src("src/features/auth/context/AuthContext.js");
 check("W12 auth exposes single-shot continuation", authSrc.includes("consumePendingAction") && authSrc.includes("clearPendingAction") && authSrc.includes("setPendingAction"));
-const navSrc = src("src/navigation/AppNavigator.js");
+const navSrc = src("src/shared/navigation/AppNavigator.js");
 check("W13 navigation ref attached for context-level guards", navSrc.includes("navigationRef") && navSrc.includes("ref={navigationRef}"));
 
 if (failures > 0) {

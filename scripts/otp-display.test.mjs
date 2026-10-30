@@ -16,16 +16,16 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const SRC = join(ROOT, "..", "src", "api");
 const tmp = mkdtempSync(join(tmpdir(), "otp-display-test-"));
-copyFileSync(join(SRC, "client.js"), join(tmp, "client.js"));
+copyFileSync(join(ROOT, "..", "src", "shared", "api", "client.js"), join(tmp, "client.js"));
 writeFileSync(
   join(tmp, "auth.js"),
-  readFileSync(join(SRC, "auth.js"), "utf8").replace(/from "\.\/client"/g, 'from "./client.js"')
+  readFileSync(join(ROOT, "..", "src", "features", "auth", "api", "auth.js"), "utf8")
+    .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
 );
 const client = await import(join(tmp, "client.js"));
 const auth = await import(join(tmp, "auth.js"));
-const loginSrc = readFileSync(join(ROOT, "..", "src", "screens", "auth", "LoginScreen.js"), "utf8");
+const loginSrc = readFileSync(join(ROOT, "..", "src", "features", "auth", "screens", "LoginScreen.js"), "utf8");
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -86,7 +86,7 @@ try {
 check("A10 wrong code rejects as kind 'login' (401)", client.isApiError(err, "login") && err.status === 401);
 
 // --- 2. LoginScreen wiring (source text) ---------------------------------------
-check("L1 LoginScreen imports requestOtp from api/auth", /import\s*{[^}]*requestOtp[^}]*}\s*from\s*"..\/..\/api\/auth"/.test(loginSrc));
+check("L1 LoginScreen imports requestOtp from api/auth", /import\s*{[^}]*requestOtp[^}]*}\s*from\s*"\.\.\/api\/auth(\.js)?"/.test(loginSrc));
 check(
   "L2 phone submit stores the backend debug_code",
   /const resp = await requestOtp\(fullPhone\(\)\);[\s\S]{0,700}resp && resp\.debug_code \? String\(resp\.debug_code\) : null;[\s\S]{0,40}setDevCode\(serverCode\);/.test(loginSrc)

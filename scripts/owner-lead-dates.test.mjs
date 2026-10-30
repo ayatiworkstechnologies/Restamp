@@ -21,25 +21,32 @@ import { fileURLToPath } from "node:url";
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, "..", "src");
 const tmp = mkdtempSync(join(tmpdir(), "owner-lead-dates-test-"));
-for (const f of ["client.js", "mappers.js", "buyerModeCore.js"]) copyFileSync(join(SRC, "api", f), join(tmp, f));
-for (const f of ["owner.js", "enquiries.js", "buyerMode.js"]) {
+copyFileSync(join(SRC, "shared", "api", "client.js"), join(tmp, "client.js"));
+copyFileSync(join(SRC, "shared", "api", "mappers.js"), join(tmp, "mappers.js"));
+copyFileSync(join(SRC, "features", "buyer", "api", "buyerModeCore.js"), join(tmp, "buyerModeCore.js"));
+const file_sources = {
+  "owner.js": join(SRC, "features", "owner", "api", "owner.js"),
+  "enquiries.js": join(SRC, "features", "buyer", "api", "enquiries.js"),
+  "buyerMode.js": join(SRC, "features", "buyer", "api", "buyerMode.js"),
+};
+for (const [f, p] of Object.entries(file_sources)) {
   writeFileSync(
     join(tmp, f),
-    readFileSync(join(SRC, "api", f), "utf8")
-      .replace(/from "\.\/client"/g, 'from "./client.js"')
-      .replace(/from "\.\/mappers"/g, 'from "./mappers.js"')
-      .replace(/from "\.\/buyerModeCore"/g, 'from "./buyerModeCore.js"')
-      .replace(/from "\.\/buyerMode"/g, 'from "./buyerMode.js"')
+    readFileSync(p, "utf8")
+      .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
+      .replace(/from "[^"]*mappers(\.js)?"/g, 'from "./mappers.js"')
+      .replace(/from "[^"]*buyerModeCore(\.js)?"/g, 'from "./buyerModeCore.js"')
+      .replace(/from "[^"]*buyerMode(\.js)?"/g, 'from "./buyerMode.js"')
   );
 }
-copyFileSync(join(SRC, "utils", "ownerProfile.js"), join(tmp, "ownerProfile.js"));
+copyFileSync(join(SRC, "features", "owner", "utils", "ownerProfile.js"), join(tmp, "ownerProfile.js"));
 const { toOwnerLead, leadDateLabel, LEAD_DATE_UNAVAILABLE } = await import(join(tmp, "owner.js"));
 const { toUiEnquiry } = await import(join(tmp, "enquiries.js")); // may be undefined (see section 2)
 const { initialOwnerNameDraft, validateOwnerName, OWNER_NAME_MAX_LENGTH } = await import(join(tmp, "ownerProfile.js"));
 const src = (rel) => readFileSync(join(SRC, rel), "utf8");
-const leadsSrc = src("screens/owner/OwnerLeadsScreen.js");
-const detailSrc = src("screens/owner/OwnerLeadDetailScreen.js");
-const profileSrc = src("screens/owner/OwnerProfileScreen.js");
+const leadsSrc = src("features/owner/screens/OwnerLeadsScreen.js");
+const detailSrc = src("features/owner/screens/OwnerLeadDetailScreen.js");
+const profileSrc = src("features/owner/screens/OwnerProfileScreen.js");
 
 let failures = 0;
 function check(name, cond, extra) {

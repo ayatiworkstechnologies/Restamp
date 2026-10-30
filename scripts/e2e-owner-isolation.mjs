@@ -35,16 +35,17 @@ const SRC = join(ROOT, "..", "src");
 // directory and add the ".js" extension so Node can load the REAL app code.
 const tmp = mkdtempSync(join(tmpdir(), "restamp-e2e-"));
 const FILES = [
-  join(SRC, "api", "auth.js"),
-  join(SRC, "api", "client.js"),
-  join(SRC, "api", "owner.js"),
-  join(SRC, "api", "mappers.js"),
-  join(SRC, "auth", "session.js"),
+  join(SRC, "features", "auth", "api", "auth.js"),
+  join(SRC, "shared", "api", "client.js"),
+  join(SRC, "features", "owner", "api", "owner.js"),
+  join(SRC, "shared", "api", "mappers.js"),
+  join(SRC, "features", "auth", "session.js"),
 ];
 for (const file of FILES) {
-  const code = readFileSync(file, "utf8").replace(/from "(\.\/[^"]+?)"/g, (m, spec) =>
-    spec.endsWith(".js") ? m : `from "${spec}.js"`
-  );
+  let code = readFileSync(file, "utf8");
+  for (const name of ["client", "auth", "owner", "mappers", "session"]) {
+    code = code.replace(new RegExp(`from "[^"]*${name}(\\.js)?"`, 'g'), `from "./${name}.js"`);
+  }
   writeFileSync(join(tmp, file.split("/").pop()), code);
 }
 

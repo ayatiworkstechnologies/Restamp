@@ -38,21 +38,26 @@ const {
   isBuyerRole,
   isRoleGateError,
   normalizeRole,
-} = await import(join(ROOT, "..", "src", "api", "buyerModeCore.js"));
+} = await import(join(ROOT, "..", "src", "features", "buyer", "api", "buyerModeCore.js"));
 
 // --- Real client wiring (needs the tmp/extension harness) ----------------
+const SHARED_API = join(ROOT, "..", "src", "shared", "api");
+const BUYER_API = join(ROOT, "..", "src", "features", "buyer", "api");
 const tmp = mkdtempSync(join(tmpdir(), "buyer-mode-test-"));
-for (const f of ["client.js", "buyerMode.js", "buyerModeCore.js", "enquiries.js", "visits.js", "contact.js", "saved.js", "mappers.js"]) {
-  copyFileSync(join(SRC, f), join(tmp, f));
+for (const f of ["client.js", "visits.js", "contact.js", "mappers.js"]) {
+  copyFileSync(join(SHARED_API, f), join(tmp, f));
+}
+for (const f of ["buyerMode.js", "buyerModeCore.js", "enquiries.js", "saved.js"]) {
+  copyFileSync(join(BUYER_API, f), join(tmp, f));
 }
 for (const f of ["buyerMode.js", "enquiries.js", "visits.js", "contact.js", "saved.js"]) {
   writeFileSync(
     join(tmp, f),
     readFileSync(join(tmp, f), "utf8")
-      .replaceAll('from "./client"', 'from "./client.js"')
-      .replaceAll('from "./buyerMode"', 'from "./buyerMode.js"')
-      .replaceAll('from "./buyerModeCore"', 'from "./buyerModeCore.js"')
-      .replaceAll('from "./mappers"', 'from "./mappers.js"')
+      .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
+      .replace(/from "[^"]*buyerMode(\.js)?"/g, 'from "./buyerMode.js"')
+      .replace(/from "[^"]*buyerModeCore(\.js)?"/g, 'from "./buyerModeCore.js"')
+      .replace(/from "[^"]*mappers(\.js)?"/g, 'from "./mappers.js"')
   );
 }
 const client = await import(join(tmp, "client.js"));

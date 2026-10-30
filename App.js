@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import { Platform } from "react-native";
 import { enableScreens } from "react-native-screens";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import AppNavigator from "./src/navigation/AppNavigator";
+import AppNavigator from "./src/shared/navigation/AppNavigator";
 
 enableScreens(true);
-import { WishlistProvider } from "./src/context/WishlistContext";
-import { OwnerProvider } from "./src/context/OwnerContext";
-import { AgentProvider } from "./src/context/AgentContext";
-import { AuthProvider } from "./src/context/AuthContext";
-import AnimatedSplashScreen from "./src/components/AnimatedSplashScreen";
+import { WishlistProvider } from "./src/features/buyer/context/WishlistContext";
+import { OwnerProvider } from "./src/features/owner/context/OwnerContext";
+import { AgentProvider } from "./src/features/agent/context/AgentContext";
+import { AuthProvider } from "./src/features/auth/context/AuthContext";
+import AnimatedSplashScreen from "./src/shared/components/AnimatedSplashScreen";
 
 // Disable blue focus outline across all fields globally on Web / WebViews
 if (Platform.OS === "web" && typeof document !== "undefined") {

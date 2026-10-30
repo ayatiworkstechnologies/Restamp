@@ -20,18 +20,27 @@ import { fileURLToPath } from "node:url";
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, "..", "src");
 const tmp = mkdtempSync(join(tmpdir(), "buyer-viewed-test-"));
-copyFileSync(join(SRC, "api", "client.js"), join(tmp, "client.js"));
-for (const f of ["viewed.js", "visits.js", "buyerMode.js", "buyerModeCore.js", "mappers.js"]) {
+copyFileSync(join(SRC, "shared", "api", "client.js"), join(tmp, "client.js"));
+const file_sources = {
+  "viewed.js": join(SRC, "features", "buyer", "api", "viewed.js"),
+  "visits.js": join(SRC, "shared", "api", "visits.js"),
+  "buyerMode.js": join(SRC, "features", "buyer", "api", "buyerMode.js"),
+  "buyerModeCore.js": join(SRC, "features", "buyer", "api", "buyerModeCore.js"),
+  "mappers.js": join(SRC, "shared", "api", "mappers.js"),
+};
+for (const [f, srcPath] of Object.entries(file_sources)) {
   writeFileSync(
     join(tmp, f),
-    readFileSync(join(SRC, "api", f), "utf8").replace(/from "\.\/([A-Za-z]+)"/g, 'from "./$1.js"')
+    readFileSync(srcPath, "utf8")
+      .replace(/from "[^"]*\/([A-Za-z]+)(\.js)?"/g, 'from "./$1.js"')
+      .replace(/from "\.\/([A-Za-z]+)(\.js)?"/g, 'from "./$1.js"')
   );
 }
 const client = await import(join(tmp, "client.js"));
 const buyerMode = await import(join(tmp, "buyerMode.js"));
 const { recordViewed, fetchViewed, toUiViewed } = await import(join(tmp, "viewed.js"));
-const savedSrc = readFileSync(join(SRC, "screens", "buyer", "SavedScreen.js"), "utf8");
-const modalSrc = readFileSync(join(SRC, "components", "PropertyDetailModal.js"), "utf8");
+const savedSrc = readFileSync(join(SRC, "features", "buyer", "screens", "SavedScreen.js"), "utf8");
+const modalSrc = readFileSync(join(SRC, "features", "buyer", "components", "PropertyDetailModal.js"), "utf8");
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -125,7 +134,7 @@ check("S3 Viewed tab has loading/error state", savedSrc.includes("setViewedLoadi
 check("S4 Saved (wishlist) tab still renders the wishlist, not viewed history", savedSrc.includes("{wishlist.map((property) => {"));
 check(
   "S5 PropertyDetailModal records every real listing it opens, fire-and-forget",
-  modalSrc.includes('import { recordViewed } from "../api/viewed";') &&
+  (modalSrc.includes('import { recordViewed } from "../api/viewed";') || modalSrc.includes('import { recordViewed } from "../api/viewed.js";')) &&
     modalSrc.includes('if (!visible || typeof backendId !== "number") return;') &&
     modalSrc.includes("recordViewed(backendId).then((recorded) => {")
 );
@@ -152,7 +161,7 @@ check(
   };
   walk(SRC);
   const callers = files.filter(
-    (f) => !f.endsWith(join("api", "viewed.js")) && /\brecordViewed\(/.test(readFileSync(f, "utf8"))
+    (f) => !f.endsWith(join("viewed.js")) && /\brecordViewed\(/.test(readFileSync(f, "utf8"))
   );
   check(
     "D1 recordViewed is called from exactly one place: PropertyDetailModal",

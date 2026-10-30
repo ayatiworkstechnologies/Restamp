@@ -18,16 +18,17 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const SRC = join(ROOT, "..", "src", "api");
+const SHARED_API = join(ROOT, "..", "src", "shared", "api");
+const OWNER_API = join(ROOT, "..", "src", "features", "owner", "api");
 const tmp = mkdtempSync(join(tmpdir(), "owner-leads-test-"));
-for (const f of ["owner.js", "client.js", "mappers.js"]) {
-  copyFileSync(join(SRC, f), join(tmp, f));
-}
+copyFileSync(join(OWNER_API, "owner.js"), join(tmp, "owner.js"));
+copyFileSync(join(SHARED_API, "client.js"), join(tmp, "client.js"));
+copyFileSync(join(SHARED_API, "mappers.js"), join(tmp, "mappers.js"));
 writeFileSync(
   join(tmp, "owner.js"),
   readFileSync(join(tmp, "owner.js"), "utf8")
-    .replace('from "./client"', 'from "./client.js"')
-    .replace('from "./mappers"', 'from "./mappers.js"')
+    .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
+    .replace(/from "[^"]*mappers(\.js)?"/g, 'from "./mappers.js"')
 );
 const { fetchOwnerLeads, toOwnerLead, selectPropertyLeads, toOwnerProperty } = await import(
   join(tmp, "owner.js")
@@ -36,10 +37,10 @@ const { fetchOwnerLeads, toOwnerLead, selectPropertyLeads, toOwnerProperty } = a
 function src(rel) {
   return readFileSync(join(ROOT, "..", rel), "utf8");
 }
-const ownerLeadsSrc = src("src/screens/owner/OwnerLeadsScreen.js");
-const propertyLeadsSrc = src("src/screens/owner/OwnerPropertyLeadsScreen.js");
-const dashboardSrc = src("src/screens/owner/OwnerDashboardScreen.js");
-const leadDetailSrc = src("src/screens/owner/OwnerLeadDetailScreen.js");
+const ownerLeadsSrc = src("src/features/owner/screens/OwnerLeadsScreen.js");
+const propertyLeadsSrc = src("src/features/owner/screens/OwnerPropertyLeadsScreen.js");
+const dashboardSrc = src("src/features/owner/screens/OwnerDashboardScreen.js");
+const leadDetailSrc = src("src/features/owner/screens/OwnerLeadDetailScreen.js");
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -288,7 +289,7 @@ check(
 check(
   "Close modal offers no listing side effect",
   (() => {
-    const modalSrc = src("src/screens/owner/OwnerCloseLeadModal.js");
+    const modalSrc = src("src/features/owner/screens/OwnerCloseLeadModal.js");
     return (
       !modalSrc.includes("closePropertyToo") &&
       !modalSrc.includes("listing status has been updated") &&
@@ -304,7 +305,7 @@ check(
 
 // --- 6. My Leads server properties + initialTab + badge removal ---
 {
-  const profileSrc = src("src/screens/owner/OwnerProfileScreen.js");
+  const profileSrc = src("src/features/owner/screens/OwnerProfileScreen.js");
   check(
     "S1 selector loads real properties (never context-only)",
     ownerLeadsSrc.includes("fetchAllOwnerListings") &&
@@ -365,10 +366,10 @@ check(
 
 // --- 5. P0/P1/P2/API-URL guards intact ---
 {
-  const wishlistSrc = src("src/context/WishlistContext.js");
-  const ctxSrc = src("src/context/OwnerContext.js");
-  const clientSrc = src("src/api/client.js");
-  const enquiriesScreenSrc = src("src/screens/buyer/EnquiriesScreen.js");
+  const wishlistSrc = src("src/features/buyer/context/WishlistContext.js");
+  const ctxSrc = src("src/features/owner/context/OwnerContext.js");
+  const clientSrc = src("src/shared/api/client.js");
+  const enquiriesScreenSrc = src("src/features/buyer/screens/EnquiriesScreen.js");
   check(
     "P5 P2 buyer honesty intact",
     wishlistSrc.includes("useState([])") &&

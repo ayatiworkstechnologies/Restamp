@@ -19,16 +19,18 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "api");
+const ROOT = dirname(fileURLToPath(import.meta.url));
+const SHARED_API = join(ROOT, "..", "src", "shared", "api");
+const OWNER_API = join(ROOT, "..", "src", "features", "owner", "api");
 const tmp = mkdtempSync(join(tmpdir(), "edit-mode-test-"));
-for (const f of ["owner.js", "client.js", "mappers.js"]) {
-  copyFileSync(join(SRC, f), join(tmp, f));
-}
+copyFileSync(join(OWNER_API, "owner.js"), join(tmp, "owner.js"));
+copyFileSync(join(SHARED_API, "client.js"), join(tmp, "client.js"));
+copyFileSync(join(SHARED_API, "mappers.js"), join(tmp, "mappers.js"));
 writeFileSync(
   join(tmp, "owner.js"),
   readFileSync(join(tmp, "owner.js"), "utf8")
-    .replace('from "./client"', 'from "./client.js"')
-    .replace('from "./mappers"', 'from "./mappers.js"')
+    .replace(/from "[^"]*client(\.js)?"/g, 'from "./client.js"')
+    .replace(/from "[^"]*mappers(\.js)?"/g, 'from "./mappers.js"')
 );
 const {
   resolveEditingListingId, buildPayload, buildUpdatePayload, toEditForm,
@@ -444,7 +446,7 @@ check("N8 valid email keeps no error",
 // resurrect the just-published edit/form. Verified by source assertion (the
 // screen itself cannot run in this harness) plus inspection and build.
 const addScreenSrc = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "screens", "owner", "OwnerAddPropertyScreen.js"),
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "features", "owner", "screens", "OwnerAddPropertyScreen.js"),
   "utf8"
 );
 {
@@ -461,7 +463,7 @@ const addScreenSrc = readFileSync(
 // mid-edit. Scoped to the Add Tab.Screen block only, so unrelated future
 // listeners elsewhere never trip this guard.
 const ownerNavSrc = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "navigation", "OwnerNavigator.js"),
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "features", "owner", "navigation", "OwnerNavigator.js"),
   "utf8"
 );
 {

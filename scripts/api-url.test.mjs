@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "api");
+const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "shared", "api");
 const LOCAL = "http://127.0.0.1:8000";
 const PROD = "https://restamp-backend-h3x8.onrender.com";
 

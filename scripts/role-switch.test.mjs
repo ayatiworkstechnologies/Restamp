@@ -1,6 +1,6 @@
 // Pure regression tests for role-switch coordination. Run with:
 //   node scripts/role-switch.test.mjs
-import { createRoleGuard } from "../src/api/roleSwitchCore.js";
+import { createRoleGuard } from "../src/shared/api/roleSwitchCore.js";
 
 let failures = 0;
 function check(name, cond, extra) {
