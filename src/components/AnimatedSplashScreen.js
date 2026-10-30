@@ -23,6 +23,7 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
   const screenScale = useRef(new Animated.Value(1)).current;
 
   const hasExited = useRef(false);
+  const useNative = Platform.OS !== "web";
 
   const triggerExit = () => {
     if (hasExited.current) return;
@@ -32,12 +33,12 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
       Animated.timing(screenOpacity, {
         toValue: 0,
         duration: 380,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
       Animated.timing(screenScale, {
         toValue: 1.04,
         duration: 380,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
     ]).start(() => {
       onAnimationComplete?.();
@@ -50,13 +51,13 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
       Animated.timing(logoOpacity, {
         toValue: 1,
         duration: 450,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
       Animated.spring(logoScale, {
         toValue: 1,
         friction: 6,
         tension: 55,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
     ]).start();
 
@@ -66,13 +67,13 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
         Animated.timing(textOpacity, {
           toValue: 1,
           duration: 400,
-          useNativeDriver: true,
+          useNativeDriver: useNative,
         }),
         Animated.spring(textTranslateY, {
           toValue: 0,
           friction: 7,
           tension: 60,
-          useNativeDriver: true,
+          useNativeDriver: useNative,
         }),
       ]).start();
     }, 250);

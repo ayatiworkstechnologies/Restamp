@@ -59,7 +59,7 @@ import SafeImage from "../../components/common/SafeImage";
 import { getUnreadCount, subscribeNotifications } from "../../data/notificationsStore";
 
 const { width } = Dimensions.get("window");
-const CARD_WIDTH = width * 0.78;
+const CARD_WIDTH = Math.min(300, Math.max(260, Math.round(width * 0.78)));
 const REC_CARD_WIDTH = Math.min(170, Math.max(130, Math.round((width - 40) / 2.45)));
 const PROJECT_CARD_WIDTH = Math.min(320, width * 0.84);
 const DEMAND_CARD_WIDTH = Math.min(270, width * 0.72);
@@ -69,7 +69,7 @@ const SHOW_NEWLY_LAUNCHED_PROJECTS = false;
 const SHOW_DEMAND_IN_CHENNAI = false;
 
 // MANUAL BANNER HEIGHT CONTROL (Change this value to adjust the banner height)
-const POST_PROPERTY_BANNER_HEIGHT = 130;
+const POST_PROPERTY_BANNER_HEIGHT = 152;
 
 const DEAL_TYPES = ["Buy", "Resale", "Rent", "Lease"];
 
@@ -718,7 +718,7 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => setSelectedProperty(property)}
               >
                 <View style={styles.recommendedImageContainer}>
-                  <SafeImage source={{ uri: property.image }} style={styles.recommendedImage} />
+                  <SafeImage source={{ uri: property.image }} style={styles.recommendedImage} resizeMode="cover" />
                   <View style={styles.verifiedGreenBadge}>
                     <CheckCircle2 size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
                     <Text style={styles.verifiedGreenBadgeText}>Verified</Text>
@@ -790,7 +790,7 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => setSelectedProperty(property)}
               >
                 <View style={styles.cardImageContainer}>
-                  <SafeImage source={{ uri: property.image }} style={styles.cardImage} />
+                  <SafeImage source={{ uri: property.image }} style={styles.cardImage} resizeMode="cover" />
                   <View style={styles.badgeRow}>
                     <View style={styles.badgeVerified}>
                       <CheckCircle2 size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
@@ -817,10 +817,12 @@ export default function HomeScreen({ navigation }) {
                 <View style={styles.cardBody}>
                   <View style={styles.priceRow}>
                     <Text style={styles.priceText}>{property.price}{property.pricePeriod}</Text>
-                    <View style={styles.ratingBadge}>
-                      <Star size={13} color={COLORS.star} fill={COLORS.star} />
-                      <Text style={styles.ratingText}>{property.rating}</Text>
-                    </View>
+                    {property.rating ? (
+                      <View style={styles.ratingBadge}>
+                        <Star size={13} color={COLORS.star} fill={COLORS.star} />
+                        <Text style={styles.ratingText}>{property.rating}</Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   <Text style={styles.propertyTitle} numberOfLines={1}>
@@ -869,7 +871,7 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => setSelectedProperty(property)}
               >
                 <View style={styles.cardImageContainer}>
-                  <SafeImage source={{ uri: property.image }} style={styles.cardImage} />
+                  <SafeImage source={{ uri: property.image }} style={styles.cardImage} resizeMode="cover" />
                   <View style={styles.badgeRow}>
                     <View style={styles.badgeOrange}>
                       <Text style={styles.badgeTextWhite}>{property.badge || "Just Added"}</Text>
@@ -895,10 +897,12 @@ export default function HomeScreen({ navigation }) {
                 <View style={styles.cardBody}>
                   <View style={styles.priceRow}>
                     <Text style={styles.priceText}>{property.price}{property.pricePeriod}</Text>
-                    <View style={styles.ratingBadge}>
-                      <Star size={13} color={COLORS.star} fill={COLORS.star} />
-                      <Text style={styles.ratingText}>{property.rating}</Text>
-                    </View>
+                    {property.rating ? (
+                      <View style={styles.ratingBadge}>
+                        <Star size={13} color={COLORS.star} fill={COLORS.star} />
+                        <Text style={styles.ratingText}>{property.rating}</Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   <Text style={styles.propertyTitle} numberOfLines={1}>
@@ -1202,20 +1206,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoIconBg: {
-    width: 32,
-    height: 32,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 6,
   },
   logoText: {
     fontSize: 22,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#0F172A",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   logoTextAccent: {
-    color: COLORS.primary,
+    color: "#0E2773",
+    fontWeight: "800",
   },
   notificationBtn: {
     width: 42,
@@ -1411,30 +1414,29 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   postPropertyCard: {
-    height: POST_PROPERTY_BANNER_HEIGHT, // <-- CHANGE HEIGHT MANUALLY HERE (e.g. 130, 145, 160)
+    height: POST_PROPERTY_BANNER_HEIGHT, // <-- CHANGE HEIGHT MANUALLY HERE (e.g. 130, 145, 152, 160)
     backgroundColor: COLORS.primary,
     borderRadius: 20,
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingLeft: 18,
-    paddingRight: 6,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   postPropertyContent: {
     flex: 1,
     height: "100%",
     justifyContent: "center",
-    paddingRight: 8,
+    paddingRight: 12,
     zIndex: 2,
   },
   postPropertyTitle: {
     color: "#FFFFFF",
-    fontSize: 17,
+    fontSize: 17.5,
     fontWeight: "800",
     letterSpacing: -0.3,
-    lineHeight: 22,
+    lineHeight: 23,
   },
   postPropertyTitleFree: {
     color: "#FFFFFF",
@@ -1442,18 +1444,18 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   postPropertySubtitle: {
-    color: "rgba(255, 255, 255, 0.88)",
-    fontSize: 11.5,
+    color: "rgba(255, 255, 255, 0.9)",
+    fontSize: 12,
     fontWeight: "400",
-    marginTop: 3,
-    marginBottom: 10,
-    lineHeight: 15,
+    marginTop: 4,
+    marginBottom: 12,
+    lineHeight: 16,
   },
   postPropertyBtn: {
     backgroundColor: "#FFFFFF",
     borderRadius: 100,
-    paddingHorizontal: 15,
-    paddingVertical: 7.5,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     alignSelf: "flex-start",
     borderWidth: 1,
     borderColor: "#EEF2F6",
@@ -1466,6 +1468,8 @@ const styles = StyleSheet.create({
   postPropertyImageWrapper: {
     height: "100%",
     aspectRatio: 1,
+    borderRadius: 16,
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1481,7 +1485,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    marginTop: 18,
+    marginTop: 14,
     marginBottom: 8,
   },
   sectionTitle: {
@@ -1555,7 +1559,7 @@ const styles = StyleSheet.create({
   recommendedScrollContainer: {
     paddingHorizontal: 20,
     paddingTop: 6,
-    paddingBottom: 20,
+    paddingBottom: 8,
   },
   recommendedCard: {
     width: REC_CARD_WIDTH,
@@ -1937,7 +1941,7 @@ const styles = StyleSheet.create({
   cardHorizontalList: {
     paddingHorizontal: 20,
     paddingTop: 6,
-    paddingBottom: 20,
+    paddingBottom: 8,
   },
   propertyCard: {
     width: CARD_WIDTH,

@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Animated,
   Alert,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -57,7 +58,7 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
       toValue: 1,
       friction: 5,
       tension: 65,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start();
 
     // Auto-redirect to Owner Dashboard after ~3 seconds

@@ -125,20 +125,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoIconBg: {
-    width: 32,
-    height: 32,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 6,
   },
   logoText: {
     fontSize: 22,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#0F172A",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   logoTextAccent: {
-    color: COLORS.primary || "#2563EB",
+    color: "#0E2773",
+    fontWeight: "800",
   },
   headerRightActions: {
     flexDirection: "row",

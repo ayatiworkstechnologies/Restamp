@@ -1512,7 +1512,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
           </TouchableOpacity>
 
           <View style={styles.brandIconWrapper}>
-            <RestampLogo size={32} />
+            <RestampLogo size={28} />
           </View>
 
           <View style={styles.headerTitles}>
@@ -3196,8 +3196,6 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   brandIconWrapper: {
-    width: 34,
-    height: 34,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
@@ -3207,9 +3205,9 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 11,
-    color: COLORS.primary,
-    fontWeight: "600",
-    letterSpacing: 0.3,
+    color: "#0E2773",
+    fontWeight: "700",
+    letterSpacing: 0.4,
   },
   headerTitle: {
     fontSize: 16,

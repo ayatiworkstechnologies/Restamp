@@ -15,8 +15,8 @@ import {
   ImageBackground,
   ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import Svg, { Path, Rect } from "react-native-svg";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Path, Rect, Defs, LinearGradient, Stop } from "react-native-svg";
 import {
   ChevronLeft,
   ChevronDown,
@@ -26,6 +26,7 @@ import {
   X,
 } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
+import TYPOGRAPHY from "../../constants/typography";
 import { useAuth } from "../../context/AuthContext";
 import {
   requestOtp,
@@ -43,7 +44,7 @@ import { planLoginResume } from "../../auth/requireAuth";
 import NumericKeypad from "../../components/common/NumericKeypad";
 import RestampLogo from "../../components/RestampLogo";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_MAX_WIDTH = 480;
 const ACTUAL_WIDTH = Math.min(SCREEN_WIDTH, CARD_MAX_WIDTH);
 // 6 OTP boxes spaced cleanly
@@ -116,18 +117,16 @@ function GoogleIcon({ size = 20 }) {
   );
 }
 
-function FacebookIcon({ size = 20 }) {
+function AppleIcon({ size = 20, color = "#FFFFFF" }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path
-        d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
-        fill="#1877F2"
-      />
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.66-.8 1.1-1.92.98-3.04-1 .04-2.18.66-2.88 1.47-.6.69-1.13 1.83-.99 2.92 1.12.09 2.24-.55 2.89-1.35z" />
     </Svg>
   );
 }
 
 export default function LoginScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const {
     loginWithToken,
     saveProfileName,
@@ -150,6 +149,9 @@ export default function LoginScreen({ navigation }) {
   const [focusedOtpIndex, setFocusedOtpIndex] = useState(0);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [isPhoneFocused, setIsPhoneFocused] = useState(false);
+  const [firstNameFocused, setFirstNameFocused] = useState(false);
+  const [lastNameFocused, setLastNameFocused] = useState(false);
 
   // Timer for resend OTP
   const [timer, setTimer] = useState(30);
@@ -574,136 +576,198 @@ export default function LoginScreen({ navigation }) {
   const isNameValid = firstName.trim().length > 0;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={[
+        styles.safeArea,
+        { backgroundColor: step === 0 ? "#111317" : "#FFFFFF" },
+      ]}
+      edges={step === 0 ? [] : ["top", "bottom"]}
+    >
       <StatusBar
         barStyle={step === 0 ? "light-content" : "dark-content"}
-        backgroundColor={step === 0 ? "transparent" : "#FFFFFF"}
-        translucent={step === 0}
+        backgroundColor="transparent"
+        translucent={true}
       />
 
-      <View style={styles.wrapper}>
+      <View
+        style={[
+          styles.wrapper,
+          { backgroundColor: step === 0 ? "#111317" : "#FFFFFF" },
+        ]}
+      >
         {/* ======================================================== */}
-        {/* STEP 0: WELCOME / LANDING SCREEN (DESIGN 3)              */}
+        {/* STEP 0: WELCOME / LANDING SCREEN (PERPLEXITY FULLSCREEN) */}
         {/* ======================================================== */}
         {step === 0 && (
-          <View style={styles.step0Container}>
-            {/* Top Half: Modern house architectural hero with sky overlay */}
-            <ImageBackground
-              source={require("../../../assets/login-hero-house.jpg")}
-              style={styles.step0HeroImage}
-              resizeMode="cover"
+          <View style={styles.perplexityContainer}>
+            {/* Top Architectural Hero with Fade Gradient (Fullscreen Absolute Background) */}
+            <View style={styles.perplexityHeroWrapper} pointerEvents="none">
+              <ImageBackground
+                source={require("../../../assets/login-screen-img.jpg")}
+                style={styles.perplexityHeroImage}
+                resizeMode="cover"
+              >
+                {/* SVG Gradient smoothly fading the image down into dark background #111317 */}
+                <Svg
+                  height="100%"
+                  width="100%"
+                  style={StyleSheet.absoluteFillObject}
+                >
+                  <Defs>
+                    <LinearGradient id="heroFade" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0" stopColor="#111317" stopOpacity="0" />
+                      <Stop offset="0.45" stopColor="#111317" stopOpacity="0.08" />
+                      <Stop offset="0.75" stopColor="#111317" stopOpacity="0.75" />
+                      <Stop offset="1" stopColor="#111317" stopOpacity="1" />
+                    </LinearGradient>
+                  </Defs>
+                  <Rect
+                    x="0"
+                    y="0"
+                    width="100%"
+                    height="100%"
+                    fill="url(#heroFade)"
+                  />
+                </Svg>
+              </ImageBackground>
+            </View>
+
+            {/* Minimalist Top Right 'Skip' Link (Pinned to absolute top-right below status bar) */}
+            <View
+              style={[
+                styles.perplexityTopRow,
+                { top: insets.top > 0 ? insets.top + 8 : (Platform.OS === "ios" ? 16 : 20) },
+              ]}
+              pointerEvents="box-none"
             >
-              <View style={styles.step0HeroOverlay}>
-                {/* Top Status & Guest Skip */}
-                <View style={styles.step0TopRow}>
-                  <View style={{ flex: 1 }} />
-                  <TouchableOpacity
-                    onPress={handleSkip}
-                    style={styles.step0SkipBtn}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.step0SkipText}>Skip</Text>
+              <TouchableOpacity
+                onPress={handleSkip}
+                style={styles.perplexitySkipBtn}
+                activeOpacity={0.7}
+                hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                accessibilityLabel="Skip to browse"
+              >
+                <Text style={styles.perplexitySkipText}>Skip</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Bottom Content Area: Logo + Wordmark + Pill Buttons + Links */}
+            <View
+              style={[
+                styles.perplexityContent,
+                { paddingBottom: Math.max(insets.bottom, Platform.OS === "ios" ? 28 : 22) },
+              ]}
+            >
+              {/* Centered Brand Mark + Wordmark */}
+              <View style={styles.perplexityBrandContainer}>
+                <RestampLogo size={46} color="#FFFFFF" />
+                <Text style={styles.perplexityBrandText}>restamp</Text>
+              </View>
+
+              {/* Action Buttons Stack (Perplexity style) */}
+              <View style={styles.perplexityButtonsStack}>
+                {/* Button 1: Continue with Apple (White Pill with Centered Icon + Text) */}
+                <TouchableOpacity
+                  style={styles.perplexityWhiteBtn}
+                  onPress={() => {
+                    Alert.alert(
+                      "Apple Sign-In",
+                      "Apple Sign-In is coming soon. Please continue with your mobile number."
+                    );
+                  }}
+                  activeOpacity={0.88}
+                >
+                  <AppleIcon size={20} color="#000000" />
+                  <Text style={styles.perplexityWhiteBtnText}>
+                    Continue with Apple
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Button 2: Continue with Google (White Pill with Centered Icon + Text) */}
+                <TouchableOpacity
+                  style={styles.perplexityWhiteBtn}
+                  onPress={() => {
+                    if (Platform.OS === "web") {
+                      Alert.alert(
+                        "Google Sign-In",
+                        "Please use Mobile Number or click below if Google button appears."
+                      );
+                    } else {
+                      Alert.alert(
+                        "Google Sign-In",
+                        "Google Sign-In is enabled for web. Please sign in with your mobile number."
+                      );
+                    }
+                  }}
+                  activeOpacity={0.88}
+                >
+                  <GoogleIcon size={20} />
+                  <Text style={styles.perplexityWhiteBtnText}>
+                    Continue with Google
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Web-only GIS invisible/native embed if configured */}
+                {Platform.OS === "web" ? (
+                  <View style={styles.gisWrapper}>
+                    <GoogleSignInButton
+                      onCredential={handleGoogleCredential}
+                      onError={() =>
+                        Alert.alert(
+                          "Google Sign-In Failed",
+                          "Could not sign in with Google. Please use mobile number."
+                        )
+                      }
+                    />
+                  </View>
+                ) : null}
+
+                {/* Button 3: Continue with Mobile (Brand Blue Pill) */}
+                <TouchableOpacity
+                  style={styles.perplexityPrimaryBtn}
+                  onPress={() => setStep(1)}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.perplexityPrimaryBtnText}>
+                    Continue with mobile
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Footer: Privacy policy • Terms of service & Sign Up */}
+              <View style={styles.perplexityFooter}>
+                <View style={styles.perplexityPolicyRow}>
+                  <TouchableOpacity activeOpacity={0.7}>
+                    <Text style={styles.perplexityPolicyLink}>
+                      Privacy policy
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={styles.perplexityPolicySpacer}>   </Text>
+                  <TouchableOpacity activeOpacity={0.7}>
+                    <Text style={styles.perplexityPolicyLink}>
+                      Terms of service
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Centered Brand Title & Tagline in sky area */}
-                <View style={styles.step0BrandingContainer}>
-                  <View style={styles.step0LogoRow}>
-                    <RestampLogo size={42} />
-                    <Text style={styles.step0BrandTitle}>RESTAMP</Text>
-                  </View>
-                  <Text style={styles.step0Tagline}>
-                    The best place to find millions of home, apartment, and
-                    rental listings.
+                <View style={styles.perplexitySignUpRow}>
+                  <Text style={styles.perplexitySignUpMuted}>
+                    Don’t have an account?{" "}
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => setStep(1)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.perplexitySignUpLink}>Sign Up</Text>
+                  </TouchableOpacity>
                 </View>
-              </View>
-            </ImageBackground>
-
-            {/* Bottom Half: Curved White Card with Action Buttons */}
-            <View style={styles.step0BottomCard}>
-              {/* Button 1: Continue with Mobile Number (Application primary theme) */}
-              <TouchableOpacity
-                style={styles.step0MobileBtn}
-                onPress={() => setStep(1)}
-                activeOpacity={0.85}
-              >
-                <MobileIcon size={20} color="#FFFFFF" />
-                <Text style={styles.step0MobileBtnText}>
-                  Continue with Mobile Number
-                </Text>
-              </TouchableOpacity>
-
-              {/* Button 2: Login with Google */}
-              <TouchableOpacity
-                style={styles.step0SocialBtn}
-                onPress={() => {
-                  if (Platform.OS === "web") {
-                    Alert.alert(
-                      "Google Sign-In",
-                      "Please use Mobile Number or click below if Google button appears."
-                    );
-                  } else {
-                    Alert.alert(
-                      "Google Sign-In",
-                      "Google Sign-In is enabled for web. Please sign in with your mobile number."
-                    );
-                  }
-                }}
-                activeOpacity={0.8}
-              >
-                <GoogleIcon size={20} />
-                <Text style={styles.step0SocialBtnText}>Login with Google</Text>
-              </TouchableOpacity>
-
-              {/* Web-only GIS invisible/native embed if configured */}
-              {Platform.OS === "web" ? (
-                <View style={styles.gisWrapper}>
-                  <GoogleSignInButton
-                    onCredential={handleGoogleCredential}
-                    onError={() =>
-                      Alert.alert(
-                        "Google Sign-In Failed",
-                        "Could not sign in with Google. Please use mobile number."
-                      )
-                    }
-                  />
-                </View>
-              ) : null}
-
-              {/* Button 3: Login with Facebook */}
-              <TouchableOpacity
-                style={styles.step0SocialBtn}
-                onPress={() => {
-                  Alert.alert(
-                    "Facebook Login",
-                    "Facebook login is coming soon. Please continue with your mobile number."
-                  );
-                }}
-                activeOpacity={0.8}
-              >
-                <FacebookIcon size={20} />
-                <Text style={styles.step0SocialBtnText}>Login with Facebook</Text>
-              </TouchableOpacity>
-
-              {/* Footer: Sign up / terms */}
-              <View style={styles.step0FooterRow}>
-                <Text style={styles.step0FooterText}>
-                  Don’t have an account?{" "}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setStep(1)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.step0SignUpLink}>Sign Up</Text>
-                </TouchableOpacity>
               </View>
             </View>
           </View>
         )}
 
         {/* ======================================================== */}
-        {/* STEP 1: PHONE NUMBER INPUT SCREEN (DESIGN 2)             */}
+        {/* STEP 1: PHONE NUMBER INPUT SCREEN (CLEAN BRAND STYLE)    */}
         {/* ======================================================== */}
         {step === 1 && (
           <View style={styles.flowContainer}>
@@ -715,7 +779,7 @@ export default function LoginScreen({ navigation }) {
                 activeOpacity={0.7}
                 accessibilityLabel="Go back"
               >
-                <ChevronLeft size={26} color="#0F172A" />
+                <ChevronLeft size={24} color="#0F172A" />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -734,42 +798,53 @@ export default function LoginScreen({ navigation }) {
                 Enter your registered phone number to log in
               </Text>
 
-              {/* Phone Input Card (Flag + Code + Dropdown + Real Interactive TextInput) */}
+              {/* Phone Input Card (clean rounded card without Mobile number label) */}
               <Pressable
-                style={styles.phoneInputCard}
+                style={[
+                  styles.phoneInputCard,
+                  isPhoneFocused && styles.phoneInputCardFocused,
+                ]}
                 onPress={() => phoneInputRef.current?.focus()}
               >
-                {/* Flag + Country Code trigger */}
-                <TouchableOpacity
-                  style={styles.countryBadge}
-                  onPress={() => setShowCountryModal(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.countryFlagText}>
-                    {selectedCountry.flag}
-                  </Text>
-                  <Text style={styles.countryCodeBadgeText}>
-                    {selectedCountry.code}
-                  </Text>
-                  <ChevronDown size={14} color="#64748B" style={{ marginLeft: 2 }} />
-                </TouchableOpacity>
+                <View style={styles.phoneInputRow}>
+                  {/* Flag + Country Code trigger */}
+                  <TouchableOpacity
+                    style={styles.countryBadge}
+                    onPress={() => setShowCountryModal(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.countryFlagText}>
+                      {selectedCountry.flag}
+                    </Text>
+                    <Text style={styles.countryCodeBadgeText}>
+                      {selectedCountry.code}
+                    </Text>
+                    <ChevronDown
+                      size={14}
+                      color="#64748B"
+                      style={{ marginLeft: 2 }}
+                    />
+                  </TouchableOpacity>
 
-                {/* Subtle vertical separator */}
-                <View style={styles.phoneInputDivider} />
+                  {/* Subtle vertical separator */}
+                  <View style={styles.phoneInputDivider} />
 
-                {/* Real interactive TextInput */}
-                <TextInput
-                  ref={phoneInputRef}
-                  style={styles.phoneTextInput}
-                  placeholder="00 000 000 00"
-                  placeholderTextColor="#94A3B8"
-                  value={phoneNumber}
-                  onChangeText={handlePhoneChange}
-                  keyboardType="phone-pad"
-                  autoFocus
-                  maxLength={maxPhoneDigits(selectedCountry.code)}
-                  underlineColorAndroid="transparent"
-                />
+                  {/* Real interactive TextInput */}
+                  <TextInput
+                    ref={phoneInputRef}
+                    style={styles.phoneTextInput}
+                    placeholder="00 000 000 00"
+                    placeholderTextColor="#94A3B8"
+                    value={phoneNumber}
+                    onChangeText={handlePhoneChange}
+                    onFocus={() => setIsPhoneFocused(true)}
+                    onBlur={() => setIsPhoneFocused(false)}
+                    keyboardType="phone-pad"
+                    autoFocus
+                    maxLength={maxPhoneDigits(selectedCountry.code)}
+                    underlineColorAndroid="transparent"
+                  />
+                </View>
               </Pressable>
 
               {/* Inline Validation Error */}
@@ -779,7 +854,7 @@ export default function LoginScreen({ navigation }) {
                 </Text>
               ) : null}
 
-              {/* Sign in Button (Application Primary Theme Color #2563EB) */}
+              {/* Sign in Button (Full pill button) */}
               <TouchableOpacity
                 style={[
                   styles.primaryActionButton,
@@ -795,7 +870,7 @@ export default function LoginScreen({ navigation }) {
                 </Text>
               </TouchableOpacity>
 
-              {/* Help? Link (Colored in application theme color) */}
+              {/* Help? Link */}
               <TouchableOpacity
                 style={styles.helpLinkContainer}
                 onPress={() =>
@@ -849,7 +924,7 @@ export default function LoginScreen({ navigation }) {
                 </Text>
               </Text>
 
-              {/* Floating OTP Digits with Sleek Unified Underlines */}
+              {/* Modern Tactile OTP Card Boxes */}
               <View style={styles.otpDigitsRow}>
                 {otp.map((digit, idx) => {
                   const isFocused = focusedOtpIndex === idx;
@@ -857,12 +932,16 @@ export default function LoginScreen({ navigation }) {
                   return (
                     <Pressable
                       key={idx}
-                      style={styles.otpSlot}
+                      style={[
+                        styles.otpBox,
+                        isFilled && styles.otpBoxFilled,
+                        isFocused && styles.otpBoxFocused,
+                      ]}
                       onPress={() => otpInputRefs.current[idx]?.focus()}
                     >
                       <TextInput
                         ref={(ref) => (otpInputRefs.current[idx] = ref)}
-                        style={styles.otpSlotInput}
+                        style={styles.otpBoxInput}
                         value={digit}
                         onChangeText={(val) => handleOtpChange(val, idx)}
                         onKeyPress={(e) => handleOtpKeyPress(e, idx)}
@@ -874,13 +953,9 @@ export default function LoginScreen({ navigation }) {
                         underlineColorAndroid="transparent"
                         autoFocus={idx === 0}
                       />
-                      <View
-                        style={[
-                          styles.otpSlotUnderline,
-                          isFilled && styles.otpSlotUnderlineFilled,
-                          isFocused && styles.otpSlotUnderlineFocused,
-                        ]}
-                      />
+                      {isFocused && !digit ? (
+                        <View style={styles.otpCursorIndicator} />
+                      ) : null}
                     </Pressable>
                   );
                 })}
@@ -985,7 +1060,10 @@ export default function LoginScreen({ navigation }) {
 
               {/* First Name Card */}
               <Pressable
-                style={styles.nameInputCard}
+                style={[
+                  styles.nameInputCard,
+                  firstNameFocused && styles.nameInputCardFocused,
+                ]}
                 onPress={() => firstNameInputRef.current?.focus()}
               >
                 <Text style={styles.nameInputLabel}>First Name</Text>
@@ -996,6 +1074,8 @@ export default function LoginScreen({ navigation }) {
                   placeholderTextColor="#94A3B8"
                   value={firstName}
                   onChangeText={setFirstName}
+                  onFocus={() => setFirstNameFocused(true)}
+                  onBlur={() => setFirstNameFocused(false)}
                   autoCapitalize="words"
                   autoFocus
                 />
@@ -1003,7 +1083,10 @@ export default function LoginScreen({ navigation }) {
 
               {/* Last Name Card */}
               <Pressable
-                style={styles.nameInputCard}
+                style={[
+                  styles.nameInputCard,
+                  lastNameFocused && styles.nameInputCardFocused,
+                ]}
                 onPress={() => lastNameInputRef.current?.focus()}
               >
                 <Text style={styles.nameInputLabel}>Last Name</Text>
@@ -1014,13 +1097,17 @@ export default function LoginScreen({ navigation }) {
                   placeholderTextColor="#94A3B8"
                   value={lastName}
                   onChangeText={setLastName}
+                  onFocus={() => setLastNameFocused(true)}
+                  onBlur={() => setLastNameFocused(false)}
                   autoCapitalize="words"
                 />
               </Pressable>
 
               {/* Privacy Guarantee Note */}
               <View style={styles.privacyRow}>
-                <Lock size={14} color="#64748B" style={{ marginRight: 6 }} />
+                <View style={styles.privacyIconBadge}>
+                  <Lock size={13} color="#475569" />
+                </View>
                 <Text style={styles.privacyText}>
                   We'll only show this information to people you connect with on
                   RESTAMP.
@@ -1059,6 +1146,7 @@ export default function LoginScreen({ navigation }) {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
+            <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Country Code</Text>
               <TouchableOpacity
@@ -1072,30 +1160,37 @@ export default function LoginScreen({ navigation }) {
             <FlatList
               data={COUNTRY_CODES}
               keyExtractor={(item) => item.name + item.code}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.countryListItem,
-                    selectedCountry.code === item.code &&
-                      styles.countryListItemActive,
-                  ]}
-                  onPress={() => {
-                    setSelectedCountry(item);
-                    setPhoneTouched(false);
-                    setPhoneNumber((prev) =>
-                      sanitizePhoneInput(prev, item.code)
-                    );
-                    setShowCountryModal(false);
-                    setTimeout(() => {
-                      phoneInputRef.current?.focus();
-                    }, 100);
-                  }}
-                >
-                  <Text style={styles.countryListFlag}>{item.flag}</Text>
-                  <Text style={styles.countryListName}>{item.name}</Text>
-                  <Text style={styles.countryListCode}>{item.code}</Text>
-                </TouchableOpacity>
-              )}
+              renderItem={({ item }) => {
+                const isSelected = selectedCountry.code === item.code;
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.countryListItem,
+                      isSelected && styles.countryListItemActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedCountry(item);
+                      setPhoneTouched(false);
+                      setPhoneNumber((prev) =>
+                        sanitizePhoneInput(prev, item.code)
+                      );
+                      setShowCountryModal(false);
+                      setTimeout(() => {
+                        phoneInputRef.current?.focus();
+                      }, 100);
+                    }}
+                  >
+                    <Text style={styles.countryListFlag}>{item.flag}</Text>
+                    <Text style={styles.countryListName}>{item.name}</Text>
+                    <Text style={styles.countryListCode}>{item.code}</Text>
+                    {isSelected ? (
+                      <View style={styles.countryCheckmark}>
+                        <Check size={16} color={COLORS.primary} />
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              }}
             />
           </View>
         </View>
@@ -1107,166 +1202,170 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#111317",
   },
   wrapper: {
     flex: 1,
     maxWidth: CARD_MAX_WIDTH,
     width: "100%",
     alignSelf: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#111317",
   },
 
-  /* ================= STEP 0: WELCOME SCREEN ================= */
-  step0Container: {
+  /* ================= STEP 0: WELCOME SCREEN (PERPLEXITY DESIGN) ================= */
+  perplexityContainer: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#111317",
+    position: "relative",
   },
-  step0HeroImage: {
-    flex: 1.15,
+  perplexityHeroWrapper: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: Platform.OS === "web" ? 440 : Math.round(SCREEN_HEIGHT * 0.52),
+  },
+  perplexityHeroImage: {
     width: "100%",
+    height: "100%",
   },
-  step0HeroOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.28)",
-    justifyContent: "space-between",
-    paddingTop: Platform.OS === "ios" ? 12 : 20,
-    paddingBottom: 28,
-    paddingHorizontal: 20,
+  perplexityTopRow: {
+    position: "absolute",
+    right: 22,
+    zIndex: 30,
   },
-  step0TopRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  perplexitySkipBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-  step0SkipBtn: {
-    backgroundColor: "rgba(255, 255, 255, 0.85)",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backdropFilter: "blur(6px)",
-  },
-  step0SkipText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  step0BrandingContainer: {
-    alignItems: "center",
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  step0LogoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 8,
-  },
-  step0BrandTitle: {
-    fontSize: 32,
-    fontWeight: "800",
+  perplexitySkipText: {
+    fontSize: 16,
+    fontWeight: "600",
     color: "#FFFFFF",
-    letterSpacing: 0.8,
-    textShadowColor: "rgba(0, 0, 0, 0.35)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
+    letterSpacing: -0.2,
   },
-  step0Tagline: {
-    fontSize: 14.5,
-    fontWeight: "500",
-    color: "rgba(255, 255, 255, 0.95)",
-    textAlign: "center",
-    lineHeight: 21,
-    textShadowColor: "rgba(0, 0, 0, 0.35)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  step0BottomCard: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+  perplexityContent: {
+    flex: 1,
+    justifyContent: "flex-end",
     paddingHorizontal: 22,
-    paddingTop: 24,
-    paddingBottom: Platform.OS === "ios" ? 24 : 20,
-    marginTop: -28,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000000",
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 8,
-      },
-      web: {
-        boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.08)",
-      },
-    }),
+    maxWidth: 480,
+    width: "100%",
+    alignSelf: "center",
+    zIndex: 10,
   },
-  step0MobileBtn: {
+  perplexityBrandContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+  perplexityBrandText: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: -0.6,
+    marginTop: 10,
+    fontFamily: Platform.OS === "ios" ? "System" : undefined,
+  },
+  perplexityButtonsStack: {
+    width: "100%",
+    gap: 12,
+    marginBottom: 20,
+  },
+  perplexityWhiteBtn: {
     height: 52,
-    borderRadius: 16,
-    backgroundColor: COLORS.primary, // Follow application theme color
+    borderRadius: 26,
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    marginBottom: 12,
+    paddingHorizontal: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
+        cursor: "pointer",
+      },
+    }),
+  },
+  perplexityWhiteBtnText: {
+    fontSize: 15.5,
+    fontWeight: "600",
+    color: "#0F172A",
+    letterSpacing: -0.2,
+  },
+  gisWrapper: {
+    display: "none",
+  },
+  perplexityPrimaryBtn: {
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: COLORS.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     ...Platform.select({
       ios: {
         shadowColor: COLORS.primary,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
       },
       android: {
         elevation: 4,
       },
       web: {
-        boxShadow: "0 4px 12px rgba(37, 99, 235, 0.25)",
+        boxShadow: "0 4px 14px rgba(37, 99, 235, 0.35)",
+        cursor: "pointer",
       },
     }),
   },
-  step0MobileBtnText: {
-    fontSize: 15.5,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  step0SocialBtn: {
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1.2,
-    borderColor: "#E2E8F0",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    marginBottom: 12,
-  },
-  step0SocialBtnText: {
+  perplexityPrimaryBtnText: {
     fontSize: 15.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#FFFFFF",
+    letterSpacing: -0.2,
   },
-  gisWrapper: {
-    display: "none",
-  },
-  step0FooterRow: {
-    flexDirection: "row",
-    justifyContent: "center",
+  perplexityFooter: {
     alignItems: "center",
-    marginTop: 10,
-    paddingBottom: 4,
+    gap: 10,
+    paddingTop: 4,
   },
-  step0FooterText: {
-    fontSize: 13.5,
+  perplexityPolicyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  perplexityPolicyLink: {
+    fontSize: 13,
+    color: "#94A3B8",
+    fontWeight: "500",
+  },
+  perplexityPolicySpacer: {
+    fontSize: 13,
+    color: "#94A3B8",
+  },
+  perplexitySignUpRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  perplexitySignUpMuted: {
+    fontSize: 13,
     color: "#64748B",
   },
-  step0SignUpLink: {
-    fontSize: 13.5,
+  perplexitySignUpLink: {
+    fontSize: 13,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: "#FFFFFF",
   },
 
   /* ================= FLOW SCREENS (STEP 1 & 2) ================= */
@@ -1280,31 +1379,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 10,
     paddingBottom: 8,
-    height: 48,
+    height: 52,
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: -6,
+    marginLeft: -4,
   },
   skipHereBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
   },
   skipHereText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#475569",
   },
   flowBody: {
     flex: 1,
     paddingHorizontal: 22,
-    paddingTop: 12,
+    paddingTop: 16,
   },
   flowHeading: {
     fontSize: 28,
@@ -1314,10 +1418,10 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   flowSubheading: {
-    fontSize: 14,
-    color: "#64748B",
-    lineHeight: 20,
-    marginBottom: 26,
+    fontSize: 14.5,
+    color: "#6B7280",
+    lineHeight: 21,
+    marginBottom: 24,
   },
   flowSubheadingBold: {
     fontWeight: "700",
@@ -1328,22 +1432,47 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  /* Step 1: Real Interactive Phone Card */
+  /* Step 1: Clean Phone Input Card */
   phoneInputCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 58,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1.2,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5E7EB",
     paddingHorizontal: 14,
+    paddingVertical: 12,
+    justifyContent: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+      },
+    }),
+  },
+  phoneInputCardFocused: {
+    borderColor: COLORS.primary,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 0 0 3px rgba(37, 99, 235, 0.12)",
+      },
+    }),
+  },
+  phoneInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   countryBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
+    gap: 4,
+    paddingVertical: 2,
     paddingRight: 6,
   },
   countryFlagText: {
@@ -1352,61 +1481,95 @@ const styles = StyleSheet.create({
   countryCodeBadgeText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#1F2937",
   },
   phoneInputDivider: {
     width: 1,
-    height: 24,
-    backgroundColor: "#CBD5E1",
+    height: 20,
+    backgroundColor: "#E5E7EB",
     marginHorizontal: 8,
   },
   phoneTextInput: {
     flex: 1,
-    height: "100%",
-    fontSize: 17,
+    height: 36,
+    fontSize: 16.5,
     fontWeight: "600",
-    color: "#0F172A",
-    letterSpacing: 0.5,
+    color: "#1F2937",
+    letterSpacing: 0.6,
     paddingVertical: 0,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     ...Platform.select({
       web: {
         outlineStyle: "none",
         outlineWidth: 0,
-        outlineColor: "transparent",
       },
     }),
   },
   phoneErrorText: {
-    fontSize: 12.5,
+    fontSize: 13,
+    fontWeight: "500",
     color: COLORS.danger,
-    marginTop: 6,
+    marginTop: 8,
     marginLeft: 4,
   },
 
-  /* Step 2: Floating OTP Digits with Sleek Unified Underlines */
+  /* Step 2: Individual Modern Tactile OTP Card Boxes */
   otpDigitsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     width: "100%",
-    paddingHorizontal: 10,
-    marginTop: 28,
-    marginBottom: 32,
+    paddingHorizontal: 4,
+    marginTop: 20,
+    marginBottom: 28,
   },
-  otpSlot: {
-    width: 44,
+  otpBox: {
+    width: OTP_BOX_WIDTH,
+    height: OTP_BOX_HEIGHT,
+    borderRadius: 14,
+    backgroundColor: "#FAFAFA",
+    borderWidth: 1.2,
+    borderColor: "#E5E7EB",
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
+      },
+    }),
   },
-  otpSlotInput: {
-    width: 44,
-    height: 44,
+  otpBoxFilled: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#D1D5DB",
+  },
+  otpBoxFocused: {
+    backgroundColor: "#FFFFFF",
+    borderColor: COLORS.primary,
+    borderWidth: 2,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 0 0 3px rgba(37, 99, 235, 0.12)",
+      },
+    }),
+  },
+  otpBoxInput: {
+    width: "100%",
+    height: "100%",
     textAlign: "center",
     textAlignVertical: "center",
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#1F2937",
     backgroundColor: "transparent",
     paddingHorizontal: 0,
     paddingVertical: 0,
@@ -1415,26 +1578,16 @@ const styles = StyleSheet.create({
       web: {
         outlineStyle: "none",
         outlineWidth: 0,
-        outlineColor: "transparent",
       },
     }),
   },
-  otpSlotUnderline: {
-    width: 20,
+  otpCursorIndicator: {
+    width: 14,
     height: 2.5,
     borderRadius: 2,
-    backgroundColor: "#E2E8F0",
-    marginTop: 2,
-  },
-  otpSlotUnderlineFocused: {
     backgroundColor: COLORS.primary,
-    width: 20,
-    height: 2.5,
-  },
-  otpSlotUnderlineFilled: {
-    backgroundColor: "#94A3B8",
-    width: 20,
-    height: 2.5,
+    position: "absolute",
+    bottom: 8,
   },
   iDontReceiveCodeContainer: {
     alignSelf: "flex-start",
@@ -1445,16 +1598,16 @@ const styles = StyleSheet.create({
   iDontReceiveCodeText: {
     fontSize: 14.5,
     fontWeight: "600",
-    color: "#DC2626", // Red/coral link matching mockup
+    color: "#DC2626",
   },
   devCodeNotice: {
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: "#EFF6FF",
     borderWidth: 1,
-    borderColor: COLORS.primaryBorder,
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    borderColor: "#BFDBFE",
+    borderRadius: 20,
+    paddingHorizontal: 14,
     paddingVertical: 7,
-    marginBottom: 18,
+    marginBottom: 20,
     alignSelf: "flex-start",
   },
   devCodeNoticeText: {
@@ -1463,19 +1616,19 @@ const styles = StyleSheet.create({
   },
   devCodeBold: {
     fontWeight: "700",
-    color: COLORS.primaryDark,
+    color: "#0F172A",
   },
   devCodeHint: {
     fontSize: 12,
-    color: COLORS.primary,
+    color: "#2563EB",
     fontWeight: "600",
   },
 
   /* Action Buttons */
   primaryActionButton: {
     height: 52,
-    borderRadius: 16,
-    backgroundColor: COLORS.primary, // Follow application theme color
+    borderRadius: 26,
+    backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 22,
@@ -1483,14 +1636,15 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: COLORS.primary,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
+        shadowOpacity: 0.28,
+        shadowRadius: 10,
       },
       android: {
         elevation: 3,
       },
       web: {
-        boxShadow: "0 4px 12px rgba(37, 99, 235, 0.25)",
+        boxShadow: "0 4px 14px rgba(37, 99, 235, 0.28)",
+        cursor: "pointer",
       },
     }),
   },
@@ -1499,53 +1653,77 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         boxShadow: "none",
+        cursor: "not-allowed",
       },
     }),
   },
   primaryActionButtonText: {
-    fontSize: 16,
+    fontSize: 15.5,
     fontWeight: "700",
     color: "#FFFFFF",
+    letterSpacing: 0.2,
   },
   helpLinkContainer: {
     alignSelf: "flex-start",
-    marginTop: 14,
+    marginTop: 16,
     paddingVertical: 4,
     paddingHorizontal: 2,
   },
   helpLinkText: {
     fontSize: 14,
     fontWeight: "600",
-    color: COLORS.primary, // Follow application theme
+    color: COLORS.primary,
   },
 
   /* Step 3: Name Setup */
   nameScrollContent: {
     paddingHorizontal: 22,
-    paddingTop: 12,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   nameInputCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1.2,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5E7EB",
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginBottom: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
+      },
+    }),
+  },
+  nameInputCardFocused: {
+    borderColor: COLORS.primary,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 0 0 3px rgba(37, 99, 235, 0.12)",
+      },
+    }),
   },
   nameInputLabel: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: "600",
-    color: "#64748B",
-    marginBottom: 2,
+    color: "#6B7280",
+    marginBottom: 3,
   },
   nameTextInput: {
-    fontSize: 16.5,
+    fontSize: 16,
     fontWeight: "600",
-    color: "#0F172A",
-    paddingVertical: 4,
-    height: 36,
+    color: "#1F2937",
+    paddingVertical: 2,
+    height: 32,
     width: "100%",
     ...Platform.select({
       web: {
@@ -1557,33 +1735,64 @@ const styles = StyleSheet.create({
   privacyRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 4,
+    marginTop: 6,
     paddingHorizontal: 2,
   },
+  privacyIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#F1EBE6",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
   privacyText: {
-    fontSize: 12,
-    color: "#64748B",
+    fontSize: 12.5,
+    color: "#6B7280",
     flex: 1,
-    lineHeight: 17,
+    lineHeight: 18,
   },
 
   /* Country Modal */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
     justifyContent: "flex-end",
   },
   modalSheet: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 14,
     paddingBottom: 36,
     maxHeight: "70%",
     maxWidth: CARD_MAX_WIDTH,
     width: "100%",
     alignSelf: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000000",
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.14,
+        shadowRadius: 18,
+      },
+      android: {
+        elevation: 12,
+      },
+      web: {
+        boxShadow: "0 -6px 24px rgba(0, 0, 0, 0.14)",
+      },
+    }),
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E5E7EB",
+    alignSelf: "center",
+    marginBottom: 16,
   },
   modalHeader: {
     flexDirection: "row",
@@ -1592,38 +1801,51 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#1F2937",
   },
   modalCloseBtn: {
-    padding: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
   },
   countryListItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 4,
   },
   countryListItemActive: {
-    backgroundColor: "#EFF6FF",
-    borderRadius: 12,
-    paddingHorizontal: 8,
+    backgroundColor: "#FDF5F3",
   },
   countryListFlag: {
-    fontSize: 20,
+    fontSize: 22,
     marginRight: 12,
   },
   countryListName: {
     flex: 1,
     fontSize: 15,
-    fontWeight: "500",
-    color: "#0F172A",
+    fontWeight: "600",
+    color: "#1F2937",
   },
   countryListCode: {
     fontSize: 15,
     fontWeight: "700",
     color: COLORS.primary,
+    marginRight: 8,
+  },
+  countryCheckmark: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

@@ -83,7 +83,7 @@ export default function AgentPaymentSuccessScreen({ route, navigation }) {
       toValue: 1,
       friction: 5,
       tension: 65,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start();
 
     // Auto-redirect to Agent Dashboard after ~2.8 seconds
