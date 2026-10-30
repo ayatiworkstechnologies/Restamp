@@ -6,12 +6,17 @@ import {
   StyleSheet,
   TouchableOpacity,
   Pressable,
+  Alert,
 } from "react-native";
 import { X, Sparkles } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import PrimaryButton from "../../components/owner/PrimaryButton";
-import SecondaryButton from "../../components/owner/SecondaryButton";
 
+/**
+ * The four closing outcomes accepted by PATCH /owner/leads/{id} (contract
+ * §G). closing_reason must be exactly one of these values; anything else the
+ * backend answers with 422. Nothing here touches a listing's status.
+ */
 const OUTCOMES = [
   { id: "Rented", label: "🏠 Rented", desc: "Agreement finalized with tenant", isSuccess: true },
   { id: "Sold", label: "💰 Sold", desc: "Sale deed executed and closed", isSuccess: true },
@@ -27,19 +32,46 @@ export default function OwnerCloseLeadModal({
 }) {
   const [selectedOutcome, setSelectedOutcome] = useState("Rented");
   const [isSuccessView, setIsSuccessView] = useState(false);
+  // Drives the single-submit rule: while a close request is in flight the
+  // confirm buttons are disabled, so a second tap can never send another
+  // PATCH (no double submit).
+  const [saving, setSaving] = useState(false);
 
   if (!lead) return null;
 
-  const handleConfirmClose = () => {
-    // P4 rule: close only the lead — the listing is never modified. The
-    // property-close option was removed; only the outcome is reported.
-    onCloseLeadWithOutcome?.(lead.id, selectedOutcome, false, null);
-    setIsSuccessView(true);
+  const handleConfirmClose = async () => {
+    if (saving) return;
+    if (typeof onCloseLeadWithOutcome !== "function") return;
+    setSaving(true);
+    try {
+      // The screen performs PATCH /owner/leads/{id} and refetches (§G). The
+      // success view is shown only after the server accepted the outcome —
+      // on failure the sheet stays open with an honest error, never "closed".
+      await onCloseLeadWithOutcome(lead.id, selectedOutcome);
+      setIsSuccessView(true);
+    } catch (error) {
+      Alert.alert(
+        "Couldn't close lead",
+        (error && error.detail) || "Please check your connection and try again."
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDone = () => {
     setIsSuccessView(false);
+    setSelectedOutcome("Rented");
     onClose();
+  };
+
+  // Every dismissal of the success view resets it; otherwise the next lead
+  // opened in this (still mounted) sheet would show "Deal Closed" for a lead
+  // that was never closed. Dismissal is blocked while the PATCH is in flight.
+  const handleDismiss = () => {
+    if (saving) return;
+    if (isSuccessView) handleDone();
+    else onClose();
   };
 
   const isPositiveDeal = selectedOutcome !== "Not Converted";
@@ -49,9 +81,9 @@ export default function OwnerCloseLeadModal({
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={handleDismiss}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={styles.backdrop} onPress={handleDismiss}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.sheetHandle} />
 
@@ -82,7 +114,7 @@ export default function OwnerCloseLeadModal({
                   <Text style={styles.title}>Close Lead</Text>
                   <Text style={styles.subtitle}>Outcome for {lead.customerName}</Text>
                 </View>
-                <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+                <TouchableOpacity onPress={handleDismiss} activeOpacity={0.7} disabled={saving}>
                   <X size={20} color={COLORS.textSecondary} />
                 </TouchableOpacity>
               </View>
@@ -101,6 +133,7 @@ export default function OwnerCloseLeadModal({
                       ]}
                       onPress={() => setSelectedOutcome(item.id)}
                       activeOpacity={0.8}
+                      disabled={saving}
                     >
                       <View style={{ flex: 1 }}>
                         <Text
@@ -126,12 +159,14 @@ export default function OwnerCloseLeadModal({
                 })}
               </View>
 
-              {/* P4: closing a lead never modifies the listing, so no
-                  property-close option is offered. */}
+              {/* Closing a lead never modifies the listing (§G): only the
+                  outcome above is sent to the lead endpoint. */}
 
               <PrimaryButton
                 title="Save & Close Deal"
                 onPress={handleConfirmClose}
+                disabled={saving}
+                loading={saving}
                 style={{ width: "100%", marginTop: 16 }}
               />
             </View>

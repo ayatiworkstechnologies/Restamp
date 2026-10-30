@@ -7,7 +7,7 @@
  *   scheduled_at must be in the future.
  * - GET /buyer/visits?status?&page?&page_size? -> VisitsResponse (own visits).
  * - GET /buyer/visits/{id} -> VisitOut (own only, else 404).
- * - PATCH /buyer/visits/{id} {scheduled_at?, status?} — buyers confirm/decline
+ * - PATCH /buyer/visits/{id} {scheduled_at?, status?, note?} — buyers confirm/decline
  *   owner-proposed visits, reschedule requested/confirmed times, cancel open
  *   visits. Status is one of CONFIRMED/DECLINED/CANCELLED (buyers can never
  *   COMPLETED; that is owner-only).
@@ -19,7 +19,13 @@
  *   complete confirmed visits).
  * All calls require the matching role (401 anonymous / 403 wrong role);
  * invisible listings and foreign visits are 404; invalid moves are 422.
- * Responses carry no phone numbers and no display names.
+ *
+ * VisitOut (CONTRACT.md §C/§E) carries no phone numbers. Names are the
+ * buyer's chosen name (buyer_display_name) and the owner's public name
+ * (owner_display_name) — null when there is none; never phone-based.
+ * rescheduled_at (explicit UTC) drives the "Rescheduled" display state; the
+ * visit `note` is visible to BOTH parties ("Notes for Visit"). Labels and
+ * colors live in src/utils/visitStatus.js.
  */
 import { apiGetAuth, apiPatchAuth, apiPost } from "./client";
 import { withBuyerMode } from "./buyerMode";
@@ -105,6 +111,9 @@ export function toUiVisit(row) {
   const uiStatus =
     status === "COMPLETED" ? "completed" : status === "CANCELLED" || status === "DECLINED" ? "cancelled" : "upcoming";
   const listing = row?.listing || {};
+  const rescheduled = parseApiDateTime(row?.rescheduled_at);
+  const buyerName = chosenName(row?.buyer_display_name);
+  const ownerName = chosenName(row?.owner_display_name);
   return {
     id: row?.id,
     property_listing_id: row?.property_listing_id,
@@ -116,6 +125,15 @@ export function toUiVisit(row) {
     propertyTitle: listing.title || "",
     propertyPrice: listing.price_paise ?? null,
     pricePeriod: listing.price_period || null,
+    propertyType: listing.property_type || null,
+    propertyLocality: listing.locality || "",
+    propertyCity: listing.city || "",
+    // Names (null when the backend has no chosen/public name). The *Label
+    // values are the honest fallbacks screens render.
+    buyerName,
+    ownerName,
+    buyerLabel: buyerName || (row?.buyer_user_id != null ? `Buyer #${row.buyer_user_id}` : "Buyer"),
+    ownerLabel: ownerName || "Owner",
     note: row?.note || "",
     date: valid ? `${pad(valid.getDate())} ${MONTH_NAMES[valid.getMonth()]} ${valid.getFullYear()}` : "",
     time: valid
@@ -130,7 +148,49 @@ export function toUiVisit(row) {
     // a reschedule picker's initial date) gets the right instant.
     scheduledAt: valid ? valid.toISOString() : row?.scheduled_at || null,
     createdAt: created ? created.toISOString() : row?.created_at || null,
+    rescheduledAt: rescheduled ? rescheduled.toISOString() : null,
   };
+}
+
+/**
+ * A display name is shown only when it is a chosen name. The backend already
+ * withholds phone-number defaults; this is the client-side second line of
+ * defence so a phone-shaped value is never rendered as a name.
+ */
+function chosenName(value) {
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!name) return null;
+  if (/(?:\d[\s\-().+]*){6,}/.test(name)) return null;
+  return name;
+}
+
+/**
+ * Initial values for ScheduleVisitModal when rescheduling an existing visit:
+ * the visit's own date, time and note, so a reschedule starts from what was
+ * agreed instead of today / 10:00 am / an empty note. The time uses the
+ * modal's slot format ("04:00 pm", lower-case); an off-slot time such as
+ * "04:30 pm" highlights no chip but is still kept if the user picks no other.
+ * Missing values are left undefined so the modal keeps its own defaults.
+ * @param {object} uiVisit - a toUiVisit() row
+ */
+export function toScheduleModalInitial(uiVisit) {
+  const at = parseApiDateTime(uiVisit && uiVisit.scheduledAt);
+  return {
+    initialDate: at || undefined,
+    initialTime: at && uiVisit.time ? String(uiVisit.time).toLowerCase() : undefined,
+    initialNote: uiVisit && typeof uiVisit.note === "string" ? uiVisit.note : "",
+  };
+}
+
+// PATCH bodies: `note` is sent whenever the caller passes one (an empty
+// string clears it); omitted when undefined so a status-only change never
+// touches the note.
+function visitPatchBody({ scheduledAtISO, status, note } = {}) {
+  const body = {};
+  if (scheduledAtISO) body.scheduled_at = scheduledAtISO;
+  if (status) body.status = status;
+  if (note !== undefined && note !== null) body.note = String(note).slice(0, 2000);
+  return body;
 }
 
 // --- Buyer ---------------------------------------------------------------
@@ -158,10 +218,8 @@ export async function fetchBuyerVisit(visitId) {
   return withBuyerMode(() => apiGetAuth(`/buyer/visits/${visitId}`));
 }
 
-export async function updateBuyerVisit(visitId, { scheduledAtISO, status } = {}) {
-  const body = {};
-  if (scheduledAtISO) body.scheduled_at = scheduledAtISO;
-  if (status) body.status = status;
+export async function updateBuyerVisit(visitId, { scheduledAtISO, status, note } = {}) {
+  const body = visitPatchBody({ scheduledAtISO, status, note });
   return withBuyerMode(() => apiPatchAuth(`/buyer/visits/${visitId}`, body));
 }
 
@@ -190,9 +248,7 @@ export async function fetchOwnerVisit(visitId) {
   return apiGetAuth(`/owner/visits/${visitId}`);
 }
 
-export async function updateOwnerVisit(visitId, { scheduledAtISO, status } = {}) {
-  const body = {};
-  if (scheduledAtISO) body.scheduled_at = scheduledAtISO;
-  if (status) body.status = status;
+export async function updateOwnerVisit(visitId, { scheduledAtISO, status, note } = {}) {
+  const body = visitPatchBody({ scheduledAtISO, status, note });
   return apiPatchAuth(`/owner/visits/${visitId}`, body);
 }

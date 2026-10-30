@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -34,8 +34,20 @@ import {
 import COLORS from "../../constants/colors";
 import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContext";
 import { useAuth } from "../../context/AuthContext";
-import { updateOwnerLeadStatus, toOwnerLead, selectPropertyLeads, leadPropertyLabel, propertyTypeLabel, leadDateLabel } from "../../api/owner";
+import {
+  fetchOwnerLead,
+  fetchLeadNotes,
+  addLeadNote as addLeadNoteApi,
+  updateOwnerLeadStatus,
+  toOwnerLead,
+  selectPropertyLeads,
+  leadPropertyLabel,
+  propertyTypeLabel,
+  leadDateLabel,
+  LEAD_DATE_UNAVAILABLE,
+} from "../../api/owner";
 import { fetchOwnerVisits, toUiVisit, toVisitPayload, updateOwnerVisit } from "../../api/visits";
+import { getVisitDisplay } from "../../utils/visitStatus";
 import { ownerVisitActions, ownerVisitErrorMessage, proposeVisitForLead } from "../../utils/ownerVisits";
 import StatusBadge from "../../components/owner/StatusBadge";
 import PrimaryButton from "../../components/owner/PrimaryButton";
@@ -45,7 +57,7 @@ import OwnerCloseLeadModal from "./OwnerCloseLeadModal";
 import OwnerPropertyDetailModal from "./OwnerPropertyDetailModal";
 
 export default function OwnerLeadDetailScreen({ route, navigation }) {
-  const { properties, updateLeadStatus, closeLead, addLeadNote } = useOwner();
+  const { properties, updateLeadStatus } = useOwner();
   const { user: authUser } = useAuth();
   // Only the signed-in owner's rows are ever matched (defence in depth on top
   // of the backend's ownership scoping).
@@ -53,9 +65,16 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
     () => selectOwnerScopedProperties(properties, authUser?.id ?? null),
     [properties, authUser]
   );
-  const initialLead = route?.params?.lead;
+  // Navigation params carry only the initial id + a stale snapshot; the lead
+  // itself is reloaded from GET /owner/leads/{id}, so what is rendered is the
+  // server's current values (contract §D), not what the previous screen knew.
+  const initialLead = route?.params?.lead ?? null;
 
   const [lead, setLead] = useState(initialLead);
+  const [leadFetching, setLeadFetching] = useState(false);
+  const [leadError, setLeadError] = useState(false);
+  const leadReqId = useRef(0);
+
   const [showVisitModal, setShowVisitModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showPropertyModal, setShowPropertyModal] = useState(false);
@@ -64,6 +83,39 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
   const [visitsLoading, setVisitsLoading] = useState(false);
   const [visitsError, setVisitsError] = useState(false);
   const [visitBusy, setVisitBusy] = useState(false);
+
+  // Internal notes are device-independent: they exist only behind
+  // GET/POST /owner/leads/{id}/notes (contract §F), never in a local store.
+  const [leadNotes, setLeadNotes] = useState(null);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [notesError, setNotesError] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const notesReqId = useRef(0);
+
+  // Reload the lead from the server (request-ID guard so a late response can
+  // never overwrite newer rows). The snapshot from the list stays on screen
+  // meanwhile; on failure the honest error row offers a Retry.
+  const loadLead = useCallback(() => {
+    const leadId = Number(initialLead?.id);
+    if (!Number.isFinite(leadId) || leadId <= 0) return Promise.resolve(null);
+    const myReq = ++leadReqId.current;
+    setLeadFetching(true);
+    return fetchOwnerLead(leadId).then(
+      (mapped) => {
+        if (leadReqId.current !== myReq) return null;
+        setLeadError(false);
+        setLeadFetching(false);
+        if (mapped && Number(mapped.id) === leadId) setLead(mapped);
+        return mapped;
+      },
+      () => {
+        if (leadReqId.current !== myReq) return null;
+        setLeadError(true);
+        setLeadFetching(false);
+        return null;
+      }
+    );
+  }, [initialLead?.id]);
 
   const loadOwnerVisit = useCallback(() => {
     const listingId = Number(lead?.property_listing_id);
@@ -98,10 +150,37 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
     );
   }, [lead?.property_listing_id, lead?.buyer_user_id]);
 
+  const loadLeadNotes = useCallback(() => {
+    const leadId = Number(initialLead?.id);
+    if (!Number.isFinite(leadId) || leadId <= 0) {
+      setLeadNotes([]);
+      return Promise.resolve([]);
+    }
+    const myReq = ++notesReqId.current;
+    setNotesLoading(true);
+    setNotesError(false);
+    return fetchLeadNotes(leadId).then(
+      (resp) => {
+        if (notesReqId.current !== myReq) return null;
+        setLeadNotes(resp.items);
+        setNotesLoading(false);
+        return resp.items;
+      },
+      () => {
+        if (notesReqId.current !== myReq) return null;
+        setNotesError(true);
+        setNotesLoading(false);
+        return null;
+      }
+    );
+  }, [initialLead?.id]);
+
   useFocusEffect(
     useCallback(() => {
+      loadLead();
+      loadLeadNotes();
       loadOwnerVisit();
-    }, [loadOwnerVisit])
+    }, [loadLead, loadLeadNotes, loadOwnerVisit])
   );
 
   const ownerVisitIsOpen =
@@ -158,10 +237,12 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         closingReason,
       });
       const mapped = toOwnerLead(updated);
+      // Merge only what the PATCH response genuinely carries; the full lead
+      // (with the message thread) is reloaded from GET /owner/leads/{id}.
       setLead((prev) => ({
         ...prev,
-        ...mapped,
-        internalNotes: prev.internalNotes,
+        status: mapped.status,
+        closedOutcome: mapped.closedOutcome,
       }));
     } catch {
       updateLeadStatus(lead.id, prevSnapshot.status, prevSnapshot.closedOutcome);
@@ -171,6 +252,24 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         "Please check your connection and try again."
       );
     }
+  };
+
+  // Close the lead (contract §G): PATCH /owner/leads/{id} with status CLOSED
+  // and the required closing_reason — one of the modal's four outcomes.
+  // Never touches any listing endpoint; on success the lead is refetched so
+  // status, filters, and counts come from the server, and the saved status +
+  // outcome are applied from the server-confirmed PATCH response first.
+  const handleCloseOutcome = async (outcome) => {
+    const updated = await updateOwnerLeadStatus(lead.id, {
+      status: "closed",
+      closingReason: outcome,
+    });
+    const mapped = toOwnerLead(updated);
+    setLead((prev) => (mapped && Number(mapped.id) === Number(lead.id)
+      ? { ...prev, status: mapped.status, closedOutcome: mapped.closedOutcome }
+      : prev
+    ));
+    await loadLead();
   };
 
   const applyVisitStatus = async (status, action) => {
@@ -219,7 +318,15 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
           Alert.alert("Invalid Date/Time", error?.message || "Please choose a future date and time.");
           return;
         }
-        await updateOwnerVisit(ownerVisit.id, { scheduledAtISO });
+        // §E: the note is sent only when the owner edited it in the modal
+        // (an emptied note is PATCHed as "" — the server clears it). A pure
+        // time reschedule never touches the checker's previous note.
+        const noteChanged =
+          String(visitData?.note ?? "") !== String(ownerVisit.note ?? "");
+        await updateOwnerVisit(ownerVisit.id, {
+          scheduledAtISO,
+          ...(noteChanged ? { note: visitData?.note ?? "" } : {}),
+        });
         Alert.alert("Visit Rescheduled", "The proposed time was updated.");
       } else {
         await proposeVisitForLead(lead, visitData);
@@ -275,23 +382,31 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
     }
   };
 
-  const handleAddNote = () => {
-    if (!newNoteText.trim()) return;
-    const noteContent = newNoteText.trim();
-    addLeadNote?.(lead.id, noteContent);
-
-    const newNoteObj = {
-      id: `note-${Date.now()}`,
-      text: noteContent,
-      timestamp: "Just now",
-    };
-
-    setLead((prev) => ({
-      ...prev,
-      internalNotes: [...(prev.internalNotes || []), newNoteObj],
-    }));
-
-    setNewNoteText("");
+  const handleAddNote = async () => {
+    // While the request is in flight the button stays disabled, so a second
+    // tap can never send a duplicate note.
+    if (noteSaving) return;
+    const noteContent = String(newNoteText ?? "").trim();
+    if (!noteContent || typeof lead?.id !== "number") return;
+    setNoteSaving(true);
+    try {
+      // The server-confirmed note (id + created_at from the backend) is
+      // appended; earlier notes stay. Nothing is added before the response.
+      const saved = await addLeadNoteApi(lead.id, noteContent);
+      setLeadNotes((prev) => [...(Array.isArray(prev) ? prev : []), saved]);
+      setNewNoteText("");
+    } catch (error) {
+      // The draft stays in the input box — nothing is lost on a failure.
+      if (error?.kind === "validation") {
+        Alert.alert("Note not saved", error.message);
+      } else if (error?.status === 422) {
+        Alert.alert("Note not saved", error?.detail || "A note must be 1–2000 characters.");
+      } else {
+        Alert.alert("Note not saved", "Please check your connection and try again.");
+      }
+    } finally {
+      setNoteSaving(false);
+    }
   };
 
   return (
@@ -323,6 +438,26 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Lead refresh state (values below come from the server reload). */}
+        {leadFetching ? (
+          <View style={styles.leadFetchingRow}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.leadFetchingText}>Refreshing lead…</Text>
+          </View>
+        ) : null}
+        {leadError ? (
+          <View style={styles.leadErrorRow}>
+            <Text style={styles.leadErrorText}>Couldn't refresh lead details.</Text>
+            <TouchableOpacity
+              style={styles.leadRetryBtn}
+              onPress={loadLead}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.leadRetryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* ================= BUYER DETAILS ================= */}
         <View style={styles.section}>
           <View style={styles.buyerTopRow}>
@@ -467,14 +602,16 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>LOCALITY</Text>
               <Text style={styles.specValue}>
-                {lead.propertyLocality?.split(",")[0] || "Not available"}
+                {lead.propertyLocality || "Not available"}
               </Text>
             </View>
 
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>SITE VISIT</Text>
               <Text style={styles.specValue}>
-                {ownerVisitIsOpen ? `${ownerVisit.date} · ${ownerVisit.time}` : "Not scheduled"}
+                {ownerVisitIsOpen
+                  ? `${ownerVisit.date || "Date unavailable"} · ${ownerVisit.time || "Time unavailable"}`
+                  : "Not scheduled"}
               </Text>
             </View>
 
@@ -484,12 +621,33 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
             </View>
           </View>
 
-          {lead.message ? (
+          {/* The buyer's message thread (§D). List and detail rows render the
+              same mapped fields; when a thread exists from the detail response
+              it is shown with each real message, otherwise the legacy opening
+              message is shown, and when neither exists nothing is fabricated. */}
+          {Array.isArray(lead.messages) && lead.messages.length > 0 ? (
             <View style={styles.buyerMessageQuote}>
-              <Text style={styles.buyerMessageLabel}>Enquiry Note</Text>
+              <Text style={styles.buyerMessageLabel}>Buyer Messages</Text>
+              {lead.messages.map((entry, idx) => (
+                <View key={entry.id ?? `msg-${idx}`} style={styles.threadItem}>
+                  <Text style={styles.buyerMessageText}>"{entry.body}"</Text>
+                  {entry.timestamp ? (
+                    <Text style={styles.threadTime}>{entry.timestamp}</Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ) : lead.message ? (
+            <View style={styles.buyerMessageQuote}>
+              <Text style={styles.buyerMessageLabel}>Buyer Message</Text>
               <Text style={styles.buyerMessageText}>"{lead.message}"</Text>
             </View>
-          ) : null}
+          ) : (
+            <View style={styles.buyerMessageQuote}>
+              <Text style={styles.buyerMessageLabel}>Buyer Message</Text>
+              <Text style={styles.buyerMessageText}>No messages yet.</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.sectionDivider} />
@@ -522,12 +680,25 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
                 </View>
                 <View style={styles.visitTimeCol}>
                   <Text style={styles.visitStatusLabel}>
-                    VISIT {ownerVisit.serverStatus || "PENDING"}
+                    SITE VISIT
                   </Text>
                   <Text style={styles.visitDateTime}>
-                    {ownerVisit.date} · {ownerVisit.time}
+                    {ownerVisit.date || "Date unavailable"} · {ownerVisit.time || "Time unavailable"}
                   </Text>
                 </View>
+                {/* Visit status labels/colors come from visitStatus.js (§C):
+                    "Rescheduled" shows whenever the server reports
+                    rescheduled_at on an open visit. Actions below still follow
+                    the server status, never this display label. */}
+                {(() => {
+                  const visitDisplay = getVisitDisplay(ownerVisit, "owner");
+                  return (
+                    <StatusBadge
+                      status={visitDisplay.key}
+                      label={visitDisplay.label}
+                    />
+                  );
+                })()}
               </View>
 
               {ownerVisit.note ? (
@@ -614,14 +785,15 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
 
         <View style={styles.sectionDivider} />
 
-        {/* ================= INTERNAL NOTES ================= */}
+        {/* ================= INTERNAL NOTES (server-backed, §F) ================= */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Internal Notes</Text>
           <Text style={styles.sectionSubtitle}>
             Private notes visible only to you:
           </Text>
 
-          {/* Add Note Input Box */}
+          {/* Add Note Input Box (saving disables the button + input so no
+              duplicate note can be sent; the draft survives a failure). */}
           <View style={styles.noteInputBox}>
             <TextInput
               style={styles.noteInput}
@@ -630,30 +802,51 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
               value={newNoteText}
               onChangeText={setNewNoteText}
               underlineColorAndroid="transparent"
+              editable={!noteSaving}
               multiline
+              maxLength={2000}
             />
             <TouchableOpacity
               style={[
                 styles.saveNoteBtn,
-                !newNoteText.trim() && styles.saveNoteBtnDisabled,
+                (!newNoteText.trim() || noteSaving) && styles.saveNoteBtnDisabled,
               ]}
               onPress={handleAddNote}
-              disabled={!newNoteText.trim()}
+              disabled={!newNoteText.trim() || noteSaving}
               activeOpacity={0.8}
             >
               <Plus size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-              <Text style={styles.saveNoteBtnText}>Save Note</Text>
+              <Text style={styles.saveNoteBtnText}>
+                {noteSaving ? "Saving…" : "Save Note"}
+              </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Existing Notes List */}
-          {lead.internalNotes && lead.internalNotes.length > 0 ? (
+          {/* Existing Notes List — only server-confirmed notes (oldest first,
+              as GET /owner/leads/{id}/notes returns them). */}
+          {notesLoading && (leadNotes || []).length === 0 ? (
+            <View style={styles.notesLoadingRow}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.leadFetchingText}>Loading notes…</Text>
+            </View>
+          ) : notesError && (leadNotes || []).length === 0 ? (
+            <View style={styles.notesErrorRow}>
+              <Text style={styles.leadErrorText}>Couldn't load internal notes.</Text>
+              <TouchableOpacity
+                style={styles.leadRetryBtn}
+                onPress={loadLeadNotes}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.leadRetryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : leadNotes && leadNotes.length > 0 ? (
             <View style={styles.savedNotesList}>
-              {lead.internalNotes.map((noteItem) => (
-                <View key={noteItem.id} style={styles.savedNoteItem}>
+              {leadNotes.map((noteItem, idx) => (
+                <View key={noteItem.id ?? `note-${idx}`} style={styles.savedNoteItem}>
                   <View style={styles.savedNoteHeader}>
                     <FileText size={13} color="#2563EB" style={{ marginRight: 6 }} />
-                    <Text style={styles.savedNoteTime}>{noteItem.timestamp}</Text>
+                    <Text style={styles.savedNoteTime}>{noteItem.timestamp || LEAD_DATE_UNAVAILABLE}</Text>
                   </View>
                   <Text style={styles.savedNoteContent}>{noteItem.text}</Text>
                 </View>
@@ -686,27 +879,27 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Site Visit Modal */}
+      {/* Site Visit Modal (reschedule opens pre-filled with the visit's own
+          date/time/note via toScheduleModalInitial; propose starts empty). */}
       <OwnerSiteVisitModal
+        key={ownerVisit && ownerVisitIsOpen ? `visit-${ownerVisit.id}-${ownerVisit.scheduledAt}` : "new"}
         visible={showVisitModal}
         lead={lead}
+        visit={ownerVisitIsOpen ? ownerVisit : null}
         onClose={() => setShowVisitModal(false)}
         onVisitScheduled={(leadId, visitData) => handleScheduleVisit(visitData)}
       />
 
-      {/* Close Lead Modal */}
+      {/* Close Lead Modal — the modal drives the single submit; the outcome
+          is saved to the server by handleCloseOutcome and the modal confirms
+          only after the request succeeds. */}
       <OwnerCloseLeadModal
         visible={showCloseModal}
         lead={lead}
         onClose={() => setShowCloseModal(false)}
-        onCloseLeadWithOutcome={(leadId, outcome, closeProp, propId) => {
-          // P4 rules: close only the lead (closeProp ignored — the modal no
-          // longer offers it), and persist CLOSED with the outcome as
-          // closing_reason (no LOST backend status exists).
-          closeLead(leadId, outcome, false, null);
-          persistLeadStatus("closed", outcome);
-          setShowCloseModal(false);
-        }}
+        onCloseLeadWithOutcome={(leadId, outcome) =>
+          handleCloseOutcome(outcome)
+        }
       />
 
       {/* Property Details Modal */}
@@ -1191,6 +1384,75 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 10,
   },
+
+  /* LEAD REFRESH / NOTES STATES */
+  leadFetchingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+  },
+  leadFetchingText: {
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
+  },
+  leadErrorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  leadErrorText: {
+    fontSize: 12.5,
+    color: "#DC2626",
+    flex: 1,
+    marginRight: 10,
+  },
+  leadRetryBtn: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  leadRetryText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  notesLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+  },
+  notesErrorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+
+  /* MESSAGE THREAD */
+  threadItem: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E2E8F0",
+  },
+  threadTime: {
+    fontSize: 10.5,
+    color: "#94A3B8",
+    marginTop: 2,
+  },
+
   errorContainer: {
     flex: 1,
     justifyContent: "center",

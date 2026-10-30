@@ -35,6 +35,7 @@ import { useAuth } from "../../context/AuthContext";
 import PropertyDetailModal from "../../components/PropertyDetailModal";
 import { fetchMyEnquiries } from "../../api/enquiries";
 import { getAuthTokenSync } from "../../api/client";
+import { recordCallTap } from "../../api/calls";
 
 // Paise integer -> short display string (mirrors backend price_display).
 function formatPaise(paise, period) {
@@ -196,6 +197,8 @@ export default function EnquiriesScreen({ navigation, route }) {
       );
       return;
     }
+    // "Call button tapped" (CONTRACT §B), best effort, right before dialling.
+    recordCallTap(item.propertyId);
     Linking.openURL(`tel:+${cleanPhone}`).catch(() => {
       Alert.alert("Call Unavailable", "Could not place this call.");
     });

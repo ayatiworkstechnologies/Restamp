@@ -33,9 +33,12 @@ export function ownerVisitErrorMessage(error, action = "update") {
     };
   }
   if (error?.status === 422) {
+    // Contract §E: business-rule 422s carry short static text (e.g. "Only
+    // buyer may reschedule a REQUESTED visit") and the UI shows it. The
+    // wording stays the server's — it is never paraphrased into a guess.
     return {
       title: `Couldn't ${action} visit`,
-      message: "This visit may have changed. Refresh and try again.",
+      message: error?.detail || "This visit may have changed. Refresh and try again.",
     };
   }
   return {

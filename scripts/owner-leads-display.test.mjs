@@ -302,7 +302,12 @@ check(
   !leadDetailSrc.includes("PREFERRED LOCALITY") &&
     !leadDetailSrc.includes(">Buyer Requirement<") &&
     !leadDetailSrc.includes("lead.preferredVisitDate") &&
-    leadDetailSrc.includes("ownerVisitIsOpen ? `${ownerVisit.date} · ${ownerVisit.time}` : \"Not scheduled\"")
+    // The SITE VISIT spec row keeps the approved honest fallbacks now that
+    // the §D reload can leave date/time absent on old rows.
+    leadDetailSrc.includes('ownerVisit.date || "Date unavailable"') &&
+    leadDetailSrc.includes('ownerVisit.time || "Time unavailable"') &&
+    leadDetailSrc.includes('"Not scheduled"') &&
+    !leadDetailSrc.includes("ownerVisitIsOpen ? `${ownerVisit.date} · ${ownerVisit.time}` : \"Not scheduled\"")
 );
 
 if (failures) {

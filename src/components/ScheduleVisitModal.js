@@ -93,6 +93,9 @@ function ScheduleVisitModal({
   subtitle,
   initialDate,
   initialTime = "10:00 am",
+  // Existing visit note when rescheduling (see toScheduleModalInitial in
+  // src/api/visits.js); empty for a new request/proposal.
+  initialNote = "",
 }) {
   const today = useMemo(() => new Date(), []);
 
@@ -110,7 +113,9 @@ function ScheduleVisitModal({
   });
 
   const [selectedTime, setSelectedTime] = useState(initialTime);
-  const [visitNotes, setVisitNotes] = useState("");
+  const [visitNotes, setVisitNotes] = useState(() =>
+    typeof initialNote === "string" ? initialNote : ""
+  );
   const [selectedProperty, setSelectedProperty] = useState(
     property || matchingProperties[0] || null
   );
@@ -383,11 +388,14 @@ function ScheduleVisitModal({
             {/* VISIT NOTES INPUT */}
             <View style={styles.notesSection}>
               <Text style={styles.fieldSectionTitle}>Notes for Visit (Optional)</Text>
+              {/* The visit note is shared: buyer and owner both see it (CONTRACT §E).
+                  Private owner notes belong in the lead's internal notes instead. */}
+              <Text style={styles.notesHint}>Visible to both the buyer and the owner.</Text>
               <TextInput
                 style={styles.notesInput}
                 value={visitNotes}
                 onChangeText={setVisitNotes}
-                placeholder="Entry gate instructions, customer preferences..."
+                placeholder="Entry gate instructions, landmarks, timing..."
                 placeholderTextColor="#94A3B8"
                 multiline
                 numberOfLines={2}
@@ -654,6 +662,12 @@ const styles = StyleSheet.create({
 
   notesSection: {
     marginBottom: 10,
+  },
+  notesHint: {
+    fontSize: 11.5,
+    color: COLORS.lightText,
+    marginTop: -2,
+    marginBottom: 6,
   },
   notesInput: {
     backgroundColor: "#FFFFFF",

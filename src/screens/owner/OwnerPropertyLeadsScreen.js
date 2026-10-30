@@ -35,6 +35,7 @@ import { useOwner, selectOwnerScopedProperties } from "../../context/OwnerContex
 import { useAuth } from "../../context/AuthContext";
 import { selectPropertyLeads, fetchOwnerLeads, toOwnerLead, updateOwnerLeadStatus } from "../../api/owner";
 import { fetchOwnerVisits, toUiVisit, toVisitPayload, updateOwnerVisit } from "../../api/visits";
+import { getVisitDisplay } from "../../utils/visitStatus";
 import { ownerVisitErrorMessage, proposeVisitForLead } from "../../utils/ownerVisits";
 import StatusBadge from "../../components/owner/StatusBadge";
 import EmptyState from "../../components/owner/EmptyState";
@@ -54,7 +55,7 @@ const LEAD_TABS = [
 ];
 
 export default function OwnerPropertyLeadsScreen({ route, navigation }) {
-  const { properties, leads, updateLeadStatus, closeLead } = useOwner();
+  const { properties, leads, updateLeadStatus } = useOwner();
   const { user: authUser } = useAuth();
   // Only the signed-in owner's rows are ever shown (defence in depth on top
   // of the backend's ownership scoping).
@@ -207,6 +208,26 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
       }
     },
     [patchServerLead, updateLeadStatus, loadLeads]
+  );
+
+  // Close a lead (contract §G): one PATCH /owner/leads/{id} with CLOSED and
+  // the chosen outcome — never a listing endpoint. After the server
+  // confirms, the list is refetched so tabs, search, and counts show server
+  // values. The close modal awaits this and stays open on failure (the
+  // success view is only rendered after the request resolves).
+  const handleCloseOutcome = useCallback(
+    async (leadId, outcome) => {
+      try {
+        await updateOwnerLeadStatus(leadId, { status: "closed", closingReason: outcome });
+        await loadLeads();
+      } catch (error) {
+        // Refetch first so any partially-applied state is replaced by real
+        // server rows, then propagate: the modal shows the failure honestly.
+        loadLeads();
+        throw error;
+      }
+    },
+    [loadLeads]
   );
 
   // Filter leads specifically for this property. Honest empty (P0+P3): a
@@ -500,6 +521,11 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
           <View style={styles.leadsList}>
             {filteredLeads.map((lead) => {
               const leadVisit = activeVisitByBuyer.get(Number(lead.buyer_user_id));
+              // Visit wording/colors come from visitStatus.js (§C) — the
+              // raw server status is never shown as text.
+              const leadVisitDisplay = leadVisit
+                ? getVisitDisplay(leadVisit, "owner")
+                : null;
 
               return (
                 <TouchableOpacity
@@ -581,12 +607,14 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
                     {lead.message || "No message provided."}
                   </Text>
 
-                  {/* Real backend visit state only. */}
-                  {leadVisit ? (
+                  {/* Real backend visit state only, worded through the §C
+                      display label (incl. Rescheduled) with honest
+                      date/time fallbacks when the server row lacks them. */}
+                  {leadVisit && leadVisitDisplay ? (
                     <View style={styles.visitChipRow}>
                       <Calendar size={13} color="#D97706" style={{ marginRight: 5 }} />
                       <Text style={styles.visitChipText}>
-                        {leadVisit.serverStatus}: {leadVisit.date}, {leadVisit.time}
+                        {leadVisitDisplay.label}: {leadVisit.date || "Date unavailable"}, {leadVisit.time || "Time unavailable"}
                       </Text>
                     </View>
                   ) : null}
@@ -609,11 +637,15 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Site Visit Modal */}
+      {/* Site Visit Modal — reschedules open pre-filled with the visit's own
+          date/time/note (toScheduleModalInitial, §E); proposals start empty. */}
       {selectedLeadForVisit && (
         <OwnerSiteVisitModal
           visible={!!selectedLeadForVisit}
           lead={selectedLeadForVisit}
+          visit={
+            activeVisitByBuyer.get(Number(selectedLeadForVisit.buyer_user_id)) || null
+          }
           onClose={() => setSelectedLeadForVisit(null)}
           onVisitScheduled={async (leadId, visitDetails) => {
             const lead = selectedLeadForVisit;
@@ -632,7 +664,15 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
                   Alert.alert("Invalid Date/Time", error?.message || "Please choose a future date and time.");
                   return;
                 }
-                await updateOwnerVisit(existingVisit.id, { scheduledAtISO });
+                // §E: PATCH `note` only when the owner edited it in the
+                // modal — an emptied note is sent as "" (server clears it);
+                // a pure time change never rewrites the shared note.
+                const noteChanged =
+                  String(visitDetails?.note ?? "") !== String(existingVisit.note ?? "");
+                await updateOwnerVisit(existingVisit.id, {
+                  scheduledAtISO,
+                  ...(noteChanged ? { note: visitDetails?.note ?? "" } : {}),
+                });
                 Alert.alert("Visit Rescheduled", "The proposed time was updated.");
               } else {
                 await proposeVisitForLead(lead, visitDetails);
@@ -656,18 +696,17 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
         />
       )}
 
-      {/* Close Lead Modal */}
+      {/* Close Lead Modal — the modal awaits the server-confirmed close
+          (contract §G); the success view never shows before the PATCH
+          resolves. Only the lead is closed — never the listing. */}
       {selectedLeadForClose && (
         <OwnerCloseLeadModal
           visible={!!selectedLeadForClose}
           lead={selectedLeadForClose}
           onClose={() => setSelectedLeadForClose(null)}
-          onLeadClosed={(leadId, reason) => {
-            // P4 rule: close only the lead — never the listing.
-            closeLead(leadId, reason, false, null);
-            persistLeadStatus(leadId, "closed", reason);
-            setSelectedLeadForClose(null);
-          }}
+          onCloseLeadWithOutcome={(leadId, outcome) =>
+            handleCloseOutcome(leadId, outcome)
+          }
         />
       )}
 

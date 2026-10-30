@@ -172,35 +172,12 @@ export function OwnerProvider({ children }) {
     );
   };
 
-  const closeLead = (leadId, outcome, closeRelatedProperty = false, propertyId = null) => {
-    updateLeadStatus(leadId, "closed", outcome);
-    if (closeRelatedProperty && propertyId) {
-      updatePropertyStatus(propertyId, "closed", { closedOutcome: outcome });
-    }
-  };
-
-  const addLeadNote = (leadId, noteText) => {
-    if (!noteText || !noteText.trim()) return;
-    setLeads((prev) =>
-      prev.map((lead) => {
-        if (lead.id === leadId) {
-          const notes = lead.internalNotes || [];
-          return {
-            ...lead,
-            internalNotes: [
-              ...notes,
-              {
-                id: `note-${Date.now()}`,
-                text: noteText.trim(),
-                timestamp: "Just now",
-              },
-            ],
-          };
-        }
-        return lead;
-      })
-    );
-  };
+  // Lead states that used to live only on this device were removed with the
+  // server-backed flows: internal notes exist only behind
+  // GET/POST /owner/leads/{id}/notes (src/api/owner.js; contract §F), and
+  // closing a lead is PATCH /owner/leads/{id} with a server-confirmed
+  // closing_reason (contract §G) — never a local-only flip, and it never
+  // touches any listing status.
 
   const contextValue = useMemo(() => ({
     subscription,
@@ -217,8 +194,6 @@ export function OwnerProvider({ children }) {
     leads,
     setLeads,
     updateLeadStatus,
-    closeLead,
-    addLeadNote,
     selectedPlanForCheckout,
     setSelectedPlanForCheckout,
   }), [

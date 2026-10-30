@@ -12,6 +12,7 @@ import {
   Alert,
   TextInput,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -41,6 +42,9 @@ import {
   ShieldCheck,
   Award,
   Briefcase,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from "../../components/common/HugeIcon";
 import COLORS from "../../constants/colors";
 import { useWishlist } from "../../context/WishlistContext";
@@ -54,10 +58,13 @@ import {
   fetchBuyerVisits,
   toUiVisit,
   toVisitPayload,
+  toScheduleModalInitial,
   updateBuyerVisit,
 } from "../../api/visits";
+import { getVisitDisplay } from "../../utils/visitStatus";
 import {
   fetchMyEnquiries,
+  fetchEnquiryDetail,
   createEnquiry,
   toUiEnquiry,
 } from "../../api/enquiries";
@@ -65,7 +72,13 @@ import {
   fetchViewed,
   toUiViewed,
 } from "../../api/viewed";
+import {
+  fetchCallEvents,
+  recordCallTap,
+  toUiCallEvent,
+} from "../../api/calls";
 import { revealContactPhone } from "../../api/contact";
+import { fetchListingDetail } from "../../api/listings";
 import { getAuthTokenSync } from "../../api/client";
 
 // P2 honesty: no fabricated history. Viewed properties and call records have
@@ -118,15 +131,19 @@ export default function SavedScreen({ navigation, route }) {
   const [viewedLoading, setViewedLoading] = useState(false);
   const [viewedError, setViewedError] = useState(null);
 
-  // Call history state with both Call and WhatsApp actions
-  // No backend call-log API exists: the Calls tab starts empty and
-  // shows the honest empty state below. Nothing here is seeded.
+  // Call history state (server-backed: GET /buyer/call-events)
   const [callHistory, setCallHistory] = useState([]);
+  const [callsLoading, setCallsLoading] = useState(false);
+  const [callsError, setCallsError] = useState(null);
 
   // Messages/enquiries state (server-backed: GET /buyer/enquiries)
   const [enquiries, setEnquiries] = useState([]);
   const [enquiriesLoading, setEnquiriesLoading] = useState(false);
   const [enquiriesError, setEnquiriesError] = useState(null);
+  // Full conversation per enquiry id, loaded on demand when a card is
+  // expanded: { loading, error, messages }.
+  const [expandedEnquiryId, setExpandedEnquiryId] = useState(null);
+  const [threads, setThreads] = useState({});
 
   // Site visits are server-backed (GET /buyer/visits) for authenticated
   // buyers; guests and logged-out users see the honest empty state. The
@@ -134,6 +151,7 @@ export default function SavedScreen({ navigation, route }) {
   // agent details.
   const [siteVisits, setSiteVisits] = useState([]);
   const [visitsLoading, setVisitsLoading] = useState(false);
+  const [visitsError, setVisitsError] = useState(null);
   const [visitFilter, setVisitFilter] = useState("upcoming");
   const [selectedVisitForDetails, setSelectedVisitForDetails] = useState(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
@@ -144,6 +162,7 @@ export default function SavedScreen({ navigation, route }) {
       return Promise.resolve([]);
     }
     setVisitsLoading(true);
+    setVisitsError(null);
     return fetchBuyerVisits({ page: 1, pageSize: 50 }).then(
       (resp) => {
         const mapped = (resp?.items || []).map(toUiVisit);
@@ -151,8 +170,11 @@ export default function SavedScreen({ navigation, route }) {
         setVisitsLoading(false);
         return mapped;
       },
-      () => {
+      (err) => {
+        // Keep the last good list but say the refresh failed, instead of an
+        // empty "No visits" that would misstate the buyer's bookings.
         setVisitsLoading(false);
+        setVisitsError(err || true);
         return [];
       }
     );
@@ -167,7 +189,7 @@ export default function SavedScreen({ navigation, route }) {
     }
     setEnquiriesLoading(true);
     setEnquiriesError(null);
-    return fetchMyEnquiries({ page: 1, pageSize: 50 }).then(
+    return fetchMyEnquiries(1, 50).then(
       (resp) => {
         const items = Array.isArray(resp?.items) ? resp.items : [];
         setEnquiries(items);
@@ -181,6 +203,43 @@ export default function SavedScreen({ navigation, route }) {
       }
     );
   }, []);
+
+  const loadThread = useCallback((enquiryId) => {
+    setThreads((prev) => ({ ...prev, [enquiryId]: { loading: true, error: null, messages: prev[enquiryId]?.messages || null } }));
+    return fetchEnquiryDetail(enquiryId).then(
+      (row) => {
+        const ui = toUiEnquiry(row);
+        setThreads((prev) => ({ ...prev, [enquiryId]: { loading: false, error: null, messages: ui.messages || [] } }));
+      },
+      (err) => {
+        if (err && (err.status === 401 || err.kind === "login")) {
+          requireAuth(() => loadThread(enquiryId));
+        }
+        setThreads((prev) => ({ ...prev, [enquiryId]: { loading: false, error: err || true, messages: null } }));
+      }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Enquiry rows carry only a listing snapshot, so the full card is fetched
+  // before opening the detail modal; a listing that is no longer public says so.
+  const openEnquiryListing = (listingId) => {
+    if (typeof listingId !== "number") return;
+    fetchListingDetail(listingId).then(
+      (property) => setSelectedProperty(property),
+      () => Alert.alert("Property Unavailable", "This property is no longer available.")
+    );
+  };
+
+  const toggleThread = (enquiryId) => {
+    if (expandedEnquiryId === enquiryId) {
+      setExpandedEnquiryId(null);
+      return;
+    }
+    setExpandedEnquiryId(enquiryId);
+    // Always refetch on open so replies sent from the detail modal show up.
+    loadThread(enquiryId).catch(() => {});
+  };
 
   // Load viewed properties from the backend
   const loadViewedProperties = useCallback(() => {
@@ -207,6 +266,30 @@ export default function SavedScreen({ navigation, route }) {
     );
   }, []);
 
+  // Load call events from the backend
+  const loadCallEvents = useCallback(() => {
+    if (!getAuthTokenSync()) {
+      setCallHistory([]);
+      setCallsError(null);
+      return Promise.resolve([]);
+    }
+    setCallsLoading(true);
+    setCallsError(null);
+    return fetchCallEvents({ page: 1, pageSize: 50 }).then(
+      (resp) => {
+        const items = (resp?.items || []).map(toUiCallEvent);
+        setCallHistory(items);
+        setCallsLoading(false);
+        return items;
+      },
+      (err) => {
+        setCallsLoading(false);
+        setCallsError(err);
+        return [];
+      }
+    );
+  }, []);
+
   // Views are recorded by PropertyDetailModal itself (once per opening, for
   // every entry point); this screen only refreshes its Viewed list after.
   const handleViewRecorded = useCallback(() => {
@@ -219,7 +302,8 @@ export default function SavedScreen({ navigation, route }) {
       loadServerVisits().catch(() => {});
       loadEnquiries().catch(() => {});
       loadViewedProperties().catch(() => {});
-    }, [refreshWishlist, loadServerVisits, loadEnquiries, loadViewedProperties])
+      loadCallEvents().catch(() => {});
+    }, [refreshWishlist, loadServerVisits, loadEnquiries, loadViewedProperties, loadCallEvents])
   );
 
   // Agents state (Agent Page Detail Tab)
@@ -245,13 +329,6 @@ export default function SavedScreen({ navigation, route }) {
     Linking.openURL(`https://wa.me/${clean}?text=${text}`).catch(() => {
       Alert.alert("WhatsApp Agent", `Chat with ${agent?.name} at ${agent?.phone}`);
     });
-  };
-
-  const findAgentByName = (name) => {
-    return (
-      agents.find((a) => (a.name || "").toLowerCase() === (name || "").toLowerCase()) ||
-      agents[0]
-    );
   };
 
   // Real authenticated identity only (GET /auth/me via AuthContext).
@@ -320,24 +397,66 @@ export default function SavedScreen({ navigation, route }) {
 
   // Contact Handlers (P2 honesty: only dial/message a genuine number; never
   // fall back to a sample number. Missing numbers show an honest message.)
-  const handleWhatsApp = (property) => {
-    const cleanPhone = cleanPhoneOrNull(property?.agent?.phone);
-    if (!cleanPhone) {
-      Alert.alert(
-        "Phone Number Unavailable",
-        "The contact number for this property is not available."
-      );
+  const listingIdOf = (property) =>
+    typeof property?.backendId === "number" ? property.backendId : null;
+
+  const showPhoneUnavailable = (what = "property") => {
+    Alert.alert(
+      "Phone Number Unavailable",
+      `The contact number for this ${what} is not available.`
+    );
+  };
+
+  // Owner numbers are never stored on cards, enquiries or visits: they come
+  // only from the authorized, audited reveal endpoint, fetched when the buyer
+  // taps Call or WhatsApp. A guest is sent to log in and the action resumes.
+  const withRevealedPhone = (listingId, what, onDigits, retry) => {
+    if (typeof listingId !== "number") {
+      showPhoneUnavailable(what);
       return;
     }
-    const text = encodeURIComponent(
-      `Hello! I am interested in ${property?.title || "your property"} (${property?.price || ""}) in ${property?.location || "Chennai"}.`
+    revealContactPhone(listingId).then(
+      (phone) => {
+        const digits = cleanPhoneOrNull(phone);
+        if (!digits) {
+          showPhoneUnavailable(what);
+          return;
+        }
+        onDigits(digits);
+      },
+      (e) => {
+        if (e && (e.status === 401 || e.kind === "login")) {
+          requireAuth(retry);
+          return;
+        }
+        showPhoneUnavailable(what);
+      }
     );
-    Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`).catch(() => {
+  };
+
+  const openWhatsApp = (digits, message) => {
+    Linking.openURL(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`).catch(() => {
       Alert.alert("WhatsApp Not Available", "Could not open WhatsApp for this contact.");
     });
   };
 
-  const handleCall = (phone, name = "Agent") => {
+  const handleWhatsApp = (property) => {
+    const listingId = listingIdOf(property);
+    withRevealedPhone(listingId, "property", (digits) =>
+      openWhatsApp(
+        digits,
+        `Hello! I am interested in ${property?.title || "your property"}${property?.price ? ` (${property.price})` : ""}${property?.location ? ` in ${property.location}` : ""}.`
+      ),
+      () => handleWhatsApp(property)
+    );
+  };
+
+  // Dials a genuine number. `listingId` is passed only by real Call buttons
+  // for a listing: the "Call button tapped" event (CONTRACT §B) is recorded
+  // right before the dialer opens. Recording is best effort and never awaited,
+  // so a logging failure can never block the call; recordCallTap itself skips
+  // guests and non-buyer roles.
+  const handleCall = (phone, name = "Agent", listingId = null) => {
     const digits = cleanPhoneOrNull(phone);
     if (!digits) {
       Alert.alert(
@@ -346,97 +465,38 @@ export default function SavedScreen({ navigation, route }) {
       );
       return;
     }
+    if (listingId != null) recordCallTap(listingId);
     Linking.openURL(`tel:+${digits}`).catch(() => {
       Alert.alert("Call Unavailable", "Could not place this call.");
     });
   };
 
-  // Visit contact goes through the authorized reveal endpoint only: the
-  // server stores no agent phones on visits, so there is never a number to
-  // fall back to. Failures show an honest message instead of a sample number.
-  const handleVisitCall = (visit) => {
-    const listingId = visit?.property_listing_id;
-    if (typeof listingId !== "number") {
-      Alert.alert(
-        "Phone Number Unavailable",
-        "The contact number for this visit is not available."
-      );
-      return;
-    }
-    revealContactPhone(listingId).then(
-      (phone) => {
-        if (!phone) {
-          Alert.alert(
-            "Phone Number Unavailable",
-            "The contact number for this visit is not available."
-          );
-          return;
-        }
-        handleCall(phone, "Property Owner");
-      },
-      (e) => {
-        if (e && (e.status === 401 || e.kind === "login")) {
-          requireAuth(() => handleVisitCall(visit));
-          return;
-        }
-        Alert.alert(
-          "Phone Number Unavailable",
-          "The contact number for this visit is not available."
-        );
-      }
+  const callListingOwner = (listingId, what = "property") => {
+    withRevealedPhone(
+      listingId,
+      what,
+      (digits) => handleCall(digits, "Property Owner", listingId),
+      () => callListingOwner(listingId, what)
     );
   };
 
+  const handleVisitCall = (visit) => callListingOwner(visit?.property_listing_id, "visit");
+
   const handleWhatsAppVisit = (visit) => {
-    const listingId = visit?.property_listing_id;
-    if (typeof listingId !== "number") {
-      Alert.alert(
-        "Phone Number Unavailable",
-        "The contact number for this visit is not available."
-      );
-      return;
-    }
-    revealContactPhone(listingId).then(
-      (phone) => {
-        const digits = cleanPhoneOrNull(phone);
-        if (!digits) {
-          Alert.alert(
-            "Phone Number Unavailable",
-            "The contact number for this visit is not available."
-          );
-          return;
-        }
-        const text = encodeURIComponent(
-          `Hello! I am contacting you regarding our scheduled site visit for "${visit.propertyTitle}" on ${visit.date} at ${visit.time}.`
-        );
-        Linking.openURL(`https://wa.me/${digits}?text=${text}`).catch(() => {
-          Alert.alert("WhatsApp Unavailable", "Could not open WhatsApp for this visit.");
-        });
-      },
-      () => {
-        Alert.alert(
-          "Phone Number Unavailable",
-          "The contact number for this visit is not available."
-        );
-      }
+    withRevealedPhone(visit?.property_listing_id, "visit", (digits) =>
+      openWhatsApp(
+        digits,
+        `Hello! I am contacting you regarding our scheduled site visit for "${visit.propertyTitle}" on ${visit.date} at ${visit.time}.`
+      ),
+      () => handleWhatsAppVisit(visit)
     );
   };
 
   const handleWhatsAppEnquiry = (msg) => {
-    const digits = cleanPhoneOrNull(msg.recipientPhone);
-    if (!digits) {
-      Alert.alert(
-        "Phone Number Unavailable",
-        "The contact number for this enquiry is not available."
-      );
-      return;
-    }
-    const text = encodeURIComponent(
-      `Hello ${msg.recipientName}! I am following up on my enquiry for "${msg.propertyTitle}".`
+    withRevealedPhone(msg?.property_listing_id, "enquiry", (digits) =>
+      openWhatsApp(digits, `Hello! I am following up on my enquiry for "${msg.propertyTitle}".`),
+      () => handleWhatsAppEnquiry(msg)
     );
-    Linking.openURL(`https://wa.me/${digits}?text=${text}`).catch(() => {
-      Alert.alert("WhatsApp Unavailable", `Could not open WhatsApp for ${msg.recipientName}.`);
-    });
   };
 
   const refreshVisitsQuietly = () => {
@@ -540,7 +600,10 @@ export default function SavedScreen({ navigation, route }) {
       Alert.alert("Invalid Date/Time", e?.message || "Please choose a future date and time.");
       return;
     }
-    updateBuyerVisit(visit.id, { scheduledAtISO }).then(
+    // The modal opens with the visit's own note (toScheduleModalInitial), so
+    // sending it back keeps it; clearing the field clears the shared note.
+    const note = typeof reschedData?.notes === "string" ? reschedData.notes : undefined;
+    updateBuyerVisit(visit.id, { scheduledAtISO, note }).then(
       () => {
         setIsRescheduling(false);
         setSelectedVisitForDetails(null);
@@ -972,7 +1035,7 @@ export default function SavedScreen({ navigation, route }) {
                               activeOpacity={0.8}
                               onPress={(e) => {
                                 e.stopPropagation();
-                                handleCall(property?.agent?.phone || property?.ownerPhone, property?.agent?.name || "Owner");
+                                callListingOwner(listingIdOf(property));
                               }}
                             >
                               <Phone size={12} color="#0F172A" style={{ marginRight: 4 }} />
@@ -1001,23 +1064,49 @@ export default function SavedScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* TAB 3: CALL */}
+        {/* TAB 3: CALL — "Call button tapped" history (GET /buyer/call-events).
+            Each row is a tap, never a completed call. */}
         {activeTab === "call" && (
           <View style={styles.tabContentArea}>
             <View style={styles.listHeaderRow}>
               <Text style={styles.listSectionTitle}>
-                Call & Contact Activity ({callHistory.length})
+                Call Activity ({callHistory.length})
               </Text>
             </View>
 
-            {callHistory.length === 0 ? (
+            {callsLoading && callHistory.length === 0 ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.loadingText}>Loading call activity…</Text>
+              </View>
+            ) : callsError ? (
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <AlertCircle size={32} color="#EF4444" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.emptyTitle}>Couldn't load call activity</Text>
+                <Text style={styles.emptyText}>
+                  Please check your connection and try again.
+                </Text>
+                <TouchableOpacity
+                  style={styles.exploreBtn}
+                  activeOpacity={0.85}
+                  onPress={() => loadCallEvents().catch(() => {})}
+                >
+                  <RotateCcw size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.exploreBtnText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : callHistory.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <View style={styles.emptyIconCircle}>
                   <Phone size={32} color="#CBD5E1" strokeWidth={1.5} />
                 </View>
                 <Text style={styles.emptyTitle}>No call activity yet</Text>
                 <Text style={styles.emptyText}>
-                  Direct calls and WhatsApp enquiries made to owners and agents will show here.
+                  {isAuthenticated
+                    ? "Properties you tap Call on will show here."
+                    : "Log in to keep a history of the properties you call."}
                 </Text>
                 <TouchableOpacity
                   style={styles.exploreBtn}
@@ -1032,7 +1121,6 @@ export default function SavedScreen({ navigation, route }) {
               <View style={styles.callList}>
                 {callHistory.map((item) => (
                   <View key={item.id} style={styles.callCard}>
-                    {/* Call Header */}
                     <View style={styles.callHeaderRow}>
                       <View style={styles.callAgentInfo}>
                         <View style={styles.callIconBox}>
@@ -1040,67 +1128,63 @@ export default function SavedScreen({ navigation, route }) {
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.callAgentName} numberOfLines={1}>
-                            {item.agentName}
+                            Call tapped
                           </Text>
                           <Text style={styles.callAgencyName} numberOfLines={1}>
-                            {item.agency}
+                            {item.tappedDate}
                           </Text>
                         </View>
                       </View>
-
-                      <Text style={styles.callTimeText}>{item.callTime}</Text>
+                      <Text style={styles.callTimeText}>{item.tappedTime}</Text>
                     </View>
 
-                    {/* Associated Property Snippet (Minimalist & borderless row) */}
-                    <TouchableOpacity
-                      style={styles.callPropertyRow}
-                      activeOpacity={0.8}
-                      onPress={() => setSelectedProperty(item.property)}
-                    >
-                      <SafeImage
-                        source={{ uri: item.property?.image }}
-                        style={styles.callPropertyThumb}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.callPropertyTitle} numberOfLines={1}>
-                          {item.property?.title}
-                        </Text>
-                        <Text style={styles.callPropertyPrice} numberOfLines={1}>
-                          {item.property?.price} • {item.property?.location}
-                        </Text>
+                    {item.property ? (
+                      <TouchableOpacity
+                        style={styles.callPropertyRow}
+                        activeOpacity={0.8}
+                        onPress={() => setSelectedProperty(item.property)}
+                      >
+                        <SafeImage
+                          source={item.property.image ? { uri: item.property.image } : null}
+                          style={styles.callPropertyThumb}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.callPropertyTitle} numberOfLines={1}>
+                            {item.property.title}
+                          </Text>
+                          <Text style={styles.callPropertyPrice} numberOfLines={1}>
+                            {[item.property.price, item.property.location].filter(Boolean).join(" • ")}
+                          </Text>
+                        </View>
+                        <ArrowRight size={14} color="#94A3B8" />
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.callPropertyRow}>
+                        <View style={styles.callPropertyThumb} />
+                        <Text style={styles.callPropertyPrice}>Property no longer available</Text>
                       </View>
-                      <ArrowRight size={14} color="#94A3B8" />
-                    </TouchableOpacity>
+                    )}
 
-                    {/* Call Footer Actions: Call, WhatsApp, Agent Details */}
-                    <View style={styles.callFooterRow}>
-                      <TouchableOpacity
-                        style={styles.callActionBtnDark}
-                        activeOpacity={0.85}
-                        onPress={() => handleCall(item.agentPhone, item.agentName)}
-                      >
-                        <Phone size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
-                        <Text style={styles.callActionTextDark}>Call</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.callActionBtnLight}
-                        activeOpacity={0.85}
-                        onPress={() => handleWhatsApp(item.property)}
-                      >
-                        <MessageCircle size={13} color="#0F172A" style={{ marginRight: 5 }} />
-                        <Text style={styles.callActionTextLight}>WhatsApp</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.callActionBtnAgent}
-                        activeOpacity={0.85}
-                        onPress={() => setSelectedAgentForModal(findAgentByName(item.agentName))}
-                      >
-                        <User size={13} color="#2563EB" style={{ marginRight: 4 }} />
-                        <Text style={styles.callActionTextAgent}>Agent Info</Text>
-                      </TouchableOpacity>
-                    </View>
+                    {item.property ? (
+                      <View style={styles.callFooterRow}>
+                        <TouchableOpacity
+                          style={styles.callActionBtnDark}
+                          activeOpacity={0.85}
+                          onPress={() => callListingOwner(item.listingId)}
+                        >
+                          <Phone size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
+                          <Text style={styles.callActionTextDark}>Call again</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.callActionBtnLight}
+                          activeOpacity={0.85}
+                          onPress={() => handleWhatsApp(item.property)}
+                        >
+                          <MessageCircle size={13} color="#16A34A" style={{ marginRight: 5 }} />
+                          <Text style={styles.callActionTextLight}>WhatsApp</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
                   </View>
                 ))}
               </View>
@@ -1108,7 +1192,182 @@ export default function SavedScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* TAB 4: MESSAGES / ENQUIRIES */}        {activeTab === "messages" && (          <View style={styles.tabContentArea}>            <View style={styles.listHeaderRow}>              <Text style={styles.listSectionTitle}>                Messages & Enquiries ({enquiries.length})              </Text>            </View>            {enquiries.length === 0 ? (              <View style={styles.emptyContainer}>                <View style={styles.emptyIconCircle}>                  <MessageSquare size={32} color="#CBD5E1" strokeWidth={1.5} />                </View>                <Text style={styles.emptyTitle}>No messages yet</Text>                <Text style={styles.emptyText}>                  Direct enquiries sent to property owners and verified agents will appear here.                </Text>                <TouchableOpacity                  style={styles.exploreBtn}                  activeOpacity={0.85}                  onPress={() => navigation.navigate("Home")}                >                  <Text style={styles.exploreBtnText}>Find Properties to Enquire</Text>                  <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />                </TouchableOpacity>              </View>            ) : (              <View style={styles.messagesList}>                {enquiries.map((row) => {                  const item = toUiEnquiry(row);                  return (                    <View key={item.id} style={styles.messageCard}>                      {/* Header: Recipient Name, Role & Status */}                      <View style={styles.messageHeaderRow}>                        <View style={styles.messageRecipientCol}>                          <View style={styles.msgIconBox}>                            <User size={16} color="#2563EB" />                          </View>                          <View>                            <Text style={styles.msgRecipientName}>{item.recipientName}</Text>                            <Text style={styles.msgRecipientRole}>{item.recipientRole}</Text>                          </View>                        </View>                        <View style={styles.msgStatusCol}>                          <View style={styles.msgStatusBadge}>                            <Text style={styles.msgStatusText}>{item.status}</Text>                          </View>                          <Text style={styles.msgTimeText}>{item.timestamp}</Text>                        </View>                      </View>                      {/* Associated Property Snippet */}                      <View style={styles.msgPropertyRow}>                        <SafeImage                          source={{ uri: item.propertyImage }}                          style={styles.msgPropertyThumb} />                        <View style={{ flex: 1 }}>                          <Text style={styles.msgPropertyTitle} numberOfLines={1}>                            {item.propertyTitle}                          </Text>                          <Text style={styles.msgPropertyLoc} numberOfLines={1}>                            {item.propertyPrice} • {item.propertyLocation}                          </Text>                        </View>                      </View>                      {/* Message Preview Quote */}                      <View style={styles.msgBubble}>                        <Text style={styles.msgBubbleText} numberOfLines={2}>                          "{item.lastMessage}"                        </Text>                      </View>                      {/* Divider */}                      <View style={styles.cardDivider} />                      {/* Action Buttons: Call, WhatsApp, Agent Details */}                      <View style={styles.cardActionsInline}>                        <TouchableOpacity                          style={styles.callCustomerBtn}                          onPress={() => handleCall(item.recipientPhone, item.recipientName)}                          activeOpacity={0.8}>                          <Phone size={13} color="#0F172A" style={{ marginRight: 5 }} />                          <Text style={styles.callCustomerBtnText}>Call</Text>                        </TouchableOpacity>                        <TouchableOpacity                          style={styles.whatsappActionBtn}                          onPress={() => handleWhatsAppEnquiry(item)}                          activeOpacity={0.8}>                          <MessageCircle size={13} color="#16A34A" style={{ marginRight: 5 }} />                          <Text style={styles.whatsappActionBtnText}>WhatsApp</Text>                        </TouchableOpacity>                        <TouchableOpacity                          style={styles.msgAgentDetailBtn}                          onPress={() => setSelectedAgentForModal(findAgentByName(item.recipientName))}                          activeOpacity={0.8}>                          <User size={13} color="#2563EB" style={{ marginRight: 4 }} />                          <Text style={styles.msgAgentDetailBtnText}>Agent Info</Text>                        </TouchableOpacity>                      </View>                    </View>                  );                })}              </View>            )}          </View>        )}        {/* TAB 5: SITE VISITS (Matching Agent/Owner Reference Design) */}
+        {/* TAB 4: MESSAGES / ENQUIRIES — persisted threads (GET /buyer/enquiries,
+            full thread from GET /buyer/enquiries/{id} on expand). */}
+        {activeTab === "messages" && (
+          <View style={styles.tabContentArea}>
+            <View style={styles.listHeaderRow}>
+              <Text style={styles.listSectionTitle}>
+                Messages & Enquiries ({enquiries.length})
+              </Text>
+            </View>
+            {enquiriesLoading && enquiries.length === 0 ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.loadingText}>Loading messages…</Text>
+              </View>
+            ) : enquiriesError ? (
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <AlertCircle size={32} color="#EF4444" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.emptyTitle}>Couldn't load messages</Text>
+                <Text style={styles.emptyText}>
+                  Please check your connection and try again.
+                </Text>
+                <TouchableOpacity
+                  style={styles.exploreBtn}
+                  activeOpacity={0.85}
+                  onPress={() => loadEnquiries().catch(() => {})}
+                >
+                  <RotateCcw size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.exploreBtnText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : enquiries.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <MessageSquare size={32} color="#CBD5E1" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.emptyTitle}>No messages yet</Text>
+                <Text style={styles.emptyText}>
+                  {isAuthenticated
+                    ? "Enquiries you send to property owners will appear here."
+                    : "Log in to see the enquiries you send to property owners."}
+                </Text>
+                <TouchableOpacity
+                  style={styles.exploreBtn}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate("Home")}
+                >
+                  <Text style={styles.exploreBtnText}>Find Properties to Enquire</Text>
+                  <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.messagesList}>
+                {enquiries.map((row) => {
+                  const item = toUiEnquiry(row);
+                  const expanded = expandedEnquiryId === item.id;
+                  const thread = threads[item.id];
+                  return (
+                    <View key={item.id} style={styles.messageCard}>
+                      <View style={styles.messageHeaderRow}>
+                        <View style={styles.messageRecipientCol}>
+                          <View style={styles.msgIconBox}>
+                            <MessageSquare size={16} color="#2563EB" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.msgRecipientName}>Enquiry to owner</Text>
+                            <Text style={styles.msgRecipientRole}>
+                              {item.messageCount === 1 ? "1 message" : `${item.messageCount} messages`}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.msgStatusCol}>
+                          <View style={styles.msgStatusBadge}>
+                            <Text style={styles.msgStatusText}>
+                              {item.status === "closed" && item.closingReason
+                                ? `closed · ${item.closingReason}`
+                                : item.status}
+                            </Text>
+                          </View>
+                          <Text style={styles.msgTimeText}>{item.timestamp}</Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.msgPropertyRow}
+                        activeOpacity={0.8}
+                        onPress={() => openEnquiryListing(item.property_listing_id)}
+                      >
+                        <SafeImage
+                          source={item.propertyImage ? { uri: item.propertyImage } : null}
+                          style={styles.msgPropertyThumb}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.msgPropertyTitle} numberOfLines={1}>
+                            {item.propertyTitle}
+                          </Text>
+                          <Text style={styles.msgPropertyLoc} numberOfLines={1}>
+                            {[item.propertyPrice, item.propertyLocation].filter(Boolean).join(" • ")}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {expanded ? (
+                        <View style={styles.threadBox}>
+                          {thread && thread.loading ? (
+                            <ActivityIndicator size="small" color={COLORS.primary} />
+                          ) : thread && thread.error ? (
+                            <View style={styles.threadErrorRow}>
+                              <Text style={styles.threadErrorText}>Couldn't load this conversation.</Text>
+                              <TouchableOpacity onPress={() => loadThread(item.id)} activeOpacity={0.8}>
+                                <Text style={styles.threadRetryText}>Retry</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : thread && thread.messages ? (
+                            thread.messages.map((m) => (
+                              <View key={m.id} style={styles.msgBubble}>
+                                <Text style={styles.msgBubbleText}>{m.body}</Text>
+                                <Text style={styles.threadTime}>You · {m.timestamp}</Text>
+                              </View>
+                            ))
+                          ) : null}
+                        </View>
+                      ) : item.lastMessage ? (
+                        <View style={styles.msgBubble}>
+                          <Text style={styles.msgBubbleText} numberOfLines={2}>
+                            {`"${item.lastMessage}"`}
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      {item.messageCount > 0 ? (
+                        <TouchableOpacity
+                          style={styles.threadToggle}
+                          activeOpacity={0.8}
+                          onPress={() => toggleThread(item.id)}
+                        >
+                          <Text style={styles.threadToggleText}>
+                            {expanded ? "Hide conversation" : "View conversation"}
+                          </Text>
+                          {expanded ? (
+                            <ChevronUp size={14} color="#2563EB" />
+                          ) : (
+                            <ChevronDown size={14} color="#2563EB" />
+                          )}
+                        </TouchableOpacity>
+                      ) : null}
+
+                      <View style={styles.cardDivider} />
+
+                      <View style={styles.cardActionsInline}>
+                        <TouchableOpacity
+                          style={styles.callCustomerBtn}
+                          onPress={() => callListingOwner(item.property_listing_id, "enquiry")}
+                          activeOpacity={0.8}
+                        >
+                          <Phone size={13} color="#0F172A" style={{ marginRight: 5 }} />
+                          <Text style={styles.callCustomerBtnText}>Call</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.whatsappActionBtn}
+                          onPress={() => handleWhatsAppEnquiry(item)}
+                          activeOpacity={0.8}
+                        >
+                          <MessageCircle size={13} color="#16A34A" style={{ marginRight: 5 }} />
+                          <Text style={styles.whatsappActionBtnText}>WhatsApp</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        )}
+
         {activeTab === "visits" && (
           <View style={styles.tabContentArea}>
             <View style={styles.visitScreenHeader}>
@@ -1149,7 +1408,28 @@ export default function SavedScreen({ navigation, route }) {
             </View>
 
             {/* Visits List */}
-            {siteVisits.filter((v) => v.status === visitFilter).length === 0 ? (
+            {visitsLoading && siteVisits.length === 0 ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.loadingText}>Loading site visits…</Text>
+              </View>
+            ) : visitsError && siteVisits.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <AlertCircle size={32} color="#EF4444" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.emptyTitle}>Couldn't load site visits</Text>
+                <Text style={styles.emptyText}>Please check your connection and try again.</Text>
+                <TouchableOpacity
+                  style={styles.exploreBtn}
+                  activeOpacity={0.85}
+                  onPress={() => loadServerVisits().catch(() => {})}
+                >
+                  <RotateCcw size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.exploreBtnText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : siteVisits.filter((v) => v.status === visitFilter).length === 0 ? (
               <View style={styles.emptyContainer}>
                 <View style={styles.emptyIconCircle}>
                   <Calendar size={32} color="#CBD5E1" strokeWidth={1.5} />
@@ -1165,37 +1445,24 @@ export default function SavedScreen({ navigation, route }) {
                   .filter((v) => v.status === visitFilter)
                   .map((item) => (
                     <View key={item.id} style={styles.visitCard}>
-                      {/* Card Header: Person Name & Status Pill */}
+                      {/* Card Header: owner's chosen name & shared status (CONTRACT §C) */}
                       <View style={styles.visitCardHeader}>
                         <View style={styles.visitPersonRow}>
                           <User size={15} color="#2563EB" style={{ marginRight: 6 }} />
-                          <Text style={styles.visitPersonName}>Visit #{item.id}</Text>
-                          {item.serverStatus ? (
-                            <Text style={styles.visitPersonRole}> • {item.serverStatus}</Text>
-                          ) : null}
+                          <Text style={styles.visitPersonName} numberOfLines={1}>{item.ownerLabel}</Text>
+                          <Text style={styles.visitPersonRole}> • Owner</Text>
                         </View>
 
-                        <View
-                          style={[
-                            styles.statusPill,
-                            item.status === "completed" && styles.statusPillCompleted,
-                            item.status === "cancelled" && styles.statusPillCancelled,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.statusPillText,
-                              item.status === "completed" && styles.statusPillTextCompleted,
-                              item.status === "cancelled" && styles.statusPillTextCancelled,
-                            ]}
-                          >
-                            {item.status === "upcoming"
-                              ? "Upcoming"
-                              : item.status === "completed"
-                              ? "Completed"
-                              : "Cancelled"}
-                          </Text>
-                        </View>
+                        {(() => {
+                          const display = getVisitDisplay(item, "buyer");
+                          return (
+                            <View style={[styles.statusPill, { backgroundColor: display.background }]}>
+                              <Text style={[styles.statusPillText, { color: display.color }]}>
+                                {display.label}
+                              </Text>
+                            </View>
+                          );
+                        })()}
                       </View>
 
                       {/* Visit Body: Property & Location */}
@@ -1206,6 +1473,20 @@ export default function SavedScreen({ navigation, route }) {
                             {item.propertyTitle}
                           </Text>
                         </View>
+                        {item.propertyLocality || item.propertyCity ? (
+                          <View style={styles.bodyField}>
+                            <Text style={styles.fieldLabel}>Location:</Text>
+                            <Text style={styles.fieldValue}>
+                              {[item.propertyLocality, item.propertyCity].filter(Boolean).join(", ")}
+                            </Text>
+                          </View>
+                        ) : null}
+                        {item.note ? (
+                          <View style={styles.bodyField}>
+                            <Text style={styles.fieldLabel}>Note:</Text>
+                            <Text style={styles.fieldValue} numberOfLines={2}>{item.note}</Text>
+                          </View>
+                        ) : null}
 
                         <View style={styles.dateTimeRow}>
                           <View style={styles.dateTimeBadge}>
@@ -1429,7 +1710,7 @@ export default function SavedScreen({ navigation, route }) {
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={styles.phoneLabel}>PHONE NUMBER</Text>
                 <Text style={styles.phoneNumber}>
-                  {viewedNumberProperty?.agent?.phone || "Not available"}
+                  {viewedNumberProperty?.agent?.phone || "Shared when you tap Call or WhatsApp"}
                 </Text>
               </View>
               <View style={styles.copyPill}>
@@ -1443,7 +1724,7 @@ export default function SavedScreen({ navigation, route }) {
                 style={styles.sheetCallBtn}
                 activeOpacity={0.85}
                 onPress={() => {
-                  handleCall(viewedNumberProperty?.agent?.phone, viewedNumberProperty?.agent?.name);
+                  callListingOwner(listingIdOf(viewedNumberProperty));
                   setViewedNumberProperty(null);
                 }}
               >
@@ -1502,12 +1783,16 @@ export default function SavedScreen({ navigation, route }) {
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.detailsList}>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Booking</Text>
+                    <Text style={styles.detailLabel}>Status</Text>
                     <Text style={styles.detailValueBold}>
-                      Visit #{selectedVisitForDetails.id}
-                      {selectedVisitForDetails.serverStatus
-                        ? ` · ${selectedVisitForDetails.serverStatus}`
-                        : ""}
+                      {getVisitDisplay(selectedVisitForDetails, "buyer").label}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Owner</Text>
+                    <Text style={styles.detailValue}>
+                      {selectedVisitForDetails.ownerLabel}
                     </Text>
                   </View>
 
@@ -1515,6 +1800,15 @@ export default function SavedScreen({ navigation, route }) {
                     <Text style={styles.detailLabel}>Property</Text>
                     <Text style={styles.detailValueBold}>
                       {selectedVisitForDetails.propertyTitle}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Location</Text>
+                    <Text style={styles.detailValue}>
+                      {[selectedVisitForDetails.propertyLocality, selectedVisitForDetails.propertyCity]
+                        .filter(Boolean)
+                        .join(", ") || "Location unavailable"}
                     </Text>
                   </View>
 
@@ -1639,9 +1933,11 @@ export default function SavedScreen({ navigation, route }) {
         lead={{ customerName: selectedVisitForDetails?.propertyTitle }}
         property={{
           title: selectedVisitForDetails?.propertyTitle,
-          location: "",
+          location: [selectedVisitForDetails?.propertyLocality, selectedVisitForDetails?.propertyCity]
+            .filter(Boolean)
+            .join(", "),
         }}
-        initialTime={selectedVisitForDetails?.time || "10:00 am"}
+        {...toScheduleModalInitial(selectedVisitForDetails || {})}
         onConfirm={(reschedData) => {
           handleConfirmReschedule(selectedVisitForDetails, reschedData);
         }}
@@ -2499,6 +2795,53 @@ const styles = StyleSheet.create({
   },
 
   /* Messages Tab Styles */
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#64748B",
+  },
+  threadBox: {
+    gap: 8,
+    marginBottom: 6,
+  },
+  threadTime: {
+    fontSize: 11,
+    color: "#94A3B8",
+    marginTop: 4,
+  },
+  threadErrorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
+  threadErrorText: {
+    fontSize: 12.5,
+    color: "#B91C1C",
+  },
+  threadRetryText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#2563EB",
+  },
+  threadToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    paddingVertical: 4,
+    marginBottom: 6,
+  },
+  threadToggleText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#2563EB",
+  },
   messagesList: {
     gap: 14,
     paddingBottom: 24,

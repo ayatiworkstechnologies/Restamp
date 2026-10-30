@@ -1,7 +1,8 @@
 /**
  * Backend card -> legacy UI property shape (Phase 2).
  * Every key below is either authoritative backend data or an explicit,
- * documented UI fallback (rating/furnishing-style fields stay mock-only).
+ * documented UI fallback. Fields the backend does not send (rating,
+ * furnishing) stay undefined — never sample values.
  */
 export const PROPERTY_TYPE_FALLBACK_IMAGES = {
   Apartment: [
@@ -143,7 +144,7 @@ export function toUiProperty(card) {
     price: card.price_display,
     pricePeriod: "",
     rawPrice: Math.round(card.price_paise / 100),
-    rating: undefined, // mock-only in UI (shows 4.9 fallback); no backend rating exists
+    rating: undefined, // no backend rating exists; the detail sheet hides the badge
     location: card.location_label,
     address: card.address_line || card.location_label,
     beds: card.bedrooms ?? undefined,
@@ -151,7 +152,9 @@ export function toUiProperty(card) {
     sqft: areaNum != null ? areaNum.toLocaleString("en-IN") : undefined,
     isVerified: true, // server guarantees VERIFIED
     badge: card.badge || "Verified",
-    furnishing: card.furnishing || "Semi-Furnished",
+    // Real value only: the buyer API sends no furnishing today, so this is
+    // usually undefined and the detail sheet says "Not specified".
+    furnishing: card.furnishing || undefined,
     constructionStatus: CONSTRUCTION_LABELS[card.construction_status] || undefined,
     image,
     description: card.description || undefined,
