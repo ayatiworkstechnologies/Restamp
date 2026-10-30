@@ -270,30 +270,41 @@ for (const [label, s] of [["Leads", ownerLeadsSrc], ["PropertyLeads", propertyLe
       s.includes("leadReqId.current !== myReq") &&
       s.includes("leadReqId.current++")
   );
+  // §G close: the device-only closeLead is gone; closing is one PATCH with
+  // the outcome, refetched from the server, and never a listing endpoint.
   check(
-    `${label} close never touches the listing`,
-    !s.includes("closeLead(leadId, outcome, closeProp") &&
-      !s.includes("closeLead(leadId, reason)") &&
-      (s.includes("closeLead(leadId, outcome, false, null)") ||
-        s.includes("closeLead(leadId, reason, false, null)"))
+    `${label} close never touches the listing (§G)`,
+    !s.includes("closeLead(") &&
+      !/submitListing|publishListing|archiveListing|updateListingStatus/.test(s) &&
+      s.includes("handleCloseOutcome") &&
+      s.includes('closingReason: outcome') &&
+      s.includes('status: "closed"')
   );
 }
 check(
-  "LeadDetail persists close as CLOSED (no LOST) with rollback",
-  leadDetailSrc.includes("persistLeadStatus") &&
-    leadDetailSrc.includes('persistLeadStatus("closed", outcome)') &&
+  "LeadDetail closes via the server-confirmed outcome (no LOST) and refetches",
+  leadDetailSrc.includes("handleCloseOutcome") &&
+    leadDetailSrc.includes('status: "closed"') &&
+    leadDetailSrc.includes("closingReason: outcome") &&
+    leadDetailSrc.includes("await loadLead();") &&
     !leadDetailSrc.includes('status: "lost"') &&
     !leadDetailSrc.includes('"lost" : "closed"') &&
     leadDetailSrc.includes("Couldn't update lead")
 );
 check(
-  "Close modal offers no listing side effect",
+  "Close modal offers no listing side effect and cannot double-submit (§G)",
   (() => {
     const modalSrc = src("src/features/owner/screens/OwnerCloseLeadModal.js");
+    const outcomes = [...modalSrc.matchAll(/id: "([^"]+)"/g)].map((m) => m[1]);
     return (
       !modalSrc.includes("closePropertyToo") &&
       !modalSrc.includes("listing status has been updated") &&
-      modalSrc.includes("onCloseLeadWithOutcome?.(lead.id, selectedOutcome, false, null)")
+      modalSrc.includes("await onCloseLeadWithOutcome(lead.id, selectedOutcome)") &&
+      modalSrc.includes("if (saving) return;") &&
+      modalSrc.includes("loading={saving}") &&
+      modalSrc.includes("disabled={saving}") &&
+      // Exactly the four contract §G outcomes, nothing else.
+      outcomes.join("|") === "Rented|Sold|Leased|Not Converted"
     );
   })()
 );

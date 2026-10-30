@@ -40,6 +40,7 @@ import { useListings } from "../api/useListings.js";
 import { parseSmartQuery } from "../../../shared/api/mappers.js";
 import { fetchListingDetail } from "../api/listings.js";
 import { revealContactPhone } from "../../../shared/api/contact.js";
+import { recordCallTap } from "../api/calls.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 import { useWishlist } from "../context/WishlistContext.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
@@ -355,6 +356,8 @@ export default function SearchScreen({ navigation, route }) {
       );
       return;
     }
+    // "Call button tapped" (CONTRACT §B), best effort, right before dialling.
+    recordCallTap(property?.backendId);
     Linking.openURL(`tel:+${digits}`).catch(() => {
       Alert.alert("Call Unavailable", "Could not place this call.");
     });

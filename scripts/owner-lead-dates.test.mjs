@@ -98,8 +98,8 @@ check("D1 test runs in Asia/Kolkata", new Date(0).getTimezoneOffset() === -330);
 // this tree the checks are reported as skipped (never silently passed).
 if (typeof toUiEnquiry === "function") {
   const msg = toUiEnquiry(row({ created_at: "2030-12-30T20:00:00Z" }));
-  check("B1 toUiEnquiry shows the local calendar day of the UTC instant", msg.timestamp === "31 Dec", msg.timestamp);
-  check("B2 toUiEnquiry with null created_at shows no date", toUiEnquiry(row({ created_at: null })).timestamp === "");
+  check("B1 toUiEnquiry shows the local calendar day of the UTC instant", msg.timestamp.startsWith("31 Dec 2030, "), msg.timestamp);
+  check("B2 toUiEnquiry with null created_at says the date is unavailable", toUiEnquiry(row({ created_at: null })).timestamp === "Date unavailable");
 } else {
   console.log("skip - B1/B2: toUiEnquiry not present (Buyer messaging work not in this tree)");
 }

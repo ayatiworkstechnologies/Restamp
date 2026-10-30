@@ -723,6 +723,82 @@ export function leadPropertyLabel(lead) {
 }
 
 /**
+ * Fetch ONE lead (its full detail response) by id.
+ * GET /owner/leads/{lead_id} returns OwnerLeadOut + the full message thread;
+ * 404 when the lead is missing or belongs to another owner. The response is
+ * mapped through the same toOwnerLead used for list rows, so the list card
+ * and the detail screen always present identical values from real data.
+ */
+export async function fetchOwnerLead(leadId) {
+  const row = await apiGetAuth(`/owner/leads/${leadId}`);
+  return toOwnerLead(row);
+}
+
+/**
+ * Map one backend OwnerLeadMessageOut ({id, body, sender, created_at}) to
+ * the shape the detail screen's message thread renders. created_at follows
+ * the same UTC rule as every other lead timestamp; id/created_at are null
+ * only for opening messages of enquiries that existed before messages were
+ * stored separately.
+ */
+function toOwnerLeadMessage(row) {
+  const created = parseLeadTimestamp(row && row.created_at);
+  return {
+    id: row && row.id !== undefined && row.id !== null ? row.id : null,
+    body: typeof (row && row.body) === "string" ? row.body : "",
+    sender: (row && row.sender) || null,
+    createdAt: created ? created.toISOString() : null,
+    timestamp: created ? formatLocalDateTime(created) : undefined,
+  };
+}
+
+/**
+ * The owner's own internal, private notes for one lead (contract §F).
+ * GET /owner/leads/{lead_id}/notes -> {items: [{id, body, created_at}], total},
+ * oldest first. These notes exist only behind this endpoint; nothing is ever
+ * kept or shown from a device-only store.
+ */
+export async function fetchLeadNotes(leadId) {
+  const data = await apiGetAuth(`/owner/leads/${leadId}/notes`);
+  const items = Array.isArray(data && data.items) ? data.items.map(toOwnerLeadNote) : [];
+  return {
+    items,
+    total: typeof (data && data.total) === "number" ? data.total : items.length,
+  };
+}
+
+/**
+ * Map one backend LeadNoteOut ({id, body, created_at}) to the rendered shape.
+ */
+function toOwnerLeadNote(row) {
+  const created = parseLeadTimestamp(row && row.created_at);
+  return {
+    id: row && row.id !== undefined && row.id !== null ? row.id : null,
+    text: typeof (row && row.body) === "string" ? row.body : "",
+    createdAt: created ? created.toISOString() : null,
+    timestamp: created ? formatLocalDateTime(created) : undefined,
+  };
+}
+
+/**
+ * Save a new internal note for a lead: POST /owner/leads/{lead_id}/notes.
+ * The body is trimmed server-side too; it must be 1–2000 chars after
+ * trimming, so an empty note never reaches the network. Append-only in v1:
+ * callers render the returned server-confirmed note — there is no
+ * optimistic or device-only note state anywhere.
+ */
+export async function addLeadNote(leadId, bodyText) {
+  const body = String(bodyText ?? "").trim().slice(0, 2000);
+  if (!body) {
+    const error = new Error("Write the note before saving it.");
+    error.kind = "validation";
+    throw error;
+  }
+  const note = await apiPost(`/owner/leads/${leadId}/notes`, { body });
+  return toOwnerLeadNote(note);
+}
+
+/**
  * Persist an owner-side lead status change (P4).
  * Status accepts either UI casing ("contacted") or backend casing
  * ("CONTACTED"); it is normalized to the backend vocabulary
@@ -791,7 +867,7 @@ function formatLeadPaise(paise, period) {
 }
 
 /**
- * Map a backend OwnerLeadOut to the shape owner lead screens render (P3).
+ * Map a backend OwnerLeadOut to the shape owner lead screens render (P3+§D).
  * Only genuine backend fields are forwarded. The buyer's name is their own
  * chosen display name when the backend returns one (it withholds the
  * phone-number default), otherwise the stable "Buyer #id" label. Buyer
@@ -800,10 +876,17 @@ function formatLeadPaise(paise, period) {
  * propertyId is the string form of the numeric listing id so the existing
  * selectPropertyLeads matching (same property id) keeps working; status is
  * lowercased to the UI vocabulary ("new"/"contacted"/"closed").
+ *
+ * §D additions (same values on list and detail rows; times via the same UTC
+ * rule as created_at): listing snapshot locality/city, message_count,
+ * last_message, last_message_at, and the full `messages` thread when the
+ * response carries one (null on list items → undefined). Nothing is inferred
+ * from other fields when one of these is missing.
  */
 export function toOwnerLead(row) {
   const listing = row && row.listing ? row.listing : null;
   const created = parseLeadTimestamp(row && row.created_at);
+  const lastAt = parseLeadTimestamp(row && row.last_message_at);
   return {
     id: row.id,
     propertyId: row.property_listing_id != null ? String(row.property_listing_id) : undefined,
@@ -828,12 +911,25 @@ export function toOwnerLead(row) {
     propertyPrice: listing ? formatLeadPaise(listing.price_paise, listing.price_period) : "",
     // The listing's real type (owner lead snapshot); undefined when absent.
     propertyType: listing && listing.property_type ? listing.property_type : undefined,
-    propertyLocality: "",
+    // Real locality/city of the enquired listing (lead snapshot, §D): empty
+    // string when the backend has none — screens show an honest fallback.
+    propertyLocality: (listing && listing.locality) || "",
+    propertyCity: (listing && listing.city) || "",
     propertyImage: undefined,
     budget: undefined,
     // Real enquiry creation time (backend created_at, UTC) or absent.
     createdAt: created ? created.toISOString() : null,
     timestamp: created ? formatLocalDateTime(created) : undefined,
+    // Message thread facts (§D): real counts/summary only, never synthesized.
+    messageCount: typeof row.message_count === "number" ? row.message_count : undefined,
+    lastMessage:
+      typeof row.last_message === "string" && row.last_message ? row.last_message : undefined,
+    // Explicit-UTC instant (or null when unknown); *Text is the local display.
+    lastMessageAt: lastAt ? lastAt.toISOString() : null,
+    lastMessageAtText: lastAt ? formatLocalDateTime(lastAt) : undefined,
+    // The full thread when the response carries one (lead detail); list rows
+    // send `messages: null` → undefined here, never an invented array.
+    messages: Array.isArray(row.messages) ? row.messages.map(toOwnerLeadMessage) : undefined,
     visitData: undefined,
     agency: undefined,
   };
@@ -1202,9 +1298,13 @@ export function toOwnerProperty(apiListing) {
     coverPhoto,
     description: apiListing.description || "",
     // Enquiry/visit totals come from the backend's owner-scoped counters
-    // (all statuses); views have no backend counter yet.
+    // (all statuses); views have no backend counter yet. `calls` is the
+    // backend's all-time Call-button tap count (contract §B, counts only —
+    // no buyer identity). null until the backend sends the counter, so the
+    // detail modal can hide it honestly instead of showing a fake zero.
     views: 0,
     enquiries: typeof apiListing.enquiry_count === "number" ? apiListing.enquiry_count : 0,
     visits: typeof apiListing.visit_count === "number" ? apiListing.visit_count : 0,
+    calls: typeof apiListing.call_count === "number" ? apiListing.call_count : null,
   };
 }

@@ -1,8 +1,17 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import COLORS from "../../../shared/constants/colors.js";
+import { VISIT_TONES, VISIT_TONE_BY_KEY } from "../../../shared/utils/visitStatus.js";
 
-export default function StatusBadge({ status, style, textStyle }) {
+/**
+ * Status pill for listings, leads and site visits.
+ * Visit statuses (requested/proposed/confirmed/declined/cancelled/completed)
+ * and the "rescheduled" display state take their colors from
+ * src/utils/visitStatus.js — the single source shared by buyer and owner
+ * screens. Pass `label` to show viewer-specific wording (e.g. the `label`
+ * from getVisitDisplay); otherwise the status is shown upper-cased.
+ */
+export default function StatusBadge({ status, label: labelOverride, style, textStyle }) {
   if (!status) return null;
 
   const normalized = String(status).toLowerCase();
@@ -11,7 +20,12 @@ export default function StatusBadge({ status, style, textStyle }) {
   let textColor = "#475569";
   let label = status.toUpperCase();
 
-  switch (normalized) {
+  const visitTone = VISIT_TONE_BY_KEY[normalized];
+  if (visitTone) {
+    bg = VISIT_TONES[visitTone].background;
+    textColor = VISIT_TONES[visitTone].color;
+    label = normalized.toUpperCase();
+  } else switch (normalized) {
     case "active":
       bg = "#F0FDF4";
       textColor = "#16A34A";
@@ -43,33 +57,7 @@ export default function StatusBadge({ status, style, textStyle }) {
       textColor = "#64748B";
       label = "DRAFT";
       break;
-    // Leads Statuses
-    case "requested":
-      bg = "#FFFBEB";
-      textColor = "#B45309";
-      label = "REQUESTED";
-      break;
-    case "proposed":
-      bg = "#FAF5FF";
-      textColor = "#9333EA";
-      label = "PROPOSED";
-      break;
-    case "confirmed":
-      bg = "#EFF6FF";
-      textColor = COLORS.primary;
-      label = "CONFIRMED";
-      break;
-    case "completed":
-      bg = "#F0FDF4";
-      textColor = "#16A34A";
-      label = "COMPLETED";
-      break;
-    case "declined":
-    case "cancelled":
-      bg = "#FEF2F2";
-      textColor = "#DC2626";
-      label = normalized.toUpperCase();
-      break;
+    // Leads Statuses (visit statuses are handled above via visitStatus.js)
     case "new":
     case "new lead":
       bg = "#EFF6FF";
@@ -125,7 +113,7 @@ export default function StatusBadge({ status, style, textStyle }) {
   return (
     <View style={[styles.badge, { backgroundColor: bg }, style]}>
       <Text style={[styles.badgeText, { color: textColor }, textStyle]}>
-        {label}
+        {labelOverride ? String(labelOverride).toUpperCase() : label}
       </Text>
     </View>
   );

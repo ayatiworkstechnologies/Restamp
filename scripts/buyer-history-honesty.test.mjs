@@ -172,7 +172,8 @@ check(
     !savedScreenSrc.includes('phone || "+919876543210"') &&
     !savedScreenSrc.includes('phone || "+91 98401 22334"') &&
     savedScreenSrc.includes("Phone Number Unavailable") &&
-    savedScreenSrc.includes("Not available")
+    // The contact sheet shows no number until the reveal endpoint returns one.
+    savedScreenSrc.includes('agent?.phone || "Shared when you tap Call or WhatsApp"')
 );
 
 // --- 5. Enquiries: no mocks, honest loading/empty/error, real mapping ---

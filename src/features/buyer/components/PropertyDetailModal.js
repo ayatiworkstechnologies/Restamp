@@ -62,6 +62,7 @@ import ScheduleVisitModal from "./ScheduleVisitModal.js";
 import { createEnquiry } from "../api/enquiries.js";
 import { revealContactPhone } from "../../../shared/api/contact.js";
 import { recordViewed } from "../api/viewed.js";
+import { recordCallTap } from "../api/calls.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -95,48 +96,20 @@ const TABS = [
   { id: "amenities", label: "Amenities" },
 ];
 
-const getFurnishingDetails = (val) => {
-  const raw = (val || "Semi-Furnished").toString().toLowerCase();
-  if (raw.includes("unfurnish")) {
-    return {
-      title: "Unfurnished",
-      subtitle: "Blank canvas ready for personalized design & interior decoration",
-      tag: "Bare Shell",
-      inclusions: [
-        "Basic Electrical Points",
-        "Sanitary Ware & CP Fittings",
-        "Standard Flooring",
-        "Main Door Security Locks",
-      ],
-    };
-  }
-  if (raw.includes("full") || raw === "furnished") {
-    return {
-      title: "Fully Furnished",
-      subtitle: "100% Move-in ready with complete furniture and appliances",
-      tag: "Full Setup",
-      inclusions: [
-        "Modular Kitchen",
-        "Living Room Sofa Set",
-        "Beds & Mattresses",
-        "Air Conditioning",
-        "Built-in Wardrobes",
-        "Designer Lighting",
-      ],
-    };
-  }
-  return {
-    title: "Semi-Furnished",
-    subtitle: "Equipped with essential woodwork, modular fittings & cabinetry",
-    tag: "Move-in Ready",
-    inclusions: [
-      "Modular Kitchen",
-      "Built-in Wardrobes",
-      "Designer Light Fittings",
-      "Ceiling Fans & Exhaust",
-    ],
-  };
+// Furnishing label from the listing's real value only; null when the
+// listing has none (the buyer API does not send it today). No generic
+// subtitle, tag or "included fixtures" list is invented for it.
+const getFurnishingLabel = (val) => {
+  const raw = (val || "").toString().trim().toLowerCase();
+  if (!raw) return null;
+  if (raw.includes("unfurnish")) return "Unfurnished";
+  if (raw.includes("semi")) return "Semi-Furnished";
+  if (raw.includes("full") || raw === "furnished") return "Fully Furnished";
+  return val.toString().trim();
 };
+
+// Neutral label for a detail the owner has not provided.
+const NOT_SPECIFIED = "Not specified";
 
 function PropertyDetailModal({
   visible,
@@ -176,7 +149,7 @@ function PropertyDetailModal({
   const [enquiryMessage, setEnquiryMessage] = useState(
     "Hello, I am interested in this property. Please share further details."
   );
-  const furnishingData = getFurnishingDetails(property?.furnishing);
+  const furnishingLabel = getFurnishingLabel(property?.furnishing);
 
   useEffect(() => {
     if (property) {
@@ -309,41 +282,19 @@ function PropertyDetailModal({
   const saved = isWishlisted ? isWishlisted(property.id) : false;
   const displayAddress = customAddress || property.address || property.location;
 
-  const sqftNum =
-    parseInt(String(property.sqft || 1500).replace(/,/g, "")) || 1500;
+  // Honest specs: every value below comes from the listing itself. Missing
+  // area, rating, rooms, readiness or amenities are left out (or shown as
+  // "Not specified") — never filled with sample values.
+  const sqftNum = parseInt(String(property.sqft || "").replace(/,/g, ""), 10) || null;
   const perSqft =
     property.rawPrice && sqftNum
       ? `₹${Math.round(property.rawPrice / sqftNum).toLocaleString("en-IN")}/sqft`
-      : "₹6,800/sqft";
-  const statusText =
-    property.constructionStatus ||
-    (property.badge === "Just Added" ? "New Launch" : "Ready to move");
-
-  let tags = [
-    "Gated Society",
-    "Power Backup",
-    "Covered Parking",
-    "Lift Access",
-  ];
-  if (property.type === "Apartment") {
-    tags = ["Gated Society", "Power Backup", "Covered Parking", "Lift Access"];
-  } else if (property.type === "Villa" || property.type === "House") {
-    tags = [
-      "Independent Villa",
-      "Private Garden",
-      "Corner Property",
-      "2 Car Parking",
-    ];
-  } else if (property.type === "Commercial") {
-    tags = [
-      "Grade A Tech Park",
-      "100% Power Backup",
-      "High Speed Lifts",
-      "Visitor Parking",
-    ];
-  } else if (property.type === "Plot") {
-    tags = ["CMDA Approved", "Corner Property", "2 Side Open", "Clear Title"];
-  }
+      : null;
+  const statusText = property.constructionStatus || null;
+  const hasRating = typeof property.rating === "number" && property.rating > 0;
+  const hasBeds = property.beds > 0;
+  const hasBaths = property.baths > 0;
+  const hasArea = Boolean(property.sqft);
 
   // Only real stored photos are shown. A live detail fetch may supply the
   // gallery when the opening card carried only its cover; failures stay empty.
@@ -522,7 +473,8 @@ function PropertyDetailModal({
       payload = toVisitPayload({
         date: visitData.date || visitData.dateString,
         time: visitData.time,
-        note: visitData.notes || "Requested via Property Details page.",
+        // Only what the buyer typed; an empty note is sent as no note.
+        note: visitData.notes || "",
       });
     } catch (e) {
       Alert.alert("Invalid Date/Time", e?.message || "Please choose a future date and time.");
@@ -631,6 +583,9 @@ function PropertyDetailModal({
           );
           return;
         }
+        // "Call button tapped" (CONTRACT §B): recorded right before the
+        // dialler opens, best effort — it never blocks or fails the call.
+        recordCallTap(backendId);
         Linking.openURL(`tel:${phone}`).catch(() => {
           Alert.alert("Call Unavailable", "Could not place this call.");
         });
@@ -906,48 +861,52 @@ function PropertyDetailModal({
                 <Text style={styles.propertyTitleText} numberOfLines={2}>
                   {property.title}
                 </Text>
-                <View style={styles.ratingBadge}>
-                  <Star
-                    size={14}
-                    color={COLORS.star}
-                    fill={COLORS.star}
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text style={styles.ratingText}>
-                    {property.rating || 4.9}
-                  </Text>
-                </View>
+                {hasRating ? (
+                  <View style={styles.ratingBadge}>
+                    <Star
+                      size={14}
+                      color={COLORS.star}
+                      fill={COLORS.star}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text style={styles.ratingText}>{property.rating}</Text>
+                  </View>
+                ) : null}
               </View>
 
               {/* Line 2: Price (e.g. $4.688/month or ₹1.45 Cr • ₹7,838 /sqft) */}
               <View style={styles.priceRow}>
                 <Text style={styles.priceTag}>{property.price}</Text>
-                <Text style={styles.priceSubtext}>
-                  {property.pricePeriod
-                    ? property.pricePeriod
-                    : ` • ${perSqft}`}
-                </Text>
+                {property.pricePeriod || perSqft ? (
+                  <Text style={styles.priceSubtext}>
+                    {property.pricePeriod ? property.pricePeriod : ` • ${perSqft}`}
+                  </Text>
+                ) : null}
               </View>
 
               {/* Line 3: Specs Row (5 beds   2 baths   3,457 sq ft - as in Image 2) */}
-              <View style={styles.specsRow}>
-                <Text style={styles.specItem}>
-                  <Text style={styles.specBold}>
-                    {property.beds > 0 ? property.beds : 3}{" "}
-                  </Text>
-                  <Text style={styles.specLabel}>beds</Text>
-                </Text>
-                <Text style={styles.specItem}>
-                  <Text style={styles.specBold}>
-                    {property.baths > 0 ? property.baths : 2}{" "}
-                  </Text>
-                  <Text style={styles.specLabel}>baths</Text>
-                </Text>
-                <Text style={styles.specItem}>
-                  <Text style={styles.specBold}>{property.sqft} </Text>
-                  <Text style={styles.specLabel}>sq ft</Text>
-                </Text>
-              </View>
+              {hasBeds || hasBaths || hasArea ? (
+                <View style={styles.specsRow}>
+                  {hasBeds ? (
+                    <Text style={styles.specItem}>
+                      <Text style={styles.specBold}>{property.beds} </Text>
+                      <Text style={styles.specLabel}>beds</Text>
+                    </Text>
+                  ) : null}
+                  {hasBaths ? (
+                    <Text style={styles.specItem}>
+                      <Text style={styles.specBold}>{property.baths} </Text>
+                      <Text style={styles.specLabel}>baths</Text>
+                    </Text>
+                  ) : null}
+                  {hasArea ? (
+                    <Text style={styles.specItem}>
+                      <Text style={styles.specBold}>{property.sqft} </Text>
+                      <Text style={styles.specLabel}>sq ft</Text>
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
 
               {/* Line 4: Locality Address & Status Badge (Interactive Manual Location Changer) */}
               <View style={styles.locationStatusRow}>
@@ -968,19 +927,15 @@ function PropertyDetailModal({
                     <Text style={styles.changeLocationPillText}>Change</Text>
                   </View>
                 </TouchableOpacity>
-                <View style={styles.statusPill}>
-                  <Text style={styles.statusPillText}>{statusText}</Text>
-                </View>
+                {statusText ? (
+                  <View style={styles.statusPill}>
+                    <Text style={styles.statusPillText}>{statusText}</Text>
+                  </View>
+                ) : null}
               </View>
 
-              {/* Line 5: Feature Tags */}
-              <View style={styles.featureChipsRow}>
-                {tags.map((tag, idx) => (
-                  <View key={idx} style={styles.featureChip}>
-                    <Text style={styles.featureChipText}>{tag}</Text>
-                  </View>
-                ))}
-              </View>
+              {/* Line 5: Feature tags — none: listings carry no amenity data
+                  yet, and sample chips would misdescribe the property. */}
             </View>
           </View>
 
@@ -1024,8 +979,7 @@ function PropertyDetailModal({
           >
             <Text style={styles.subSectionTitle}>Overview</Text>
             <Text style={styles.descriptionText}>
-              {property.description ||
-                "Exceptional residential property in prime location with excellent connectivity, natural lighting, modular fittings, and world-class building amenities. Ready for immediate possession."}
+              {property.description || "The owner hasn't added a description yet."}
             </Text>
           </View>
 
@@ -1037,42 +991,9 @@ function PropertyDetailModal({
             }}
           >
             <Text style={styles.subSectionTitle}>Highlights</Text>
-            <View style={styles.highlightsList}>
-              <View style={styles.bulletRow}>
-                <Text style={styles.bulletSymbol}>•</Text>
-                <Text style={styles.bulletText}>Overlooking Main Road</Text>
-              </View>
-              <View style={styles.bulletRow}>
-                <Text style={styles.bulletSymbol}>•</Text>
-                <Text style={styles.bulletText}>
-                  3 sides open corner apartment with excellent ventilation
-                </Text>
-              </View>
-              <View style={styles.bulletRow}>
-                <Text style={styles.bulletSymbol}>•</Text>
-                <Text style={styles.bulletText}>
-                  5 mins walk to Metro Station & Bus Terminus
-                </Text>
-              </View>
-              <View style={styles.bulletRow}>
-                <Text style={styles.bulletSymbol}>•</Text>
-                <Text style={styles.bulletText}>
-                  Gated community with 24/7 Security & CCTV surveillance
-                </Text>
-              </View>
-              <View style={styles.bulletRow}>
-                <Text style={styles.bulletSymbol}>•</Text>
-                <Text style={styles.bulletText}>
-                  100% Vastu Compliant East-facing layout
-                </Text>
-              </View>
-              <View style={styles.bulletRow}>
-                <Text style={styles.bulletSymbol}>•</Text>
-                <Text style={styles.bulletText}>
-                  Freehold Property with Clear Legal Title
-                </Text>
-              </View>
-            </View>
+            <Text style={styles.descriptionText}>
+              No highlights have been added for this property yet.
+            </Text>
           </View>
 
           {/* 6. PROPERTY DETAILS GRID */}
@@ -1088,7 +1009,7 @@ function PropertyDetailModal({
                 <View style={styles.detailValueRow}>
                   <Home size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
                   <Text style={styles.detailValueText} numberOfLines={1}>
-                    {property.type || "Apartment"}
+                    {property.type || NOT_SPECIFIED}
                   </Text>
                 </View>
                 <Text style={styles.detailLabelText} numberOfLines={1}>
@@ -1112,11 +1033,11 @@ function PropertyDetailModal({
                 <View style={styles.detailValueRow}>
                   <Maximize2 size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
                   <Text style={styles.detailValueText} numberOfLines={1}>
-                    {property.sqft ? `${property.sqft} sqft` : "1,500 sqft"}
+                    {property.sqft ? `${property.sqft} sqft` : NOT_SPECIFIED}
                   </Text>
                 </View>
                 <Text style={styles.detailLabelText} numberOfLines={1}>
-                  Super Built-up
+                  Area
                 </Text>
               </View>
 
@@ -1124,7 +1045,7 @@ function PropertyDetailModal({
                 <View style={styles.detailValueRow}>
                   <Armchair size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
                   <Text style={styles.detailValueText} numberOfLines={1}>
-                    {furnishingData.title}
+                    {furnishingLabel || NOT_SPECIFIED}
                   </Text>
                 </View>
                 <Text style={styles.detailLabelText} numberOfLines={1}>
@@ -1136,7 +1057,7 @@ function PropertyDetailModal({
                 <View style={styles.detailValueRow}>
                   <Compass size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
                   <Text style={styles.detailValueText} numberOfLines={1}>
-                    {property.facing || "East / North"}
+                    {property.facing || NOT_SPECIFIED}
                   </Text>
                 </View>
                 <Text style={styles.detailLabelText} numberOfLines={1}>
@@ -1148,7 +1069,7 @@ function PropertyDetailModal({
                 <View style={styles.detailValueRow}>
                   <Layers size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
                   <Text style={styles.detailValueText} numberOfLines={1}>
-                    {property.floor || "3rd of 5"}
+                    {property.floor || NOT_SPECIFIED}
                   </Text>
                 </View>
                 <Text style={styles.detailLabelText} numberOfLines={1}>
@@ -1166,86 +1087,27 @@ function PropertyDetailModal({
             }}
           >
             <Text style={styles.subSectionTitle}>Amenities</Text>
-            <View style={styles.amenitiesGrid}>
-              <View style={styles.amenityGridItem}>
-                <Droplet size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
-                <Text style={styles.amenityItemText} numberOfLines={1}>
-                  Swimming Pool
-                </Text>
-              </View>
-              <View style={styles.amenityGridItem}>
-                <Activity size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
-                <Text style={styles.amenityItemText} numberOfLines={1}>
-                  Gymnasium
-                </Text>
-              </View>
-              <View style={styles.amenityGridItem}>
-                <Shield size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
-                <Text style={styles.amenityItemText} numberOfLines={1}>
-                  24/7 Security
-                </Text>
-              </View>
-              <View style={styles.amenityGridItem}>
-                <Zap size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
-                <Text style={styles.amenityItemText} numberOfLines={1}>
-                  Power Backup
-                </Text>
-              </View>
-              <View style={styles.amenityGridItem}>
-                <Layers size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
-                <Text style={styles.amenityItemText} numberOfLines={1}>
-                  Elevator
-                </Text>
-              </View>
-              <View style={styles.amenityGridItem}>
-                <Car size={18} color="#475569" strokeWidth={1.8} style={{ marginRight: 8 }} />
-                <Text style={styles.amenityItemText} numberOfLines={1}>
-                  Car Parking
-                </Text>
-              </View>
-            </View>
+            <Text style={styles.descriptionText}>
+              No amenities have been listed for this property yet.
+            </Text>
           </View>
 
-          {/* 8. FURNISHING STATUS */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.subSectionTitle}>Furnishing</Text>
-            <View style={styles.furnishingCard}>
-              <View style={styles.furnishingHeader}>
-                <View style={styles.furnishingIconWrapper}>
-                  <Armchair size={22} color={COLORS.primary} strokeWidth={2} />
-                </View>
-                <View style={styles.furnishingHeaderContent}>
-                  <View style={styles.furnishingTitleRow}>
-                    <Text style={styles.furnishingTitle}>{furnishingData.title}</Text>
-                    <View style={styles.furnishingTag}>
-                      <CheckCircle2 size={12} color="#16A34A" style={{ marginRight: 5 }} />
-                      <Text style={styles.furnishingTagText}>{furnishingData.tag}</Text>
-                    </View>
+          {/* 8. FURNISHING STATUS — only the listing's real value. */}
+          {furnishingLabel ? (
+            <View style={styles.sectionContainer}>
+              <Text style={styles.subSectionTitle}>Furnishing</Text>
+              <View style={styles.furnishingCard}>
+                <View style={styles.furnishingHeader}>
+                  <View style={styles.furnishingIconWrapper}>
+                    <Armchair size={22} color={COLORS.primary} strokeWidth={2} />
                   </View>
-                  <Text style={styles.furnishingSubText}>
-                    {furnishingData.subtitle}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.furnishingDivider} />
-
-              <View style={styles.furnishingInclusionsSection}>
-                <Text style={styles.furnishingInclusionsHeading}>
-                  INCLUDED FIXTURES & APPLIANCES
-                </Text>
-                <View style={styles.furnishingChipsGrid}>
-                  {furnishingData.inclusions.map((item, idx) => (
-                    <View key={idx} style={styles.furnishingChip}>
-                      <Check size={14} color="#16A34A" strokeWidth={2.2} style={{ marginRight: 8 }} />
-                      <Text style={styles.furnishingChipText}>{item}</Text>
-                    </View>
-                  ))}
+                  <View style={styles.furnishingHeaderContent}>
+                    <Text style={styles.furnishingTitle}>{furnishingLabel}</Text>
+                  </View>
                 </View>
               </View>
             </View>
-          </View>
-
+          ) : null}
 
           {/* 9. LISTED BY / PROPERTY OWNER (honest: no invented identity;
               the genuine contact number is only available through the

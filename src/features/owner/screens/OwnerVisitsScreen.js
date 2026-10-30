@@ -30,8 +30,10 @@ import {
   fetchOwnerVisits,
   toUiVisit,
   toVisitPayload,
+  toScheduleModalInitial,
   updateOwnerVisit,
 } from "../../../shared/api/visits.js";
+import { getVisitDisplay } from "../../../shared/utils/visitStatus.js";
 import { ownerVisitActions, ownerVisitErrorMessage } from "../utils/ownerVisits.js";
 
 const FILTERS = [
@@ -152,7 +154,14 @@ export default function OwnerVisitsScreen() {
     setRescheduleVisit(null);
     setBusyVisitId(visit.id);
     try {
-      await updateOwnerVisit(visit.id, { scheduledAtISO });
+      // §E: explicit UTC for the time; the note rides along only when the
+      // owner edited it in the modal (an emptied note is PATCHed as "" so the
+      // server clears it). A pure time change never rewrites the note.
+      const noteChanged = String(data?.note ?? "") !== String(visit.note ?? "");
+      await updateOwnerVisit(visit.id, {
+        scheduledAtISO,
+        ...(noteChanged ? { note: data?.note ?? "" } : {}),
+      });
       await loadVisits();
       Alert.alert("Visit Rescheduled", "The proposed time was updated.");
     } catch (error) {
@@ -290,7 +299,15 @@ export default function OwnerVisitsScreen() {
           />
         ) : (
           <View style={styles.list}>
-            {visibleVisits.map((visit) => (
+            {visibleVisits.map((visit) => {
+              // §C display state: labels/colors from visitStatus.js (owner
+              // wording), including "Rescheduled". Actions follow the server
+              // status, never this display label.
+              const visitDisplay = getVisitDisplay(visit, "owner");
+              const locationParts = [visit.propertyLocality, visit.propertyCity]
+                .filter(Boolean)
+                .join(", ");
+              return (
               <View key={visit.id} style={styles.card}>
                 <View style={styles.cardHeader}>
                   <View style={styles.propertyRow}>
@@ -301,15 +318,22 @@ export default function OwnerVisitsScreen() {
                       <Text style={styles.propertyTitle} numberOfLines={2}>
                         {visit.propertyTitle || "Property visit"}
                       </Text>
+                      {locationParts ? (
+                        <Text style={styles.propertyLocation} numberOfLines={1}>
+                          {locationParts}
+                        </Text>
+                      ) : null}
                       <View style={styles.buyerRow}>
                         <User size={12} color="#64748B" style={{ marginRight: 4 }} />
+                        {/* The buyer's chosen name from the server, or the
+                            honest "Buyer #<id>" fallback — never a phone. */}
                         <Text style={styles.buyerText}>
-                          {visit.buyer_user_id ? `Buyer #${visit.buyer_user_id}` : "Buyer"}
+                          {visit.buyerLabel || "Buyer"}
                         </Text>
                       </View>
                     </View>
                   </View>
-                  <StatusBadge status={visit.serverStatus} />
+                  <StatusBadge status={visitDisplay.key} label={visitDisplay.label} />
                 </View>
 
                 <View style={styles.scheduleRow}>
@@ -323,10 +347,16 @@ export default function OwnerVisitsScreen() {
                   </View>
                 </View>
 
-                {visit.note ? <Text style={styles.noteText}>{visit.note}</Text> : null}
+                {visit.note ? (
+                  <View style={styles.noteBlock}>
+                    <Text style={styles.noteLabel}>Notes for Visit</Text>
+                    <Text style={styles.noteText}>{visit.note}</Text>
+                  </View>
+                ) : null}
                 {renderActions(visit)}
               </View>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -337,8 +367,9 @@ export default function OwnerVisitsScreen() {
         onClose={() => setRescheduleVisit(null)}
         title="Reschedule Visit"
         property={{ title: rescheduleVisit?.propertyTitle || "Property visit", location: "" }}
-        initialDate={rescheduleVisit?.scheduledAt ? new Date(rescheduleVisit.scheduledAt) : undefined}
-        initialTime={rescheduleVisit?.time || "10:00 am"}
+        // §C/§E: a reschedule starts from the visit's own agreed values —
+        // date, slot time, and the existing shared note — via toScheduleModalInitial.
+        {...toScheduleModalInitial(rescheduleVisit || {})}
         onConfirm={submitReschedule}
       />
     </SafeAreaView>
@@ -390,6 +421,12 @@ const styles = StyleSheet.create({
   },
   propertyMeta: { flex: 1 },
   propertyTitle: { fontSize: 14, fontWeight: "700", color: COLORS.textDark, lineHeight: 19 },
+  propertyLocation: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "400",
+    marginTop: 1,
+  },
   buyerRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
   buyerText: { fontSize: 11, color: "#64748B", fontWeight: "500" },
   scheduleRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
@@ -402,8 +439,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   scheduleText: { fontSize: 11.5, fontWeight: "600", color: "#1D4ED8" },
-  noteText: {
+  noteBlock: {
     marginTop: 10,
+  },
+  noteLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#64748B",
+    letterSpacing: 0.4,
+    marginBottom: 3,
+  },
+  noteText: {
     fontSize: 12,
     lineHeight: 17,
     color: "#475569",

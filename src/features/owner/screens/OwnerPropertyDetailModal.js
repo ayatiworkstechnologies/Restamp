@@ -238,7 +238,7 @@ export default function OwnerPropertyDetailModal({
           </View>
 
           {/* Performance strip */}
-          {(property.views || property.enquiries || property.visits) && (
+          {(property.views || property.enquiries || property.visits || property.calls != null) && (
             <View style={styles.statsStrip}>
               {property.views != null && (
                 <View style={styles.statItem}>
@@ -258,6 +258,15 @@ export default function OwnerPropertyDetailModal({
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{property.visits}</Text>
                   <Text style={styles.statLabel}>Visits</Text>
+                </View>
+              )}
+              {/* Call-button taps (contract §B): a count of taps on the Call
+                  button only — no call result or buyer identity is implied.
+                  Hidden entirely until the backend sends the counter. */}
+              {property.calls != null && (
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{formatCount(property.calls)}</Text>
+                  <Text style={styles.statLabel}>Calls</Text>
                 </View>
               )}
             </View>

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Platform } from "react-native";
+import { Platform, Alert } from "react-native";
 import { enableScreens } from "react-native-screens";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import AppNavigator from "./src/shared/navigation/AppNavigator";
@@ -10,6 +10,13 @@ import { OwnerProvider } from "./src/features/owner/context/OwnerContext";
 import { AgentProvider } from "./src/features/agent/context/AgentContext";
 import { AuthProvider } from "./src/features/auth/context/AuthContext";
 import AnimatedSplashScreen from "./src/shared/components/AnimatedSplashScreen";
+import { installWebAlert } from "./src/shared/utils/webAlert";
+
+// react-native-web's Alert.alert is a no-op: without this, web users never
+// see error messages and Alert-confirmed actions never run (see webAlert.js).
+if (Platform.OS === "web" && typeof window !== "undefined") {
+  installWebAlert(Alert, window);
+}
 
 // Disable blue focus outline across all fields globally on Web / WebViews
 if (Platform.OS === "web" && typeof document !== "undefined") {
