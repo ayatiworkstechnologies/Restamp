@@ -91,7 +91,7 @@ check(
   "L2 phone submit stores the backend debug_code",
   /const resp = await requestOtp\(fullPhone\(\)\);[\s\S]{0,700}resp && resp\.debug_code \? String\(resp\.debug_code\) : null;[\s\S]{0,40}setDevCode\(serverCode\);/.test(loginSrc)
 );
-check("L3 code chip renders only when devCode is set", /\{devCode \? \(/.test(loginSrc));
+check("L3 code chip renders only when devCode is set", /\{(SHOW_OTP_CODE_CHIP && )?devCode \? \(/.test(loginSrc));
 check("L4 chip tap auto-fills the backend code", /onPress=\{\(\) => handleAutoFill\(devCode\)\}/.test(loginSrc));
 check(
   "L5 auto-fill keeps all six digits as a string",

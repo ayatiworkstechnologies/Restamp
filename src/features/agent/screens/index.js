@@ -5,7 +5,6 @@ export { default as AgentPaymentSuccessScreen } from "./AgentPaymentSuccessScree
 export { default as AgentDashboardScreen } from "./AgentDashboardScreen.js";
 export { default as AgentPropertiesScreen } from "./AgentPropertiesScreen.js";
 export { default as AgentLeadsScreen } from "./AgentLeadsScreen.js";
-export { default as AgentVisitsScreen } from "./AgentVisitsScreen.js";
 export { default as AgentProfileScreen } from "./AgentProfileScreen.js";
 export { default as AgentLeadDetailScreen } from "./AgentLeadDetailScreen.js";
 export { default as AgentEarningsScreen } from "./AgentEarningsScreen.js";

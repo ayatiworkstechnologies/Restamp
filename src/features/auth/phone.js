@@ -40,7 +40,7 @@ export function phoneValidationMessage(digits, countryCode) {
       : "Enter your phone number.";
   }
   if (isIndia && clean.length !== 10) {
-    return `Enter exactly 10 digits (you entered ${clean.length}). Do not include +91 — it is already selected.`;
+    return "Enter a valid 10 digits mobile number.";
   }
   if (!isIndia && (clean.length < 7 || clean.length > 15)) {
     return "Enter a valid phone number for the selected country.";

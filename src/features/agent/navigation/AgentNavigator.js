@@ -5,14 +5,12 @@ import {
   HugeDashboard,
   HugeBuilding,
   HugeUsers,
-  HugeCalendar,
   HugeUser,
 } from "../../../shared/components/HugeIcon.js";
 
 import AgentDashboardScreen from "../screens/AgentDashboardScreen.js";
 import AgentPropertiesScreen from "../screens/AgentPropertiesScreen.js";
 import AgentLeadsScreen from "../screens/AgentLeadsScreen.js";
-import AgentVisitsScreen from "../screens/AgentVisitsScreen.js";
 import AgentProfileScreen from "../screens/AgentProfileScreen.js";
 
 const Tab = createBottomTabNavigator();
@@ -29,10 +27,6 @@ const agentTabConfig = {
   Leads: {
     label: "Leads",
     Icon: HugeUsers,
-  },
-  Visits: {
-    label: "Visits",
-    Icon: HugeCalendar,
   },
   Profile: {
     label: "Profile",
@@ -104,7 +98,6 @@ export default function AgentNavigator() {
       <Tab.Screen name="Dashboard" component={AgentDashboardScreen} />
       <Tab.Screen name="Properties" component={AgentPropertiesScreen} />
       <Tab.Screen name="Leads" component={AgentLeadsScreen} />
-      <Tab.Screen name="Visits" component={AgentVisitsScreen} />
       <Tab.Screen name="Profile" component={AgentProfileScreen} />
     </Tab.Navigator>
   );

@@ -36,8 +36,72 @@ import COLORS from "../../../shared/constants/colors.js";
 import RestampLogo from "../../../shared/components/RestampLogo.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { enterOwnerFlow } from "../../../shared/api/users.js";
+import { useAgent } from "../../agent/context/AgentContext.js";
+import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 
-const VERTICAL_TABS = [{ id: "owner", label: "Owner Plan", icon: Crown }];
+const VERTICAL_TABS = [
+  { id: "owner", label: "Owner Plan", icon: Crown },
+  ...(AGENT_MODULE_ENABLED ? [{ id: "agent", label: "Agent Plan", icon: Briefcase }] : []),
+];
+
+/* 3 Agent Plans — 5 / 10 / 15 Chennai localities. Names, prices and limits
+   match the tiers on AgentLocationSelectScreen so the flow stays consistent. */
+const AGENT_PLANS = [
+  {
+    id: "agent-starter",
+    name: "Agent Starter Plan",
+    titlePrefix: "Starter ",
+    titlePrefixColor: "#2563EB",
+    titleColor: "#0F172A",
+    price: "₹2,999",
+    priceSub1: "5 localities • 30 days",
+    priceSub2: "billed monthly",
+    isPopular: false,
+    buttonText: "Choose Plan",
+    locationLimit: 5,
+    features: [
+      "Choose 5 Chennai localities",
+      "Buyer enquiries from your areas",
+      "Agent dashboard, leads & visits",
+    ],
+  },
+  {
+    id: "agent-pro",
+    name: "Agent Pro Plan",
+    titlePrefix: "Pro ",
+    titlePrefixColor: "#2563EB",
+    titleColor: "#0F172A",
+    price: "₹6,999",
+    priceSub1: "10 localities • 30 days",
+    priceSub2: "billed monthly",
+    isPopular: true,
+    buttonText: "Choose Plan",
+    locationLimit: 10,
+    features: [
+      "Choose 10 Chennai localities",
+      "Buyer enquiries from your areas",
+      "Agent dashboard, leads & visits",
+    ],
+  },
+  {
+    id: "agent-elite",
+    name: "Agent Elite Plan",
+    titlePrefix: "Elite ",
+    titlePrefixColor: "#2563EB",
+    titleColor: "#0F172A",
+    price: "₹14,999",
+    priceSub1: "15 localities • 30 days",
+    priceSub2: "billed monthly",
+    isPopular: false,
+    buttonText: "Choose Plan",
+    locationLimit: 15,
+    features: [
+      "Choose 15 Chennai localities",
+      "Buyer enquiries from your areas",
+      "Agent dashboard, leads & visits",
+    ],
+  },
+];
 
 const RESIDENTIAL_TYPES = [
   {
@@ -284,8 +348,14 @@ export default function MenuScreen({ navigation, route }) {
     }
   };
 
-  // Agent plans are gated off (no production broker/lead API yet).
-  const [activeVerticalTab, setActiveVerticalTab] = useState("owner");
+  const { hasActivePlan, agentPlan } = useAgent();
+
+  // Vertical tab: 'owner' | 'agent'. The agent dashboard links back here
+  // with initialTab "agent" to upgrade or renew.
+  const requestedTab = route?.params?.initialTab;
+  const [activeVerticalTab, setActiveVerticalTab] = useState(
+    VERTICAL_TABS.some((t) => t.id === requestedTab) ? requestedTab : "owner"
+  );
 
   // Category: 'residential' | 'commercial'
   const [propertyCategory, setPropertyCategory] = useState("residential");
@@ -375,6 +445,21 @@ export default function MenuScreen({ navigation, route }) {
       return;
     }
 
+    // Agent flow: choose Chennai localities -> confirm -> payment -> dashboard.
+    if (planRole === "Agent") {
+      navigation.navigate("AgentLocationSelect", {
+        plan: {
+          id: plan.id,
+          name: plan.name,
+          locationLimit: plan.locationLimit,
+          price: plan.price,
+          priceNumeric: parseInt(plan.price.replace(/[^0-9]/g, ""), 10),
+          validity: "1 Month (30 Days)",
+        },
+      });
+      return;
+    }
+
     Alert.alert(
       `${plan.name} Selected`,
       `Proceed with ${plan.name} (${plan.price}) for your ${propertyCategory} property as an ${planRole}?`,
@@ -395,8 +480,10 @@ export default function MenuScreen({ navigation, route }) {
 
 
   // Determine current active plans array
-  const currentPlans =
-    propertyCategory === "residential"
+  const isAgentTab = activeVerticalTab === "agent";
+  const currentPlans = isAgentTab
+    ? AGENT_PLANS
+    : propertyCategory === "residential"
       ? OWNER_PLANS.residential
       : OWNER_PLANS.commercial;
 
@@ -502,23 +589,61 @@ export default function MenuScreen({ navigation, route }) {
           contentContainerStyle={styles.contentPaneScroll}
           showsVerticalScrollIndicator={false}
         >
-          {/* ================= OWNER PLAN ================= */}
-          {activeVerticalTab === "owner" && (
+          {/* ================= OWNER PLAN / AGENT PLAN ================= */}
+          {(activeVerticalTab === "owner" || isAgentTab) && (
             <View>
               {/* Header Info */}
               <View style={styles.paneHeader}>
                 <View style={styles.headerRoleRow}>
-                  <Text style={styles.paneMainTitle}>Owner Plans</Text>
-                  <View style={[styles.roleBadge, styles.roleBadgeOwner]}>
-                    <Text style={[styles.roleBadgeText, styles.roleBadgeTextOwner]}>
-                      Individual
+                  <Text style={styles.paneMainTitle}>
+                    {isAgentTab ? "Agent Plans" : "Owner Plans"}
+                  </Text>
+                  <View
+                    style={[
+                      styles.roleBadge,
+                      isAgentTab ? styles.roleBadgeAgent : styles.roleBadgeOwner,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.roleBadgeText,
+                        isAgentTab ? styles.roleBadgeTextAgent : styles.roleBadgeTextOwner,
+                      ]}
+                    >
+                      {isAgentTab ? "Partner" : "Individual"}
                     </Text>
                   </View>
                 </View>
                 <Text style={styles.paneSubtitle}>
-                  Direct buyer inquiries • 0% brokerage in Chennai
+                  {isAgentTab
+                    ? "Pick 5, 10 or 15 Chennai localities for buyer enquiries"
+                    : "Direct buyer inquiries • 0% brokerage in Chennai"}
                 </Text>
               </View>
+
+              {/* Active agent plan: jump straight to the dashboard */}
+              {isAgentTab && hasActivePlan && (
+                <View style={styles.ownerTestBanner}>
+                  <View style={styles.ownerTestLeft}>
+                    <Crown size={17} color="#2563EB" style={{ marginRight: 8 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ownerTestTitle}>
+                        {agentPlan?.name || "Agent plan"} active
+                      </Text>
+                      <Text style={styles.ownerTestSub}>
+                        {agentPlan?.locationLimit || 0} localities
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.ownerTestBtn}
+                    onPress={() => navigation.navigate("AgentNavigator")}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.ownerTestBtnText}>Dashboard</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Quick Direct Owner Access Banner (Testing - Skip Payment) */}
               {activeVerticalTab === "owner" && (
@@ -573,6 +698,7 @@ export default function MenuScreen({ navigation, route }) {
                         {plan.titlePrefix
                           ? plan.name
                               .replace(plan.titlePrefix.trim(), "")
+                              .replace(/\s+/g, " ")
                               .trim()
                           : plan.name}
                       </Text>
@@ -611,7 +737,7 @@ export default function MenuScreen({ navigation, route }) {
                     onPress={() =>
                       handleSelectPlan(
                         plan,
-                        "Owner",
+                        isAgentTab ? "Agent" : "Owner",
                       )
                     }
                   >

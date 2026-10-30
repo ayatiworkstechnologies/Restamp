@@ -17,7 +17,6 @@ import {
   MapPin,
   Building2,
   Users,
-  Calendar,
   Crown,
   CreditCard,
   FileText,
@@ -46,7 +45,6 @@ export default function AgentProfileScreen({ navigation }) {
     selectedLocalities,
     localityProperties,
     leads,
-    visits,
   } = useAgent();
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -244,23 +242,6 @@ export default function AgentProfileScreen({ navigation }) {
             <View style={styles.badgeRow}>
               <View style={styles.countBadge}>
                 <Text style={styles.countText}>{leads.length || 18}</Text>
-              </View>
-              <ChevronRight size={16} color="#94A3B8" />
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => navigation.navigate("Visits")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <Calendar size={18} color="#334155" style={styles.menuIcon} />
-              <Text style={styles.menuLabel}>Site Visits</Text>
-            </View>
-            <View style={styles.badgeRow}>
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>{visits.length || 4}</Text>
               </View>
               <ChevronRight size={16} color="#94A3B8" />
             </View>

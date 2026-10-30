@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,16 +14,18 @@ import {
   Dimensions,
   ImageBackground,
   ScrollView,
+  KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect, Defs, LinearGradient, Stop } from "react-native-svg";
 import {
   ChevronLeft,
-  ChevronDown,
   RotateCcw,
   Lock,
   Check,
   X,
+  Smartphone,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import TYPOGRAPHY from "../../../shared/constants/typography.js";
@@ -41,8 +43,11 @@ import {
   maxPhoneDigits,
 } from "../phone.js";
 import { planLoginResume } from "../requireAuth.js";
-import NumericKeypad from "../../../shared/components/NumericKeypad.js";
 import RestampLogo from "../../../shared/components/RestampLogo.js";
+
+// Internal-testing OTP code chip (only appears when the backend's test display
+// mode returns a code). Hidden per design; set true to show it again.
+const SHOW_OTP_CODE_CHIP = true;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_MAX_WIDTH = 480;
@@ -127,6 +132,8 @@ function AppleIcon({ size = 20, color = "#FFFFFF" }) {
 
 export default function LoginScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const keyboardVerticalOffset =
+    Platform.OS === "ios" ? (insets.bottom > 0 ? insets.bottom + 16 : 20) : 0;
   const {
     loginWithToken,
     saveProfileName,
@@ -184,7 +191,7 @@ export default function LoginScreen({ navigation }) {
 
   const [phoneTouched, setPhoneTouched] = useState(false);
   const handlePhoneChange = (text) => {
-    setPhoneTouched(true);
+    if (phoneTouched) setPhoneTouched(false);
     setPhoneNumber(sanitizePhoneInput(text, selectedCountry.code));
   };
   const isPhoneValid = isPhoneValidForCountry(phoneNumber, selectedCountry.code);
@@ -522,56 +529,6 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  // Central Keypad handler (also syncs with active input field)
-  const handleKeypadPress = useCallback(
-    (key) => {
-      if (step === 1) {
-        setPhoneTouched(true);
-        if (key === "backspace") {
-          setPhoneNumber((prev) => prev.slice(0, -1));
-        } else if (/^[0-9]$/.test(key)) {
-          setPhoneNumber((prev) => {
-            const next = prev + key;
-            return sanitizePhoneInput(next, selectedCountry.code);
-          });
-        }
-        phoneInputRef.current?.focus();
-      } else if (step === 2) {
-        if (key === "backspace") {
-          setOtp((prev) => {
-            const newOtp = [...prev];
-            let idxToClear = focusedOtpIndex;
-            if (newOtp[idxToClear] === "" && idxToClear > 0) {
-              idxToClear -= 1;
-            }
-            newOtp[idxToClear] = "";
-            setFocusedOtpIndex(Math.max(0, idxToClear));
-            otpInputRefs.current[Math.max(0, idxToClear)]?.focus();
-            return newOtp;
-          });
-        } else if (/^[0-9]$/.test(key)) {
-          setOtp((prev) => {
-            const newOtp = [...prev];
-            const currIdx = focusedOtpIndex;
-            if (currIdx < 6) {
-              newOtp[currIdx] = key;
-              const nextIdx = Math.min(5, currIdx + 1);
-              setFocusedOtpIndex(nextIdx);
-              otpInputRefs.current[nextIdx]?.focus();
-
-              const finalCode = newOtp.join("");
-              if (finalCode.length === 6) {
-                setTimeout(() => verifyCode(finalCode), 150);
-              }
-            }
-            return newOtp;
-          });
-        }
-      }
-    },
-    [step, selectedCountry.code, focusedOtpIndex, otp]
-  );
-
   const isOtpComplete = otp.every((d) => d !== "");
   const isNameValid = firstName.trim().length > 0;
 
@@ -770,7 +727,11 @@ export default function LoginScreen({ navigation }) {
         {/* STEP 1: PHONE NUMBER INPUT SCREEN (CLEAN BRAND STYLE)    */}
         {/* ======================================================== */}
         {step === 1 && (
-          <View style={styles.flowContainer}>
+          <KeyboardAvoidingView
+            style={styles.flowContainer}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={keyboardVerticalOffset}
+          >
             {/* Top Navigation Bar: Back arrow and Skip Here */}
             <View style={styles.flowTopBar}>
               <TouchableOpacity
@@ -792,7 +753,14 @@ export default function LoginScreen({ navigation }) {
             </View>
 
             {/* Content Area */}
-            <View style={styles.flowBody}>
+            {/* Scrolls so the action button and links stay reachable above the keyboard */}
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.flowBody}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+            >
               <Text style={styles.flowHeading}>Welcome back!</Text>
               <Text style={styles.flowSubheading}>
                 Enter your registered phone number to log in
@@ -819,15 +787,7 @@ export default function LoginScreen({ navigation }) {
                     <Text style={styles.countryCodeBadgeText}>
                       {selectedCountry.code}
                     </Text>
-                    <ChevronDown
-                      size={14}
-                      color="#64748B"
-                      style={{ marginLeft: 2 }}
-                    />
                   </TouchableOpacity>
-
-                  {/* Subtle vertical separator */}
-                  <View style={styles.phoneInputDivider} />
 
                   {/* Real interactive TextInput */}
                   <TextInput
@@ -844,6 +804,7 @@ export default function LoginScreen({ navigation }) {
                     maxLength={maxPhoneDigits(selectedCountry.code)}
                     underlineColorAndroid="transparent"
                   />
+                  <Smartphone size={22} color="#9CA3AF" strokeWidth={1.4} />
                 </View>
               </Pressable>
 
@@ -853,8 +814,10 @@ export default function LoginScreen({ navigation }) {
                   {phoneValidationMessage(phoneNumber, selectedCountry.code)}
                 </Text>
               ) : null}
+            </ScrollView>
 
-              {/* Sign in Button (Full pill button) */}
+            {/* Pinned Bottom Action Footer (Above Keyboard) */}
+            <View style={styles.flowBottomContainer}>
               <TouchableOpacity
                 style={[
                   styles.primaryActionButton,
@@ -870,7 +833,6 @@ export default function LoginScreen({ navigation }) {
                 </Text>
               </TouchableOpacity>
 
-              {/* Help? Link */}
               <TouchableOpacity
                 style={styles.helpLinkContainer}
                 onPress={() =>
@@ -884,17 +846,18 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.helpLinkText}>Help?</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Custom On-screen Numeric Keypad */}
-            <NumericKeypad onKeyPress={handleKeypadPress} />
-          </View>
+          </KeyboardAvoidingView>
         )}
 
         {/* ======================================================== */}
         {/* STEP 2: OTP VERIFICATION SCREEN (DESIGN 1)               */}
         {/* ======================================================== */}
         {step === 2 && (
-          <View style={styles.flowContainer}>
+          <KeyboardAvoidingView
+            style={styles.flowContainer}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={keyboardVerticalOffset}
+          >
             {/* Top Navigation Bar: Back Arrow */}
             <View style={styles.flowTopBar}>
               <TouchableOpacity
@@ -909,7 +872,14 @@ export default function LoginScreen({ navigation }) {
             </View>
 
             {/* Content Area */}
-            <View style={styles.flowBody}>
+            {/* Scrolls so the action button and links stay reachable above the keyboard */}
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.flowBody}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+            >
               <Text style={styles.flowHeading}>OTP Sent!</Text>
               <Text style={styles.flowSubheading}>
                 Enter the 6-digit code sent to you at{" "}
@@ -949,6 +919,7 @@ export default function LoginScreen({ navigation }) {
                         keyboardType="number-pad"
                         maxLength={1}
                         selectTextOnFocus
+                        caretHidden
                         selectionColor={COLORS.primary}
                         underlineColorAndroid="transparent"
                         autoFocus={idx === 0}
@@ -964,7 +935,7 @@ export default function LoginScreen({ navigation }) {
               {/* Internal-Testing Code Auto-fill Chip — rendered ONLY when the
                   backend actually returned a code (restricted internal-testing
                   display mode; never in production responses) */}
-              {devCode ? (
+              {SHOW_OTP_CODE_CHIP && devCode ? (
                 <TouchableOpacity
                   style={styles.devCodeNotice}
                   onPress={() => handleAutoFill(devCode)}
@@ -977,8 +948,10 @@ export default function LoginScreen({ navigation }) {
                   </Text>
                 </TouchableOpacity>
               ) : null}
+            </ScrollView>
 
-              {/* Action Button: Styled in application color theme (#2563EB) */}
+            {/* Pinned Bottom Action Footer (Above Keyboard) */}
+            <View style={styles.flowBottomContainer}>
               <TouchableOpacity
                 style={[
                   styles.primaryActionButton,
@@ -1005,7 +978,6 @@ export default function LoginScreen({ navigation }) {
                 </Text>
               </TouchableOpacity>
 
-              {/* "I don’t receive code" Link (Left-aligned under button, matching mockup) */}
               <TouchableOpacity
                 style={styles.iDontReceiveCodeContainer}
                 onPress={() => {
@@ -1025,17 +997,18 @@ export default function LoginScreen({ navigation }) {
                 </Text>
               </TouchableOpacity>
             </View>
-
-            {/* Custom On-screen Numeric Keypad */}
-            <NumericKeypad onKeyPress={handleKeypadPress} />
-          </View>
+          </KeyboardAvoidingView>
         )}
 
         {/* ======================================================== */}
         {/* STEP 3: USER NAME SETUP (FOR NEW PROFILES)               */}
         {/* ======================================================== */}
         {step === 3 && (
-          <View style={styles.flowContainer}>
+          <KeyboardAvoidingView
+            style={styles.flowContainer}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={keyboardVerticalOffset}
+          >
             {/* Top Navigation Bar: Back Arrow */}
             <View style={styles.flowTopBar}>
               <TouchableOpacity
@@ -1050,8 +1023,11 @@ export default function LoginScreen({ navigation }) {
             </View>
 
             <ScrollView
+              style={{ flex: 1 }}
               contentContainerStyle={styles.nameScrollContent}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
             >
               <Text style={styles.flowHeading}>What’s your name?</Text>
               <Text style={styles.flowSubheading}>
@@ -1113,12 +1089,13 @@ export default function LoginScreen({ navigation }) {
                   RESTAMP.
                 </Text>
               </View>
+            </ScrollView>
 
-              {/* Complete & Continue Button */}
+            {/* Pinned Bottom Action Footer (Above Keyboard) */}
+            <View style={styles.flowBottomContainer}>
               <TouchableOpacity
                 style={[
                   styles.primaryActionButton,
-                  { marginTop: 32 },
                   (!isNameValid || busy) &&
                     styles.primaryActionButtonDisabled,
                 ]}
@@ -1130,8 +1107,8 @@ export default function LoginScreen({ navigation }) {
                   {busy ? "Saving..." : "Complete & Continue"}
                 </Text>
               </TouchableOpacity>
-            </ScrollView>
-          </View>
+            </View>
+          </KeyboardAvoidingView>
         )}
       </View>
 
@@ -1185,7 +1162,7 @@ export default function LoginScreen({ navigation }) {
                     <Text style={styles.countryListCode}>{item.code}</Text>
                     {isSelected ? (
                       <View style={styles.countryCheckmark}>
-                        <Check size={16} color={COLORS.primary} />
+                        <Check size={13} color="#FFFFFF" strokeWidth={2.5} />
                       </View>
                     ) : null}
                   </TouchableOpacity>
@@ -1386,75 +1363,62 @@ const styles = StyleSheet.create({
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
-    marginLeft: -4,
   },
   skipHereBtn: {
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 18,
+    paddingVertical: 8,
+    paddingLeft: 12,
   },
   skipHereText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#475569",
+    fontSize: 16,
+    fontWeight: "400",
+    color: "#6B7280",
   },
   flowBody: {
-    flex: 1,
-    paddingHorizontal: 22,
+    paddingHorizontal: 24,
     paddingTop: 16,
+    paddingBottom: 16,
+  },
+  flowBottomContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === "ios" ? 14 : 16,
+    backgroundColor: "#FFFFFF",
+    width: "100%",
   },
   flowHeading: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#0F172A",
-    letterSpacing: -0.6,
-    marginBottom: 6,
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#0A0A0A",
+    letterSpacing: -0.8,
+    marginBottom: 8,
   },
   flowSubheading: {
-    fontSize: 14.5,
+    fontSize: 15,
     color: "#6B7280",
-    lineHeight: 21,
-    marginBottom: 24,
+    lineHeight: 22,
+    maxWidth: 320,
+    marginBottom: 20,
   },
   flowSubheadingBold: {
     fontWeight: "700",
     color: "#0F172A",
   },
   didYouEnterNumberLink: {
-    color: "#DC2626",
+    color: COLORS.primary,
     fontWeight: "600",
   },
 
   /* Step 1: Clean Phone Input Card */
   phoneInputCard: {
+    height: 62,
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    borderWidth: 1.2,
-    borderColor: "#E5E7EB",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    paddingHorizontal: 16,
     justifyContent: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-      web: {
-        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
-      },
-    }),
   },
   phoneInputCardFocused: {
     borderColor: COLORS.primary,
@@ -1471,33 +1435,28 @@ const styles = StyleSheet.create({
   countryBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingVertical: 2,
-    paddingRight: 6,
+    gap: 10,
+    paddingVertical: 4,
+    paddingRight: 10,
   },
   countryFlagText: {
-    fontSize: 20,
+    fontSize: 26,
+    lineHeight: 30,
   },
   countryCodeBadgeText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1F2937",
-  },
-  phoneInputDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: "#E5E7EB",
-    marginHorizontal: 8,
+    fontSize: 17,
+    fontWeight: "400",
+    color: "#9CA3AF",
   },
   phoneTextInput: {
     flex: 1,
-    height: 36,
-    fontSize: 16.5,
-    fontWeight: "600",
-    color: "#1F2937",
-    letterSpacing: 0.6,
+    height: 40,
+    fontSize: 17,
+    fontWeight: "400",
+    color: "#111111",
+    letterSpacing: 0.4,
     paddingVertical: 0,
-    paddingHorizontal: 2,
+    paddingHorizontal: 0,
     ...Platform.select({
       web: {
         outlineStyle: "none",
@@ -1510,7 +1469,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: COLORS.danger,
     marginTop: 8,
-    marginLeft: 4,
+    marginLeft: 2,
   },
 
   /* Step 2: Individual Modern Tactile OTP Card Boxes */
@@ -1526,50 +1485,28 @@ const styles = StyleSheet.create({
   otpBox: {
     width: OTP_BOX_WIDTH,
     height: OTP_BOX_HEIGHT,
-    borderRadius: 14,
-    backgroundColor: "#FAFAFA",
-    borderWidth: 1.2,
-    borderColor: "#E5E7EB",
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-      web: {
-        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
-      },
-    }),
+    backgroundColor: "transparent",
+    borderBottomWidth: 1.5,
+    borderBottomColor: "#E5E7EB",
   },
   otpBoxFilled: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D1D5DB",
+    borderBottomColor: "#CBD5E1",
   },
   otpBoxFocused: {
-    backgroundColor: "#FFFFFF",
-    borderColor: COLORS.primary,
-    borderWidth: 2,
-    ...Platform.select({
-      web: {
-        boxShadow: "0 0 0 3px rgba(37, 99, 235, 0.12)",
-      },
-    }),
+    borderBottomColor: COLORS.primary,
+    borderBottomWidth: 2,
   },
   otpBoxInput: {
     width: "100%",
     height: "100%",
     textAlign: "center",
     textAlignVertical: "center",
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1F2937",
+    fontSize: 26,
+    fontWeight: "600",
+    color: "#0F172A",
     backgroundColor: "transparent",
     paddingHorizontal: 0,
     paddingVertical: 0,
@@ -1582,23 +1519,22 @@ const styles = StyleSheet.create({
     }),
   },
   otpCursorIndicator: {
-    width: 14,
-    height: 2.5,
-    borderRadius: 2,
+    width: 2,
+    height: 26,
+    borderRadius: 1,
     backgroundColor: COLORS.primary,
     position: "absolute",
-    bottom: 8,
   },
   iDontReceiveCodeContainer: {
-    alignSelf: "flex-start",
-    marginTop: 16,
-    paddingVertical: 4,
-    paddingHorizontal: 2,
+    alignSelf: "center",
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
   iDontReceiveCodeText: {
     fontSize: 14.5,
     fontWeight: "600",
-    color: "#DC2626",
+    color: COLORS.primary,
   },
   devCodeNotice: {
     backgroundColor: "#EFF6FF",
@@ -1631,26 +1567,31 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 22,
+    marginTop: 0,
+    width: "100%",
     ...Platform.select({
       ios: {
         shadowColor: COLORS.primary,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.28,
-        shadowRadius: 10,
+        shadowOpacity: 0.32,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
       web: {
-        boxShadow: "0 4px 14px rgba(37, 99, 235, 0.28)",
+        boxShadow: "0 4px 14px rgba(37, 99, 235, 0.35)",
         cursor: "pointer",
       },
     }),
   },
   primaryActionButtonDisabled: {
     backgroundColor: "#93C5FD",
+    opacity: 0.7,
     ...Platform.select({
+      ios: {
+        shadowOpacity: 0,
+      },
       web: {
         boxShadow: "none",
         cursor: "not-allowed",
@@ -1658,16 +1599,16 @@ const styles = StyleSheet.create({
     }),
   },
   primaryActionButtonText: {
-    fontSize: 15.5,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "600",
     color: "#FFFFFF",
-    letterSpacing: 0.2,
+    letterSpacing: -0.2,
   },
   helpLinkContainer: {
-    alignSelf: "flex-start",
-    marginTop: 16,
-    paddingVertical: 4,
-    paddingHorizontal: 2,
+    alignSelf: "center",
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
   helpLinkText: {
     fontSize: 14,
@@ -1679,7 +1620,7 @@ const styles = StyleSheet.create({
   nameScrollContent: {
     paddingHorizontal: 22,
     paddingTop: 16,
-    paddingBottom: 40,
+    paddingBottom: 20,
   },
   nameInputCard: {
     backgroundColor: "#FFFFFF",
@@ -1822,7 +1763,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   countryListItemActive: {
-    backgroundColor: "#FDF5F3",
+    backgroundColor: COLORS.primaryLight,
   },
   countryListFlag: {
     fontSize: 22,
@@ -1832,7 +1773,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: "600",
-    color: "#1F2937",
+    color: "#0F172A",
   },
   countryListCode: {
     fontSize: 15,
@@ -1844,7 +1785,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
   },

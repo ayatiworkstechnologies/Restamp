@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  Calendar,
   Clock,
   ArrowRight,
   Search,
@@ -51,7 +50,6 @@ export default function AgentDashboardScreen({ navigation }) {
     selectedLocalities,
     agentProfile,
     leads,
-    visits,
     earningsTransactions = [],
     isPlanExpired,
     localityProperties,
@@ -83,9 +81,6 @@ export default function AgentDashboardScreen({ navigation }) {
   // Calculate summary counts
   const availablePropertiesCount = localityProperties.length;
   const newLeadsCount = leads.filter((l) => l.status === "new").length || leads.length;
-  const todaysVisitsCount = visits.filter(
-    (v) => v.date === "Today" || v.status === "upcoming"
-  ).length;
   const totalEarned = useMemo(() => {
     return (earningsTransactions || []).reduce(
       (acc, curr) => acc + (curr.commissionAmount || 0),
@@ -226,26 +221,8 @@ export default function AgentDashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Row 2: Visits Today & Closed Deals */}
+        {/* Row 2: Earnings & Commission */}
         <View style={[styles.metricsGrid, { marginTop: 10 }]}>
-          {/* Card 3: Visits Today */}
-          <TouchableOpacity
-            style={styles.metricCard}
-            onPress={() => navigation.navigate("Visits")}
-            activeOpacity={0.85}
-          >
-            <View style={styles.metricCardTop}>
-              <View style={styles.metricIconWrap}>
-                <Calendar size={17} color="#1E293B" strokeWidth={1.8} />
-              </View>
-              <ArrowRight size={14} color="#94A3B8" />
-            </View>
-            <Text style={styles.metricNumber}>
-              {String(todaysVisitsCount).padStart(2, "0")}
-            </Text>
-            <Text style={styles.metricLabel}>Visits Today</Text>
-          </TouchableOpacity>
-
           {/* Card 4: Earnings & Commission */}
           <TouchableOpacity
             style={styles.metricCard}
@@ -336,15 +313,6 @@ export default function AgentDashboardScreen({ navigation }) {
           >
             <Users size={14} color="#16A34A" style={{ marginRight: 6 }} />
             <Text style={styles.quickActionPillText}>View New Leads</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickActionPillBtn}
-            onPress={() => navigation.navigate("Visits")}
-            activeOpacity={0.82}
-          >
-            <Calendar size={14} color="#EA580C" style={{ marginRight: 6 }} />
-            <Text style={styles.quickActionPillText}>Upcoming Visits</Text>
           </TouchableOpacity>
         </View>
 
