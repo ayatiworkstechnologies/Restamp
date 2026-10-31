@@ -1,136 +1,122 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   Animated,
-  Dimensions,
+  Easing,
   Pressable,
   Platform,
   StatusBar,
 } from "react-native";
-import RestampLogo from "./RestampLogo.js";
+import { useFonts, KaushanScript_400Regular } from "@expo-google-fonts/kaushan-script";
 import COLORS from "../constants/colors.js";
 
-const { width } = Dimensions.get("window");
+const BRAND = COLORS.primary || "#2563EB";
+const SPLASH_DURATION = 2000;
+
+// Handwritten wordmark: brush-script "Res" in ink, "tamp" in brand blue,
+// revealed left to right behind a pen tip as if being written.
+const WRITE_START = 200;
+const WRITE_DURATION = 1050;
 
 export default function AnimatedSplashScreen({ onAnimationComplete }) {
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.72)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
-  const textTranslateY = useRef(new Animated.Value(14)).current;
+  const useNative = Platform.OS !== "web";
+
+  // Wordmark is "written" by widening a clipping box over the full word.
+  const [fontsLoaded] = useFonts({ KaushanScript_400Regular });
+  const [wordWidth, setWordWidth] = useState(0);
+  const write = useRef(new Animated.Value(0)).current;
+  // Exit: content first, then the backdrop, so nothing ghosts over the app.
+  const contentOpacity = useRef(new Animated.Value(1)).current;
   const screenOpacity = useRef(new Animated.Value(1)).current;
-  const screenScale = useRef(new Animated.Value(1)).current;
 
   const hasExited = useRef(false);
-  const useNative = Platform.OS !== "web";
 
   const triggerExit = () => {
     if (hasExited.current) return;
     hasExited.current = true;
-
-    Animated.parallel([
+    Animated.sequence([
+      Animated.timing(contentOpacity, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: useNative,
+      }),
       Animated.timing(screenOpacity, {
         toValue: 0,
-        duration: 380,
+        duration: 260,
         useNativeDriver: useNative,
       }),
-      Animated.timing(screenScale, {
-        toValue: 1.04,
-        duration: 380,
-        useNativeDriver: useNative,
-      }),
-    ]).start(() => {
-      onAnimationComplete?.();
-    });
+    ]).start(() => onAnimationComplete?.());
   };
 
   useEffect(() => {
-    // 1. Logo entrance (scale + fade-in spring)
-    Animated.parallel([
-      Animated.timing(logoOpacity, {
+    // The word is written left to right.
+    Animated.sequence([
+      Animated.delay(WRITE_START),
+      Animated.timing(write, {
         toValue: 1,
-        duration: 450,
-        useNativeDriver: useNative,
-      }),
-      Animated.spring(logoScale, {
-        toValue: 1,
-        friction: 6,
-        tension: 55,
-        useNativeDriver: useNative,
+        duration: WRITE_DURATION,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: false,
       }),
     ]).start();
 
-    // 2. Text entrance shortly after logo
-    const textTimer = setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(textOpacity, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: useNative,
-        }),
-        Animated.spring(textTranslateY, {
-          toValue: 0,
-          friction: 7,
-          tension: 60,
-          useNativeDriver: useNative,
-        }),
-      ]).start();
-    }, 250);
-
-    // 3. Smooth exit transition to main app
-    const exitTimer = setTimeout(() => {
-      triggerExit();
-    }, 1800);
-
-    return () => {
-      clearTimeout(textTimer);
-      clearTimeout(exitTimer);
-    };
+    const exitTimer = setTimeout(triggerExit, SPLASH_DURATION);
+    return () => clearTimeout(exitTimer);
   }, []);
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          opacity: screenOpacity,
-          transform: [{ scale: screenScale }],
-        },
-      ]}
-    >
+    <Animated.View style={[styles.container, { opacity: screenOpacity }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <Pressable style={styles.pressableArea} onPress={triggerExit}>
-        {/* Animated Restamp Brand Emblem */}
-        <Animated.View
-          style={[
-            styles.logoContainer,
-            {
-              opacity: logoOpacity,
-              transform: [{ scale: logoScale }],
-            },
-          ]}
-        >
-          <View style={styles.logoCard}>
-            <RestampLogo size={88} />
-          </View>
-        </Animated.View>
-
-        {/* Animated Brand Wordmark & Subtitle */}
-        <Animated.View
-          style={[
-            styles.textContainer,
-            {
-              opacity: textOpacity,
-              transform: [{ translateY: textTranslateY }],
-            },
-          ]}
-        >
-          <Text style={styles.brandTitle}>
-            Res<Text style={styles.brandTitleAccent}>tamp</Text>
-          </Text>
-          <View style={styles.taglineBadge}>
-            <Text style={styles.brandTagline}>INDIA'S VERIFIED PROPERTY PLATFORM</Text>
+        <Animated.View style={[styles.content, { opacity: contentOpacity }]}>
+          {/* Wordmark (handwritten). The full word is laid out invisibly to
+              size the row; a clipping box widens over a copy of it. */}
+          <View style={styles.wordmarkRow}>
+            <Text
+              style={[styles.scriptWord, fontsLoaded && styles.scriptFont, styles.wordGhost]}
+              onLayout={(e) => {
+                // Measure only once the script font is in, so the clip
+                // matches the final glyph widths.
+                if (fontsLoaded) setWordWidth(Math.ceil(e.nativeEvent.layout.width) + 2);
+              }}
+              key={fontsLoaded ? "script" : "fallback"}
+            >
+              Res<Text style={styles.brandTitleAccent}>tamp</Text>
+            </Text>
+            {wordWidth > 0 ? (
+              <>
+                <Animated.View
+                  style={[
+                    styles.writeClip,
+                    { width: write.interpolate({ inputRange: [0, 1], outputRange: [0, wordWidth] }) },
+                  ]}
+                >
+                  <Text style={[styles.scriptWord, fontsLoaded && styles.scriptFont, { width: wordWidth }]}>
+                    Res<Text style={styles.brandTitleAccent}>tamp</Text>
+                  </Text>
+                </Animated.View>
+                {/* Pen tip riding the writing edge */}
+                <Animated.View
+                  style={[
+                    styles.penTip,
+                    {
+                      opacity: write.interpolate({ inputRange: [0, 0.02, 0.96, 1], outputRange: [0, 1, 1, 0] }),
+                      transform: [
+                        { translateX: write.interpolate({ inputRange: [0, 1], outputRange: [0, wordWidth] }) },
+                        {
+                          translateY: write.interpolate({
+                            inputRange: [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1],
+                            outputRange: [6, -10, 4, -6, 8, -8, 2, 0],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+              </>
+            ) : null}
           </View>
         </Animated.View>
       </Pressable>
@@ -153,46 +139,45 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 24,
   },
-  logoContainer: {
+  content: {
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
   },
-  logoCard: {
-    width: 112,
-    height: 112,
-    borderRadius: 28,
-    backgroundColor: "#F8FAFC",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  textContainer: {
-    alignItems: "center",
+  wordmarkRow: {
     justifyContent: "center",
   },
-  brandTitle: {
-    fontSize: 42,
-    fontWeight: "700",
+  scriptWord: {
+    fontSize: 62,
+    lineHeight: 86,
     color: "#0F172A",
-    letterSpacing: -0.6,
+    paddingHorizontal: 8,
+  },
+  scriptFont: {
+    fontFamily: "KaushanScript_400Regular",
+  },
+  wordGhost: {
+    opacity: 0,
+  },
+  writeClip: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    overflow: "hidden",
+  },
+  penTip: {
+    position: "absolute",
+    left: -4,
+    top: 39,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: BRAND,
+    shadowColor: BRAND,
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
   },
   brandTitleAccent: {
-    color: COLORS.primary || "#2563EB",
-    fontWeight: "800",
-  },
-  taglineBadge: {
-    marginTop: 10,
-    paddingHorizontal: 13,
-    paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: "#F1F5F9",
-  },
-  brandTagline: {
-    fontSize: 10.5,
-    fontWeight: "700",
-    color: "#64748B",
-    letterSpacing: 1.2,
+    color: BRAND,
   },
 });

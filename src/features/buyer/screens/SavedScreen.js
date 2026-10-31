@@ -52,7 +52,6 @@ import { useAuth } from "../../auth/context/AuthContext.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import PropertyDetailModal from "../components/PropertyDetailModal.js";
 import ScheduleVisitModal from "../components/ScheduleVisitModal.js";
-import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 import SafeImage from "../../../shared/components/SafeImage.js";
 import {
   fetchBuyerVisits,
@@ -644,9 +643,6 @@ export default function SavedScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-
-      {/* TOP BRAND HEADER (Matching Buyer Home) */}
-      <AppBrandHeader currentRole="buyer" />
 
       <ScrollView
         style={styles.container}

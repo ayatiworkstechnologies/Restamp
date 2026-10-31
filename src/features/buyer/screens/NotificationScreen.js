@@ -119,61 +119,50 @@ export default function NotificationScreen({ navigation }) {
     }
   };
 
-  const renderNotificationRow = (item, index, listArr) => (
-    <View key={item.id} style={styles.rowWrapper}>
-      <TouchableOpacity
-        style={[
-          styles.rowItem,
-          !item.isRead && styles.rowItemUnread,
-        ]}
-        activeOpacity={0.75}
-        onPress={() => handleNotificationPress(item)}
-      >
-        {/* Left Icon Badge */}
-        <View style={[styles.iconContainer, { backgroundColor: item.iconBg }]}>
-          {renderIcon(item)}
-        </View>
+  const renderNotificationRow = (item) => (
+    <TouchableOpacity
+      key={item.id}
+      style={[styles.rowItem, !item.isRead && styles.rowItemUnread]}
+      activeOpacity={0.75}
+      onPress={() => handleNotificationPress(item)}
+    >
+      {/* Left Icon Badge */}
+      <View style={[styles.iconContainer, { backgroundColor: item.iconBg }]}>
+        {renderIcon(item)}
+      </View>
 
-        {/* Center Details */}
-        <View style={styles.contentWrap}>
-          <View style={styles.topMetaRow}>
-            <View style={styles.titleWithDot}>
-              {!item.isRead && <View style={styles.unreadDot} />}
-              <Text
-                style={[styles.titleText, !item.isRead && styles.titleTextUnread]}
-                numberOfLines={1}
-              >
-                {item.title}
-              </Text>
-            </View>
-            <Text style={styles.timeText}>{item.time}</Text>
+      {/* Center Details */}
+      <View style={styles.contentWrap}>
+        <Text
+          style={[styles.titleText, !item.isRead && styles.titleTextUnread]}
+          numberOfLines={2}
+        >
+          {item.title}
+        </Text>
+        <Text style={styles.messageText} numberOfLines={2}>
+          {item.message}
+        </Text>
+
+        {item.propertyId && (
+          <View style={styles.actionPromptRow}>
+            <Text style={styles.actionPromptText}>View property details</Text>
+            <ChevronRight size={13} color={COLORS.primary} strokeWidth={2.4} />
           </View>
+        )}
+        <Text style={styles.timeText}>{item.time}</Text>
+      </View>
 
-          <Text style={styles.messageText} numberOfLines={2}>
-            {item.message}
-          </Text>
+      {/* Right Thumbnail Image if property notification */}
+      {item.image ? (
+        <SafeImage
+          source={{ uri: item.image }}
+          style={styles.thumbnail}
+          resizeMode="cover"
+        />
+      ) : null}
 
-          {item.propertyId && (
-            <View style={styles.actionPromptRow}>
-              <Text style={styles.actionPromptText}>View property details</Text>
-              <ChevronRight size={13} color={COLORS.primary} strokeWidth={2.4} />
-            </View>
-          )}
-        </View>
-
-        {/* Right Thumbnail Image if property notification */}
-        {item.image ? (
-          <SafeImage
-            source={{ uri: item.image }}
-            style={styles.thumbnail}
-            resizeMode="cover"
-          />
-        ) : null}
-      </TouchableOpacity>
-
-      {/* Hairline divider between rows, indented under the content */}
-      {index < listArr.length - 1 && <View style={styles.divider} />}
-    </View>
+      {!item.isRead && <View style={styles.unreadDot} />}
+    </TouchableOpacity>
   );
 
   return (
@@ -193,9 +182,7 @@ export default function NotificationScreen({ navigation }) {
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle}>Notifications</Text>
             {unreadCount > 0 ? (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadBadgeText}>{unreadCount} new</Text>
-              </View>
+              <Text style={styles.unreadBadgeText}>{unreadCount} new</Text>
             ) : null}
           </View>
         </View>
@@ -204,7 +191,8 @@ export default function NotificationScreen({ navigation }) {
           <TouchableOpacity
             style={styles.markAllBtn}
             onPress={handleMarkAllRead}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Check size={14} color={COLORS.primary} strokeWidth={2.4} style={{ marginRight: 4 }} />
             <Text style={styles.markAllText}>Mark all read</Text>
@@ -267,14 +255,14 @@ export default function NotificationScreen({ navigation }) {
             {todayList.length > 0 && (
               <View style={styles.sectionWrap}>
                 <Text style={styles.sectionHeader}>TODAY</Text>
-                {todayList.map((item, idx) => renderNotificationRow(item, idx, todayList))}
+                {todayList.map((item) => renderNotificationRow(item))}
               </View>
             )}
 
             {earlierList.length > 0 && (
               <View style={styles.sectionWrap}>
                 <Text style={styles.sectionHeader}>EARLIER</Text>
-                {earlierList.map((item, idx) => renderNotificationRow(item, idx, earlierList))}
+                {earlierList.map((item) => renderNotificationRow(item))}
               </View>
             )}
 
@@ -326,88 +314,74 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
     backgroundColor: "#FFFFFF",
   },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
+    flex: 1,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#F8FAFC",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
   headerTitleWrap: {
-    flexDirection: "row",
-    alignItems: "center",
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     color: "#0F172A",
-    letterSpacing: -0.3,
-  },
-  unreadBadge: {
-    marginLeft: 8,
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 100,
+    letterSpacing: -0.4,
   },
   unreadBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.primary,
+    fontSize: 12.5,
+    fontWeight: "500",
+    color: "#64748B",
+    marginTop: 1,
   },
   markAllBtn: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 100,
-    backgroundColor: "#EFF6FF",
   },
   markAllText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "600",
     color: COLORS.primary,
   },
   filterRow: {
     backgroundColor: "#FFFFFF",
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
-    paddingVertical: 10,
   },
   filterScrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     gap: 8,
   },
   filterPill: {
     paddingHorizontal: 16,
-    paddingVertical: 7,
+    height: 36,
+    justifyContent: "center",
     borderRadius: 100,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    backgroundColor: "#F3F4F6",
   },
   filterPillActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    backgroundColor: "#0F172A",
   },
   filterPillText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#4B5563",
   },
   filterPillTextActive: {
     color: "#FFFFFF",
@@ -415,92 +389,88 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F6F7F9",
   },
   scrollContent: {
+    paddingHorizontal: 16,
     paddingBottom: 40,
   },
   sectionWrap: {
-    marginTop: 14,
-    marginBottom: 6,
+    marginTop: 18,
+    gap: 10,
   },
   sectionHeader: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: "700",
     color: "#94A3B8",
     letterSpacing: 0.8,
-    marginBottom: 4,
-    paddingHorizontal: 20,
-  },
-  rowWrapper: {
-    backgroundColor: "#FFFFFF",
+    marginLeft: 4,
   },
   rowItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#EEF0F3",
   },
   rowItemUnread: {
-    backgroundColor: "#F8FAFC",
+    borderColor: "#DBEAFE",
+    backgroundColor: "#FFFFFF",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
-    marginTop: 2,
+    marginRight: 12,
   },
   contentWrap: {
     flex: 1,
     marginRight: 8,
   },
-  topMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  titleWithDot: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 10,
-  },
   unreadDot: {
-    width: 7,
-    height: 7,
+    position: "absolute",
+    top: 14,
+    right: 14,
+    width: 8,
+    height: 8,
     borderRadius: 4,
     backgroundColor: COLORS.primary,
-    marginRight: 6,
   },
   titleText: {
     fontSize: 15,
     fontWeight: "600",
     color: "#0F172A",
     lineHeight: 20,
+    paddingRight: 12,
   },
   titleTextUnread: {
     fontWeight: "700",
-    color: "#0F172A",
-  },
-  timeText: {
-    fontSize: 12,
-    color: "#94A3B8",
-    fontWeight: "400",
   },
   messageText: {
     fontSize: 13.5,
     color: "#64748B",
     lineHeight: 19,
-    marginTop: 2,
+    marginTop: 4,
+  },
+  timeText: {
+    fontSize: 12,
+    color: "#94A3B8",
+    fontWeight: "500",
+    marginTop: 8,
   },
   actionPromptRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 6,
+    marginTop: 8,
   },
   actionPromptText: {
     fontSize: 12.5,
@@ -509,18 +479,11 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   thumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: 14,
+    width: 64,
+    height: 64,
+    borderRadius: 12,
     backgroundColor: "#F1F5F9",
-    marginLeft: 6,
-    alignSelf: "center",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#F1F5F9",
-    marginLeft: 78, // Aligns exactly under the text, indented past the icon
-    marginRight: 20,
+    marginTop: 22,
   },
   emptyContainer: {
     alignItems: "center",
@@ -553,11 +516,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    marginTop: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#EEF0F3",
+    marginTop: 22,
   },
   prefLeft: {
     flexDirection: "row",

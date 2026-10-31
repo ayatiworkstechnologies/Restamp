@@ -12,11 +12,13 @@ import {
   Modal,
   Platform,
   Alert,
+  DeviceEventEmitter,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Home as HomeIcon,
   Building2,
+  ArrowRight,
   Building,
   Briefcase,
   LayoutGrid,
@@ -51,7 +53,7 @@ import { useAuth } from "../../auth/context/AuthContext.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import { enterOwnerFlow } from "../../../shared/api/users.js";
 import PropertyDetailModal from "../components/PropertyDetailModal.js";
-import RestampLogo from "../../../shared/components/RestampLogo.js";
+import CategoryFilledIcon from "../components/CategoryFilledIcon.js";
 import SearchPropertyModal from "../components/SearchPropertyModal.js";
 import { apiGet } from "../../../shared/api/client.js";
 import { toUiProperty } from "../../../shared/api/mappers.js";
@@ -223,6 +225,14 @@ export default function HomeScreen({ navigation }) {
 
   // Search & Filter Modal States
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+
+  // Bottom Search tab opens the Search Property sheet here.
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener("OPEN_SEARCH_FILTER_MODAL", (payload) => {
+      if (payload?.target === "home") setIsSearchModalOpen(true);
+    });
+    return () => sub.remove();
+  }, []);
   const [selectedLocality, setSelectedLocality] = useState("");
   const [localityInput, setLocalityInput] = useState("");
   const [modalType, setModalType] = useState("Apartment");
@@ -479,31 +489,20 @@ export default function HomeScreen({ navigation }) {
         style={styles.container}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        stickyHeaderIndices={[2]}
       >
         {/* ================= HEADER BAR ================= */}
         <View style={styles.header}>
           {/* Left Side Restamp Logotype */}
           <View style={styles.logoContainer}>
-            <View style={styles.logoIconBg}>
-              <RestampLogo size={28} />
-            </View>
             <Text style={styles.logoText}>
               Res<Text style={styles.logoTextAccent}>tamp</Text>
             </Text>
           </View>
 
-          {/* Right Side Header Actions: Quick Switch to Owner (Testing) + Notification Bell */}
+          {/* Right Side Header Actions: Login + Notification Bell. Owner mode
+              is reached from Menu > Owner Mode or "Post your property". */}
           <View style={styles.headerRightActions}>
-            <TouchableOpacity
-              style={styles.switchOwnerPill}
-              activeOpacity={0.8}
-              onPress={handleOpenOwnerDashboard}
-              disabled={ownerSwitching}
-            >
-              <Building2 size={13} color="#2563EB" style={{ marginRight: 4 }} />
-              <Text style={styles.switchOwnerText}>Owner</Text>
-            </TouchableOpacity>
-
             {/* Small Login button (Change 3): logged-out only, hidden once
                 authenticated and while auth state is still resolving (no
                 flash). Opens the existing OTP flow; post-login reset lands
@@ -539,8 +538,8 @@ export default function HomeScreen({ navigation }) {
               return (
                 <TouchableOpacity
                   key={type}
-                  style={styles.dealTypeTab}
-                  activeOpacity={0.7}
+                  style={[styles.dealTypeTab, isActive && styles.dealTypeTabActive]}
+                  activeOpacity={0.8}
                   onPress={() => setDealType(type)}
                 >
                   <Text
@@ -551,14 +550,15 @@ export default function HomeScreen({ navigation }) {
                   >
                     {type}
                   </Text>
-                  {isActive && <View style={styles.activeUnderline} />}
                 </TouchableOpacity>
               );
             })}
           </View>
+        </View>
 
-          {/* 2. SEARCH BAR (INBUILT FILTER, CLICK ASKS FILTER) */}
-          <View style={styles.searchRow}>
+        {/* 2. SEARCH BAR (INBUILT FILTER, CLICK ASKS FILTER) — sticky via
+            stickyHeaderIndices, so it must stay a direct ScrollView child. */}
+        <View style={styles.searchRow}>
             <TouchableOpacity
               style={styles.searchInputContainer}
               activeOpacity={0.85}
@@ -598,8 +598,9 @@ export default function HomeScreen({ navigation }) {
                 </Text>
               )}
             </TouchableOpacity>
-          </View>
+        </View>
 
+        <View style={styles.categorySection}>
           {/* 3. CATEGORY SELECTOR */}
           <View style={styles.categoryPillWrapper}>
             <ScrollView
@@ -621,6 +622,7 @@ export default function HomeScreen({ navigation }) {
                       setSelectedType(pt.id);
                     }}
                   >
+                    <CategoryFilledIcon id={pt.id} color={isSelected ? COLORS.primary : "#94A3B8"} />
                     <Text
                       style={[
                         styles.categoryPillText,
@@ -645,24 +647,32 @@ export default function HomeScreen({ navigation }) {
             activeOpacity={0.92}
             onPress={handlePostProperty}
           >
-            <View style={styles.postPropertyContent}>
-              <Text style={styles.postPropertyTitle}>
-                Post your Property for <Text style={styles.postPropertyTitleFree}>Free</Text>
-              </Text>
-              <Text style={styles.postPropertySubtitle}>
-                List it on Restamp and get genuine leads
-              </Text>
-              <View style={styles.postPropertyBtn}>
-                <Text style={styles.postPropertyBtnText}>Post your property</Text>
-              </View>
-            </View>
-
+            {/* House image fills the right side, fading into the card */}
             <View style={styles.postPropertyImageWrapper}>
               <Image
                 source={require("../../../../assets/post-property-banner.jpg")}
                 style={styles.postPropertyImage}
                 resizeMode="cover"
               />
+            </View>
+
+            {/* Decorative glow */}
+            <View style={styles.postPropertyGlow} />
+
+            <View style={styles.postPropertyContent}>
+              <Text style={styles.postPropertyTitle}>
+                Post your Property for{" "}
+                <Text style={styles.postPropertyTitleFree}>Free</Text>
+              </Text>
+              <Text style={styles.postPropertySubtitle}>
+                List it on Restamp and get genuine leads
+              </Text>
+              <View style={styles.postPropertyBtn}>
+                <Text style={styles.postPropertyBtnText}>Post your property</Text>
+                <View style={styles.postPropertyBtnIcon}>
+                  <ArrowRight size={13} color="#FFFFFF" strokeWidth={2.4} />
+                </View>
+              </View>
             </View>
           </TouchableOpacity>
         </View>
@@ -719,10 +729,6 @@ export default function HomeScreen({ navigation }) {
               >
                 <View style={styles.recommendedImageContainer}>
                   <SafeImage source={{ uri: property.image }} style={styles.recommendedImage} resizeMode="cover" />
-                  <View style={styles.verifiedGreenBadge}>
-                    <CheckCircle2 size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
-                    <Text style={styles.verifiedGreenBadgeText}>Verified</Text>
-                  </View>
                   <TouchableOpacity
                     style={styles.floatingHeartBtn}
                     activeOpacity={0.8}
@@ -741,7 +747,7 @@ export default function HomeScreen({ navigation }) {
                 </View>
 
                 <View style={styles.recommendedCardBody}>
-                  <Text style={styles.recommendedTitle} numberOfLines={2}>
+                  <Text style={styles.recommendedTitle} numberOfLines={1}>
                     {property.title}
                   </Text>
                   <Text style={styles.recommendedSubtitle} numberOfLines={2}>
@@ -757,10 +763,9 @@ export default function HomeScreen({ navigation }) {
         {/* ================= VERIFIED PROPERTIES ================= */}
         <View style={styles.sectionHeader}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={styles.sectionTitle}>Verified Properties</Text>
-            <View style={styles.verifiedTag}>
-              <CheckCircle2 size={13} color="#16A34A" style={{ marginRight: 3 }} />
-              <Text style={styles.verifiedTagText}>Verified</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={styles.sectionTitle}>Verified Properties</Text>
+              <CheckCircle2 size={18} color="#16A34A" />
             </View>
           </View>
         </View>
@@ -866,17 +871,13 @@ export default function HomeScreen({ navigation }) {
             return (
               <TouchableOpacity
                 key={property.id}
-                style={styles.propertyCard}
+                style={styles.recentCard}
                 activeOpacity={0.9}
                 onPress={() => setSelectedProperty(property)}
               >
-                <View style={styles.cardImageContainer}>
-                  <SafeImage source={{ uri: property.image }} style={styles.cardImage} resizeMode="cover" />
-                  <View style={styles.badgeRow}>
-                    <View style={styles.badgeOrange}>
-                      <Text style={styles.badgeTextWhite}>{property.badge || "Just Added"}</Text>
-                    </View>
-                  </View>
+                {/* Inset image with rounded corners */}
+                <View style={styles.recentImageWrap}>
+                  <SafeImage source={{ uri: property.image }} style={styles.recentImage} resizeMode="cover" />
                   <TouchableOpacity
                     style={styles.floatingHeartBtn}
                     activeOpacity={0.8}
@@ -894,25 +895,29 @@ export default function HomeScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.cardBody}>
-                  <View style={styles.priceRow}>
-                    <Text style={styles.priceText}>{property.price}{property.pricePeriod}</Text>
-                    {property.rating ? (
-                      <View style={styles.ratingBadge}>
-                        <Star size={13} color={COLORS.star} fill={COLORS.star} />
-                        <Text style={styles.ratingText}>{property.rating}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  <Text style={styles.propertyTitle} numberOfLines={1}>
+                <View style={styles.recentBody}>
+                  <Text style={styles.recentTitle} numberOfLines={2}>
                     {property.title}
                   </Text>
-                  <View style={styles.locationRow}>
-                    <MapPin size={13} color={COLORS.textSecondary} />
-                    <Text style={styles.locationAddress} numberOfLines={1}>
-                      {property.location}
-                    </Text>
+                  <View style={styles.recentMetaRow}>
+                    <View style={styles.recentMetaItem}>
+                      <MapPin size={14} color={COLORS.textSecondary} />
+                      <Text style={styles.recentMetaText} numberOfLines={1}>
+                        {property.location}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.recentFooterRow}>
+                    <Text style={styles.priceText}>{property.price}{property.pricePeriod}</Text>
+                    {property.rating ? (
+                      <>
+                        <View style={styles.recentFooterDivider} />
+                        <View style={styles.ratingBadge}>
+                          <Star size={13} color={COLORS.star} fill={COLORS.star} />
+                          <Text style={styles.ratingText}>{property.rating}</Text>
+                        </View>
+                      </>
+                    ) : null}
                   </View>
                 </View>
               </TouchableOpacity>
@@ -1108,7 +1113,12 @@ export default function HomeScreen({ navigation }) {
               style={styles.locationCard}
               activeOpacity={0.85}
               onPress={() => {
-                setSelectedLocality(loc.name);
+                // Open the existing listings page filtered to this locality.
+                navigation.navigate("Search", {
+                  locality: loc.name,
+                  dealType,
+                  openFilterModal: false,
+                });
               }}
             >
               <SafeImage source={{ uri: loc.image }} style={styles.locationCardImage} />
@@ -1142,10 +1152,11 @@ export default function HomeScreen({ navigation }) {
           setMaxBudget(filters.budgetMax);
           setConstructionStatus(filters.constructionStatus);
           if (filters.modalBudget) setModalBudget(filters.modalBudget);
+          if (filters.dealType) setDealType(filters.dealType);
 
           navigation.navigate("Search", {
             locality: filters.locality,
-            dealType: dealType,
+            dealType: filters.dealType || dealType,
             propertyType: filters.propertyType,
             bhk: filters.bhk,
             budgetMin: filters.budgetMin,
@@ -1298,6 +1309,9 @@ const styles = StyleSheet.create({
   topSection: {
     backgroundColor: "#FFFFFF",
     paddingTop: 4,
+  },
+  categorySection: {
+    backgroundColor: "#FFFFFF",
     paddingBottom: 10,
   },
 
@@ -1308,21 +1322,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 14,
-    gap: 20,
+    gap: 10,
   },
   dealTypeTab: {
-    alignItems: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
   },
   dealTypeText: {
-    ...TYPOGRAPHY.sectionHeading,
+    fontSize: 14,
   },
   dealTypeTextActive: {
-    fontWeight: "600",
-    color: COLORS.primary,
+    fontWeight: "500",
+    color: "#FFFFFF",
   },
   dealTypeTextInactive: {
     fontWeight: "400",
-    color: "#94A3B8",
+    color: "#111827",
+  },
+  dealTypeTabActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   activeUnderline: {
     height: 2.5,
@@ -1336,8 +1362,11 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 20,
-    paddingBottom: 14,
+    paddingTop: 6,
+    paddingBottom: 8,
+    zIndex: 10,
   },
   searchInputContainer: {
     flex: 1,
@@ -1390,6 +1419,7 @@ const styles = StyleSheet.create({
   categoryPillItem: {
     alignItems: "center",
     justifyContent: "center",
+    gap: 5,
     paddingHorizontal: 14,
     paddingVertical: 8,
     marginRight: 6,
@@ -1415,68 +1445,84 @@ const styles = StyleSheet.create({
   },
   postPropertyCard: {
     height: POST_PROPERTY_BANNER_HEIGHT, // <-- CHANGE HEIGHT MANUALLY HERE (e.g. 130, 145, 152, 160)
-    backgroundColor: COLORS.primary,
-    borderRadius: 20,
+    // Matches the banner photo's own background so the image blends in.
+    backgroundColor: "#2277E4",
+    borderRadius: 22,
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+  },
+  postPropertyGlow: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "#FFFFFF",
+    opacity: 0.08,
+    left: -90,
+    top: -110,
   },
   postPropertyContent: {
-    flex: 1,
-    height: "100%",
+    width: "62%",
     justifyContent: "center",
-    paddingRight: 12,
     zIndex: 2,
   },
   postPropertyTitle: {
     color: "#FFFFFF",
-    fontSize: 17.5,
+    fontSize: 19,
     fontWeight: "800",
-    letterSpacing: -0.3,
-    lineHeight: 23,
+    letterSpacing: -0.4,
+    lineHeight: 24,
   },
   postPropertyTitleFree: {
-    color: "#FFFFFF",
+    color: "#FACC15",
     fontStyle: "italic",
     fontWeight: "900",
   },
   postPropertySubtitle: {
-    color: "rgba(255, 255, 255, 0.9)",
-    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.85)",
+    fontSize: 12.5,
     fontWeight: "400",
-    marginTop: 4,
-    marginBottom: 12,
-    lineHeight: 16,
+    marginTop: 6,
+    marginBottom: 14,
+    lineHeight: 17,
   },
   postPropertyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     backgroundColor: "#FFFFFF",
     borderRadius: 100,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingLeft: 14,
+    paddingRight: 4,
+    paddingVertical: 4,
     alignSelf: "flex-start",
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
   },
   postPropertyBtnText: {
-    color: "#111111",
+    color: "#0B1B3F",
     fontSize: 12.5,
     fontWeight: "700",
   },
-  postPropertyImageWrapper: {
-    height: "100%",
-    aspectRatio: 1,
-    borderRadius: 16,
-    overflow: "hidden",
-    justifyContent: "center",
+  postPropertyBtnIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#0B1B3F",
     alignItems: "center",
+    justifyContent: "center",
+  },
+  postPropertyImageWrapper: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: "46%",
+    overflow: "hidden",
   },
   postPropertyImage: {
     width: "100%",
     height: "100%",
-    borderRadius: 16,
   },
 
   /* SECTION HEADERS */
@@ -1616,6 +1662,63 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 12,
+  },
+  /* RECENTLY ADDED CARD */
+  recentCard: {
+    width: CARD_WIDTH,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 10,
+    marginRight: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  recentImageWrap: {
+    width: "100%",
+    height: 170,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#F1F5F9",
+  },
+  recentImage: {
+    width: "100%",
+    height: "100%",
+  },
+  recentBody: {
+    paddingHorizontal: 2,
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  recentTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: COLORS.textDark,
+    lineHeight: 23,
+    marginBottom: 6,
+  },
+  recentMetaRow: {
+    marginBottom: 8,
+  },
+  recentMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  recentMetaText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 19,
+  },
+  recentFooterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  recentFooterDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: "#E2E8F0",
   },
   recommendedTitle: {
     fontSize: 13,

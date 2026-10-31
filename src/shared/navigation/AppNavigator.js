@@ -19,6 +19,7 @@ import ProfileScreen from "../../features/buyer/screens/ProfileScreen.js";
 import MenuScreen from "../../features/buyer/screens/MenuScreen.js";
 import EnquiriesScreen from "../../features/buyer/screens/EnquiriesScreen.js";
 import NotificationScreen from "../../features/buyer/screens/NotificationScreen.js";
+import ActiveMembershipsScreen from "../../features/buyer/screens/ActiveMembershipsScreen.js";
 
 import OwnerNavigator from "../../features/owner/navigation/OwnerNavigator.js";
 import OwnerPlansScreen from "../../features/owner/screens/OwnerPlansScreen.js";
@@ -141,12 +142,12 @@ function MainTabs() {
         name="Search"
         component={SearchScreen}
         listeners={({ navigation }) => ({
+          // The Search tab opens the Search Property sheet over Home rather
+          // than the listings screen; results still open Search on apply.
           tabPress: (e) => {
-            DeviceEventEmitter.emit("OPEN_SEARCH_FILTER_MODAL", { fromNavbar: true });
-            navigation.navigate("Search", {
-              openFilterModal: Date.now(),
-              fromNavbar: true,
-            });
+            e.preventDefault();
+            navigation.navigate("Home");
+            DeviceEventEmitter.emit("OPEN_SEARCH_FILTER_MODAL", { fromNavbar: true, target: "home" });
           },
         })}
       />
@@ -180,6 +181,7 @@ const guarded = (Component) => {
 
 const GuardedProfile = guarded(ProfileScreen);
 const GuardedEnquiries = guarded(EnquiriesScreen);
+const GuardedActiveMemberships = guarded(ActiveMembershipsScreen);
 const GuardedNotifications = guarded(NotificationScreen);
 const GuardedOwnerNavigator = guarded(OwnerNavigator);
 const GuardedOwnerPlans = guarded(OwnerPlansScreen);
@@ -243,6 +245,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Saved" component={SavedScreen} />
         <Stack.Screen name="Enquiries" component={GuardedEnquiries} />
         <Stack.Screen name="Explore" component={ExploreScreen} />
+        <Stack.Screen name="ActiveMemberships" component={GuardedActiveMemberships} />
         <Stack.Screen name="Notifications" component={GuardedNotifications} />
         <Stack.Screen name="Notification" component={GuardedNotifications} />
         <Stack.Screen

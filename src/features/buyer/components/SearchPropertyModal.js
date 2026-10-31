@@ -16,7 +16,7 @@ import SafeImage from "../../../shared/components/SafeImage.js";
 import COLORS from "../../../shared/constants/colors.js";
 import TYPOGRAPHY from "../../../shared/constants/typography.js";
 import { apiGet } from "../../../shared/api/client.js";
-import { toUiProperty, buildListingParams, parseSmartQuery } from "../../../shared/api/mappers.js";
+import { toUiProperty, buildListingParams, parseSmartQuery, normalizeLocalityAliases } from "../../../shared/api/mappers.js";
 
 const LOCALITY_LIST = [
   "Anna Nagar",
@@ -118,6 +118,8 @@ const AreaSquareIcon = ({ size = 15, color = "#64748B" }) => (
   </View>
 );
 
+const MODAL_DEAL_TYPES = ["Buy", "Resale", "Rent", "Lease"];
+
 function SearchPropertyModal({
   visible,
   onClose,
@@ -126,7 +128,7 @@ function SearchPropertyModal({
   // numeric backendId). The parent opens the detail screen and dismisses this
   // modal; without it, taps only fill the query text (legacy behavior).
   onSelectProperty,
-  dealType = "Buy",
+  dealType: initialDealType = "Buy",
   initialLocality = "",
   initialPropertyType = "Apartment",
   initialBhk = "All BHK",
@@ -135,6 +137,7 @@ function SearchPropertyModal({
   initialMaxBudget = Infinity,
   initialBudgetPreset = "All Budgets",
 }) {
+  const [dealType, setDealType] = useState(initialDealType);
   const [localityInput, setLocalityInput] = useState(initialLocality);
   const [selectedLocality, setSelectedLocality] = useState(initialLocality);
   const [modalType, setModalType] = useState(initialPropertyType);
@@ -180,7 +183,7 @@ function SearchPropertyModal({
         Commercial: "COMMERCIAL",
         Plot: "PLOT",
       };
-      const params = { q: text, page: 1, page_size: 6 };
+      const params = { q: normalizeLocalityAliases(text), page: 1, page_size: 6 };
       if (dealMap[dealType]) params.deal = dealMap[dealType];
       if (typeMap[modalType]) params.property_type = typeMap[modalType];
       apiGet("/buyer/listings", params).then(
@@ -206,6 +209,7 @@ function SearchPropertyModal({
   // Sync with initial props when opened
   useEffect(() => {
     if (visible) {
+      setDealType(initialDealType || "Buy");
       setLocalityInput(initialLocality || "");
       setSelectedLocality(initialLocality || "");
       setModalType(initialPropertyType || "Apartment");
@@ -217,7 +221,7 @@ function SearchPropertyModal({
       setIsMinDropdownOpen(false);
       setIsMaxDropdownOpen(false);
     }
-  }, [visible, initialLocality, initialPropertyType, initialBhk, initialStatus, initialMinBudget, initialMaxBudget, initialBudgetPreset]);
+  }, [visible, initialDealType, initialLocality, initialPropertyType, initialBhk, initialStatus, initialMinBudget, initialMaxBudget, initialBudgetPreset]);
 
   const isRentDeal = dealType === "Rent" || dealType === "Lease";
   const currentMinList = isRentDeal ? RENT_MIN_BUDGETS : BUY_MIN_BUDGETS;
@@ -412,11 +416,30 @@ function SearchPropertyModal({
           {/* 1. LOCALITY INPUT & POPULAR LOCALITIES */}
           <View style={styles.modalCard}>
             <Text style={styles.modalSectionLabel}>Enter Locality in Chennai</Text>
+
+            {/* Deal type tabs (Buy / Resale / Rent / Lease) */}
+            <View style={styles.dealTabsRow}>
+              {MODAL_DEAL_TYPES.map((type) => {
+                const isActive = dealType === type;
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.dealTab, isActive && styles.dealTabActive]}
+                    onPress={() => setDealType(type)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.dealTabText, isActive && styles.dealTabTextActive]}>
+                      {type}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
             <View style={styles.modalInputRow}>
-              <Search size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+              <Search size={16} color="#94A3B8" style={{ marginRight: 10 }} />
               <TextInput
                 style={styles.modalTextInput}
-                placeholder="Try '1bhk anna nagar' — every word must match"
+                placeholder="Search locality, project, landmark..."
                 placeholderTextColor="#94A3B8"
                 value={localityInput}
                 underlineColorAndroid="transparent"
@@ -435,7 +458,8 @@ function SearchPropertyModal({
             <Text style={styles.modalSubLabel}>Popular Localities</Text>
             <View style={styles.chipsWrap}>
               {LOCALITY_LIST.filter((loc) =>
-                loc.toLowerCase().includes(localityInput.toLowerCase())
+                // Ignore spaces and dots so "annanagar" still shows "Anna Nagar".
+                loc.toLowerCase().replace(/[\s.]/g, "").includes(localityInput.toLowerCase().replace(/[\s.]/g, ""))
               ).map((loc) => {
                 const isLocSelected = selectedLocality.toLowerCase() === loc.toLowerCase();
                 return (
@@ -680,7 +704,6 @@ function SearchPropertyModal({
                     style={[styles.statusFilterChip, isSelected && styles.statusFilterChipActive]}
                     onPress={() => setConstructionStatus(status)}
                   >
-                    {isSelected && <Check size={13} color="#FFFFFF" style={{ marginRight: 4 }} />}
                     <Text style={[styles.statusFilterChipText, isSelected && styles.statusFilterChipTextActive]}>
                       {status}
                     </Text>
@@ -743,7 +766,7 @@ function SearchPropertyModal({
 const styles = StyleSheet.create({
   modalSafeArea: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F4F4F5",
   },
   modalHeader: {
     flexDirection: "row",
@@ -752,13 +775,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
   },
   modalHeaderTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#111827",
   },
   modalCloseBtn: {
     width: 36,
@@ -768,51 +789,79 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  dealTabsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 16,
+  },
+  dealTab: {
+    paddingHorizontal: 10,
+    height: 32,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dealTabActive: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 18,
+  },
+  dealTabText: {
+    fontSize: 17,
+    fontWeight: "400",
+    color: "#111827",
+  },
+  dealTabTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "500",
+  },
   modalScroll: {
     flex: 1,
   },
   modalScrollContent: {
     padding: 16,
     paddingBottom: 110,
-    gap: 14,
+    gap: 16,
   },
   modalCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
   },
   modalSectionLabel: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
-    marginBottom: 12,
+    color: "#111827",
+    marginBottom: 14,
   },
   modalInputRow: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5E7EB",
     borderRadius: 100,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     height: 44,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   modalTextInput: {
     flex: 1,
     ...TYPOGRAPHY.inputText,
     fontSize: 13,
-    color: "#0F172A",
+    lineHeight: 18,
+    height: "100%",
+    paddingVertical: 0,
+    textAlignVertical: "center",
+    color: "#111827",
     borderWidth: 0,
     outlineStyle: "none",
     outlineWidth: 0,
     outlineColor: "transparent",
   },
   modalSubLabel: {
-    ...TYPOGRAPHY.smallHelperText,
-    color: "#94A3B8",
+    fontSize: 13,
+    color: "#9CA3AF",
     marginBottom: 8,
   },
   chipsWrap: {
@@ -822,53 +871,54 @@ const styles = StyleSheet.create({
   },
   localityChip: {
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: "#F1F5F9",
+    height: 34,
+    borderRadius: 6,
+    backgroundColor: "#EEEEEE",
+    justifyContent: "center",
   },
   localityChipSelected: {
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
   },
   localityChipText: {
-    ...TYPOGRAPHY.smallHelperText,
-    color: "#475569",
+    fontSize: 13,
+    color: "#111827",
   },
   localityChipTextSelected: {
-    color: COLORS.primary,
-    fontWeight: "600",
+    color: "#FFFFFF",
   },
   modalFilterChip: {
+    height: 38,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5E7EB",
     backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   modalFilterChipActive: {
     backgroundColor: "#EFF6FF",
-    borderColor: COLORS.primary,
+    borderColor: "#EFF6FF",
   },
   modalFilterChipText: {
-    ...TYPOGRAPHY.smallHelperText,
-    color: "#475569",
+    fontSize: 13,
+    fontWeight: "400",
+    color: "#4B5563",
   },
   modalFilterChipTextActive: {
-    color: COLORS.primary,
+    color: "#111827",
     fontWeight: "600",
   },
   budgetHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
   },
   selectedBudgetText: {
-    ...TYPOGRAPHY.smallHelperText,
-    color: COLORS.primary,
+    fontSize: 14,
     fontWeight: "600",
+    color: COLORS.primary,
   },
   budgetDropdownRow: {
     flexDirection: "row",
@@ -878,16 +928,15 @@ const styles = StyleSheet.create({
   },
   budgetDropdownBtn: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 12,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 8,
   },
   budgetDropdownBtnActive: {
     borderColor: COLORS.primary,
-    backgroundColor: "#EFF6FF",
   },
   budgetDropdownLabel: {
     fontSize: 10,
@@ -904,7 +953,7 @@ const styles = StyleSheet.create({
   budgetDropdownValText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#111827",
     flex: 1,
     marginRight: 4,
   },
@@ -966,26 +1015,27 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statusFilterChip: {
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    justifyContent: "center",
   },
   statusFilterChipActive: {
     backgroundColor: "#EFF6FF",
-    borderColor: COLORS.primary,
+    borderColor: "#EFF6FF",
   },
   statusFilterChipText: {
-    ...TYPOGRAPHY.smallHelperText,
-    color: "#475569",
-    fontWeight: "500",
+    fontSize: 13,
+    fontWeight: "400",
+    color: "#4B5563",
   },
   statusFilterChipTextActive: {
-    color: COLORS.primary,
+    color: "#111827",
     fontWeight: "600",
   },
   bhkRow: {
@@ -994,25 +1044,30 @@ const styles = StyleSheet.create({
   },
   // Bedroom Style
   bhkPill: {
-    flex: 1,
-    paddingVertical: 9,
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 20,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    flex: 1,
+    paddingHorizontal: 0,
+    backgroundColor: "#F9FAFB",
   },
   bhkPillActive: {
     backgroundColor: "#EFF6FF",
-    borderColor: COLORS.primary,
+    borderColor: "#EFF6FF",
   },
   bhkPillText: {
-    ...TYPOGRAPHY.smallHelperText,
-    color: "#475569",
+    fontSize: 13,
+    fontWeight: "400",
+    color: "#4B5563",
   },
   bhkPillTextActive: {
-    color: COLORS.primary,
+    color: "#111827",
     fontWeight: "600",
   },
   modalBottomBar: {
@@ -1021,13 +1076,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: Platform.OS === "ios" ? 34 : 20,
     flexDirection: "row",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#E5E7EB",
     elevation: 8,
   },
   modalResetBtn: {
@@ -1036,33 +1091,29 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   modalResetText: {
-    ...TYPOGRAPHY.button,
-    color: "#64748B",
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6B7280",
   },
   modalShowBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 100,
+    borderRadius: 8,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
   },
   modalShowBtnText: {
-    ...TYPOGRAPHY.button,
+    fontSize: 14,
     color: "#FFFFFF",
     fontWeight: "700",
   },
   suggestionsHeading: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: "700",
     color: "#0F172A",
-    marginTop: 20,
-    marginBottom: 8,
+    marginTop: 18,
+    marginBottom: 4,
   },
   suggestionsListContainer: {
     marginTop: 8,
@@ -1073,9 +1124,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   suggestionThumb: {
-    width: 82,
-    height: 82,
-    borderRadius: 18,
+    width: 64,
+    height: 64,
+    borderRadius: 12,
     backgroundColor: "#F1F5F9",
   },
   suggestionInfo: {
@@ -1108,7 +1159,7 @@ const styles = StyleSheet.create({
   suggestionDivider: {
     height: 1,
     backgroundColor: "#F1F5F9",
-    marginLeft: 96,
+    marginLeft: 78,
   },
 });
 

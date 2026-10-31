@@ -125,7 +125,7 @@ function GoogleIcon({ size = 20 }) {
 function AppleIcon({ size = 20, color = "#FFFFFF" }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-      <Path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.66-.8 1.1-1.92.98-3.04-1 .04-2.18.66-2.88 1.47-.6.69-1.13 1.83-.99 2.92 1.12.09 2.24-.55 2.89-1.35z" />
+      <Path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
     </Svg>
   );
 }
@@ -623,7 +623,19 @@ export default function LoginScreen({ navigation }) {
 
               {/* Action Buttons Stack (Perplexity style) */}
               <View style={styles.perplexityButtonsStack}>
-                {/* Button 1: Continue with Apple (White Pill with Centered Icon + Text) */}
+                {/* Button 1: Continue with Mobile (Brand Blue Pill) */}
+                <TouchableOpacity
+                  style={styles.perplexityPrimaryBtn}
+                  onPress={() => setStep(1)}
+                  activeOpacity={0.88}
+                >
+                  <Smartphone size={20} color="#FFFFFF" strokeWidth={2} />
+                  <Text style={styles.perplexityPrimaryBtnText}>
+                    Continue with mobile
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Button 2: Continue with Apple (White Pill with Centered Icon + Text) */}
                 <TouchableOpacity
                   style={styles.perplexityWhiteBtn}
                   onPress={() => {
@@ -634,13 +646,13 @@ export default function LoginScreen({ navigation }) {
                   }}
                   activeOpacity={0.88}
                 >
-                  <AppleIcon size={20} color="#000000" />
+                  <AppleIcon size={19} color="#000000" />
                   <Text style={styles.perplexityWhiteBtnText}>
                     Continue with Apple
                   </Text>
                 </TouchableOpacity>
 
-                {/* Button 2: Continue with Google (White Pill with Centered Icon + Text) */}
+                {/* Button 3: Continue with Google (White Pill with Centered Icon + Text) */}
                 <TouchableOpacity
                   style={styles.perplexityWhiteBtn}
                   onPress={() => {
@@ -679,16 +691,6 @@ export default function LoginScreen({ navigation }) {
                   </View>
                 ) : null}
 
-                {/* Button 3: Continue with Mobile (Brand Blue Pill) */}
-                <TouchableOpacity
-                  style={styles.perplexityPrimaryBtn}
-                  onPress={() => setStep(1)}
-                  activeOpacity={0.88}
-                >
-                  <Text style={styles.perplexityPrimaryBtnText}>
-                    Continue with mobile
-                  </Text>
-                </TouchableOpacity>
               </View>
 
               {/* Footer: Privacy policy • Terms of service & Sign Up */}
@@ -1289,6 +1291,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 10,
     ...Platform.select({
       ios: {
         shadowColor: COLORS.primary,

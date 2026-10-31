@@ -173,7 +173,8 @@ export default function SearchScreen({ navigation, route }) {
 
   // Listen to bottom tab Search icon press
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener("OPEN_SEARCH_FILTER_MODAL", () => {
+    const sub = DeviceEventEmitter.addListener("OPEN_SEARCH_FILTER_MODAL", (payload) => {
+      if (payload?.target === "home") return;
       setIsSearchModalOpen(true);
       setFromNavbar(true);
     });
@@ -505,8 +506,9 @@ export default function SearchScreen({ navigation, route }) {
             >
               <X size={16} color="#94A3B8" />
             </TouchableOpacity>
-          ) : null}
-          <SearchIcon size={18} color="#64748B" />
+          ) : (
+            <SearchIcon size={18} color="#64748B" />
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity

@@ -77,6 +77,39 @@ const SMART_PRICE_UNITS = {
   k: 1000, thousand: 1000, thousands: 1000,
 };
 
+// Localities people often type without spaces or dots ("annanagar",
+// "tnagar"). Matched on the compact form and rewritten to the listed name so
+// the every-word text search still finds them.
+const SMART_LOCALITY_ALIASES = {
+  annanagar: "anna nagar",
+  tnagar: "t. nagar",
+  kknagar: "kk nagar",
+  ashoknagar: "ashok nagar",
+  besantnagar: "besant nagar",
+};
+
+// Compact locality spellings -> listed names. Checks a word on its own and
+// joined with the next one ("t.nagar", "t nagar", "annanagar").
+export function normalizeLocalityAliases(text) {
+  const toks = String(text || "").split(/\s+/).filter(Boolean);
+  const out = [];
+  for (let i = 0; i < toks.length; i++) {
+    const one = toks[i].toLowerCase().replace(/\./g, "");
+    const two = i + 1 < toks.length ? one + toks[i + 1].toLowerCase().replace(/\./g, "") : null;
+    if (two && SMART_LOCALITY_ALIASES[two]) {
+      // Already written as the listed name: keep the user's own casing.
+      const asTyped = `${toks[i]} ${toks[i + 1]}`;
+      out.push(asTyped.toLowerCase() === SMART_LOCALITY_ALIASES[two] ? asTyped : SMART_LOCALITY_ALIASES[two]);
+      i++;
+    } else if (SMART_LOCALITY_ALIASES[one]) {
+      out.push(SMART_LOCALITY_ALIASES[one]);
+    } else {
+      out.push(toks[i]);
+    }
+  }
+  return out.join(" ");
+}
+
 export function parseSmartQuery(text) {
   const out = { q: "", bedrooms: null, property_type: null, min_price_paise: null, max_price_paise: null };
   const cleaned = String(text || "").trim().replace(/\s+/g, " ");
@@ -109,6 +142,8 @@ export function parseSmartQuery(text) {
     if (out.property_type == null) out.property_type = SMART_TYPE_WORDS[w];
     return " ";
   });
+
+  working = ` ${normalizeLocalityAliases(working)} `;
 
   // Stopwords, then re-join the confident remainder as text.
   const words = working
@@ -210,7 +245,7 @@ export function buildListingParams(ui, page, pageSize) {
     // Backend searches title/description/locality/address/city; locality-only chips also map here.
     // Normalized lightly (trim + collapse repeats): the backend splits terms
     // and requires every term, so "  villa   anna " behaves like "villa anna".
-    params.q = ui.searchQuery.trim().replace(/\s+/g, " ");
+    params.q = normalizeLocalityAliases(ui.searchQuery.trim().replace(/\s+/g, " "));
   } else if (ui.locality) {
     params.locality = ui.locality;
   }

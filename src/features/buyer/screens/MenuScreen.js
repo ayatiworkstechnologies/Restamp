@@ -33,7 +33,6 @@ import {
   MapPin,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
-import RestampLogo from "../../../shared/components/RestampLogo.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { enterOwnerFlow } from "../../../shared/api/users.js";
 import { useAgent } from "../../agent/context/AgentContext.js";
@@ -494,47 +493,8 @@ export default function MenuScreen({ navigation, route }) {
     <View style={styles.screenRoot}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* ================= HEADER BAR ================= */}
-      <View style={[styles.header, { paddingTop: safeTopPadding }]}>
-        <View style={styles.logoContainer}>
-          <View style={styles.logoIconBg}>
-            <RestampLogo size={28} />
-          </View>
-          <Text style={styles.logoText}>
-            Res<Text style={styles.logoTextAccent}>tamp</Text>
-          </Text>
-          <View style={styles.hubBadge}>
-            <Text style={styles.hubBadgeText}>SERVICES</Text>
-          </View>
-        </View>
-
-        <View style={styles.headerRightActions}>
-          <TouchableOpacity
-            style={styles.switchOwnerPill}
-            activeOpacity={0.8}
-            onPress={handleOpenOwnerDashboard}
-            disabled={ownerSwitching}
-          >
-            <Building2 size={13} color="#2563EB" style={{ marginRight: 4 }} />
-            <Text style={styles.switchOwnerText}>Owner</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.closeBtn}
-            activeOpacity={0.8}
-            onPress={() => {
-              if (navigation.canGoBack()) {
-                navigation.goBack();
-              } else {
-                navigation.navigate("Home");
-              }
-            }}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <X size={18} color="#0F172A" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* Brand header lives on Home only; keep the safe-area inset. */}
+      <View style={{ paddingTop: safeTopPadding }} />
 
       {/* ================= MAIN TWO-COLUMN VERTICAL TAB LAYOUT ================= */}
       <View style={styles.mainLayoutContainer}>

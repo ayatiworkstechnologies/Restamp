@@ -1,143 +1,131 @@
 import React from "react";
 import { View } from "react-native";
-import { HugeiconsIcon } from "@hugeicons/react-native";
 import {
-  Home01Icon,
-  Search01Icon,
-  UserIcon,
-  Notification03Icon,
-  Settings01Icon,
-  Clock01Icon,
-  Menu01Icon,
-  Building01Icon,
-  Building02Icon,
-  DashboardSquare01Icon,
-  UserGroupIcon,
-  PlusSignIcon,
-  MinusSignIcon,
-  Calendar03Icon,
-  Call02Icon,
-  Message01Icon,
-  WhatsappIcon,
-  FavouriteIcon,
-  StarIcon,
-  ViewIcon,
-  Location01Icon,
-  ShieldCheckIcon,
-  ShieldIcon,
-  CheckmarkCircle01Icon,
-  CheckmarkCircle02Icon,
-  Cancel01Icon,
-  ChevronRightIcon,
-  ChevronLeftIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  ArrowRight01Icon,
-  ArrowLeft01Icon,
-  ArrowUpRight01Icon,
-  Sorting05Icon,
-  Briefcase01Icon,
-  SlidersHorizontalIcon,
-  FilterIcon,
-  TrendingUpIcon,
-  Tag01Icon,
-  SparklesIcon,
-  Copy01Icon,
-  PencilEdit01Icon,
-  Delete02Icon,
-  ExternalLinkIcon,
-  ReloadIcon,
-  RefreshCcwIcon,
-  CircleArrowReload01Icon,
-  Award01Icon,
-  GlobeIcon,
-  HelpCircleIcon,
-  DocumentValidationIcon,
-  LockIcon,
-  Logout01Icon,
-  CrownIcon,
-  Bookmark01Icon,
-  Share01Icon,
-  SentIcon,
-  DropletIcon,
-  ActivityIcon,
-  ZapIcon,
-  LayersIcon,
-  TruckDeliveryIcon,
-  AlertCircleIcon,
-  TriangleAlertIcon,
-  Sofa01Icon,
-  Money01Icon,
-  BedSingle01Icon,
-  Calculator01Icon,
-  Camera01Icon,
-  Car01Icon,
-  Compass01Icon,
-  CreditCardIcon,
-  Download01Icon,
-  File01Icon,
-  Image01Icon,
-  InformationCircleIcon,
-  Mail01Icon,
-  Maximize01Icon,
-  MoreHorizontalIcon,
-  MoreVerticalIcon,
-  PauseCircleIcon,
-  RulerIcon,
-  SmartPhone01Icon,
-  Upload01Icon,
-  Wallet01Icon,
-  WifiOff01Icon,
-  Wrench01Icon,
-} from "@hugeicons/core-free-icons";
-
-// Export base HugeiconsIcon component and all core free icon glyphs
-export { HugeiconsIcon };
-export * from "@hugeicons/core-free-icons";
+  Activity as LucideActivity,
+  Armchair as LucideArmchair,
+  ArrowLeft as LucideArrowLeft,
+  ArrowRight as LucideArrowRight,
+  ArrowUpDown as LucideArrowUpDown,
+  ArrowUpRight as LucideArrowUpRight,
+  Award as LucideAward,
+  Banknote as LucideBanknote,
+  Bed as LucideBed,
+  Bell as LucideBell,
+  Bookmark as LucideBookmark,
+  Briefcase as LucideBriefcase,
+  Building as LucideBuilding,
+  Building2 as LucideBuilding2,
+  Calculator as LucideCalculator,
+  Calendar as LucideCalendar,
+  Camera as LucideCamera,
+  Car as LucideCar,
+  Check as LucideCheck,
+  ChevronDown as LucideChevronDown,
+  ChevronLeft as LucideChevronLeft,
+  ChevronRight as LucideChevronRight,
+  ChevronUp as LucideChevronUp,
+  CircleAlert as LucideCircleAlert,
+  CircleCheck as LucideCircleCheck,
+  CircleHelp as LucideCircleHelp,
+  CirclePause as LucideCirclePause,
+  CirclePlus as LucideCirclePlus,
+  CircleX as LucideCircleX,
+  Clock as LucideClock,
+  Compass as LucideCompass,
+  Copy as LucideCopy,
+  CreditCard as LucideCreditCard,
+  Crown as LucideCrown,
+  Download as LucideDownload,
+  Droplet as LucideDroplet,
+  Ellipsis as LucideEllipsis,
+  EllipsisVertical as LucideEllipsisVertical,
+  ExternalLink as LucideExternalLink,
+  Eye as LucideEye,
+  FileCheck as LucideFileCheck,
+  FileText as LucideFileText,
+  Funnel as LucideFunnel,
+  Globe as LucideGlobe,
+  Heart as LucideHeart,
+  House as LucideHouse,
+  Image as LucideImage,
+  Info as LucideInfo,
+  Layers as LucideLayers,
+  LayoutDashboard as LucideLayoutDashboard,
+  LayoutGrid as LucideLayoutGrid,
+  Lock as LucideLock,
+  LogOut as LucideLogOut,
+  Mail as LucideMail,
+  MapPin as LucideMapPin,
+  Maximize2 as LucideMaximize2,
+  Menu as LucideMenu,
+  MessageCircle as LucideMessageCircle,
+  MessageSquare as LucideMessageSquare,
+  Minus as LucideMinus,
+  Pencil as LucidePencil,
+  Phone as LucidePhone,
+  Plus as LucidePlus,
+  RefreshCw as LucideRefreshCw,
+  Repeat as LucideRepeat,
+  RotateCcw as LucideRotateCcw,
+  Ruler as LucideRuler,
+  Search as LucideSearch,
+  Send as LucideSend,
+  Settings as LucideSettings,
+  Share2 as LucideShare2,
+  Shield as LucideShield,
+  ShieldCheck as LucideShieldCheck,
+  SlidersHorizontal as LucideSlidersHorizontal,
+  Smartphone as LucideSmartphone,
+  Sparkles as LucideSparkles,
+  SquarePen as LucideSquarePen,
+  Star as LucideStar,
+  Tag as LucideTag,
+  Trash2 as LucideTrash2,
+  TrendingUp as LucideTrendingUp,
+  TriangleAlert as LucideTriangleAlert,
+  Truck as LucideTruck,
+  Upload as LucideUpload,
+  User as LucideUser,
+  Users as LucideUsers,
+  Wallet as LucideWallet,
+  WifiOff as LucideWifiOff,
+  Wrench as LucideWrench,
+  X as LucideX,
+  Zap as LucideZap,
+} from "lucide-react-native";
 
 /**
- * Universal HugeIcon component for RESTAMP.
- * Can be used as:
- * <HugeIcon icon={Home01Icon} size={22} color="#2563EB" strokeWidth={1.8} />
+ * App-wide icon set for RESTAMP, backed by Lucide (lucide-react-native).
+ * The file keeps its original name and export names so every screen picks up
+ * Lucide without import changes. Supports size, color, strokeWidth, fill and
+ * a wrapper `style` (used for margins).
+ *
+ * Can also be used directly:
+ * <HugeIcon icon={Search} size={22} color="#2563EB" strokeWidth={1.8} />
  */
-export function HugeIcon({
-  icon,
-  size = 22,
-  color = "#0F172A",
-  strokeWidth = 1.8,
-  style,
-  ...rest
-}) {
-  if (!icon) return null;
-  return (
-    <View style={style}>
-      <HugeiconsIcon
-        icon={icon}
-        size={size}
-        color={color}
-        strokeWidth={strokeWidth}
-        {...rest}
-      />
-    </View>
-  );
+export function HugeIcon({ icon: Icon, size = 22, color = "#0F172A", strokeWidth = 1.8, style, ...rest }) {
+  if (!Icon) return null;
+  return <Icon size={size} color={color} strokeWidth={strokeWidth} style={style} {...rest} />;
 }
 
-// Pre-configured Hugeicon factory
-export const createHuge = (iconDef, defaultStroke = 1.8) => {
-  return function HugeIconWrapper({
+// Wraps a Lucide glyph with the app's defaults. `style` goes on a wrapping
+// View so layout props like margins behave as they did before.
+export const createHuge = (LucideGlyph, defaultStroke = 1.8) => {
+  return function LucideIconWrapper({
     size = 22,
     color = "#0F172A",
     strokeWidth = defaultStroke,
+    fill = "none",
     style,
     ...rest
   }) {
     return (
       <View style={style}>
-        <HugeiconsIcon
-          icon={iconDef}
+        <LucideGlyph
           size={size}
           color={color}
           strokeWidth={strokeWidth}
+          fill={fill}
           {...rest}
         />
       </View>
@@ -145,95 +133,94 @@ export const createHuge = (iconDef, defaultStroke = 1.8) => {
   };
 };
 
-// ================= Pre-configured RESTAMP Huge Icons =================
-export const HugeHome = createHuge(Home01Icon);
-export const HugeSearch = createHuge(Search01Icon);
-export const HugeUser = createHuge(UserIcon);
-export const HugeBell = createHuge(Notification03Icon);
-export const HugeSettings = createHuge(Settings01Icon);
-export const HugeClock = createHuge(Clock01Icon);
-export const HugeMenu = createHuge(Menu01Icon);
-export const HugeBuilding = createHuge(Building01Icon);
-export const HugeBuilding2 = createHuge(Building02Icon);
-export const HugeDashboard = createHuge(DashboardSquare01Icon);
-export const HugeUsers = createHuge(UserGroupIcon);
-export const HugePlus = createHuge(PlusSignIcon);
-export const HugeMinus = createHuge(MinusSignIcon);
-export const HugeCalendar = createHuge(Calendar03Icon);
-export const HugePhone = createHuge(Call02Icon);
-export const HugeMessage = createHuge(Message01Icon);
-export const HugeWhatsApp = createHuge(WhatsappIcon);
-export const HugeHeart = createHuge(FavouriteIcon);
-export const HugeStar = createHuge(StarIcon);
-export const HugeEye = createHuge(ViewIcon);
-export const HugeMapPin = createHuge(Location01Icon);
-export const HugeShieldCheck = createHuge(ShieldCheckIcon);
-export const HugeShield = createHuge(ShieldIcon);
-export const HugeCheck = createHuge(CheckmarkCircle01Icon);
-export const HugeCheckCircle = createHuge(CheckmarkCircle02Icon);
-export const HugeClose = createHuge(Cancel01Icon);
-export const HugeChevronRight = createHuge(ChevronRightIcon);
-export const HugeChevronLeft = createHuge(ChevronLeftIcon);
-export const HugeChevronDown = createHuge(ChevronDownIcon);
-export const HugeChevronUp = createHuge(ChevronUpIcon);
-export const HugeArrowRight = createHuge(ArrowRight01Icon);
-export const HugeArrowLeft = createHuge(ArrowLeft01Icon);
-export const HugeArrowUpRight = createHuge(ArrowUpRight01Icon);
-export const HugeSorting = createHuge(Sorting05Icon);
-export const HugeBriefcase = createHuge(Briefcase01Icon);
-export const HugeSliders = createHuge(SlidersHorizontalIcon);
-export const HugeFilter = createHuge(FilterIcon);
-export const HugeTrendingUp = createHuge(TrendingUpIcon);
-export const HugeTag = createHuge(Tag01Icon);
-export const HugeInfo = createHuge(InformationCircleIcon);
-export const HugeSparkles = createHuge(SparklesIcon);
-export const HugeCopy = createHuge(Copy01Icon);
-export const HugePencil = createHuge(PencilEdit01Icon);
-export const HugeTrash = createHuge(Delete02Icon);
-export const HugeExternalLink = createHuge(ExternalLinkIcon);
-export const HugeRotateCcw = createHuge(ReloadIcon);
-export const HugeRefreshCw = createHuge(RefreshCcwIcon);
-export const HugeAward = createHuge(Award01Icon);
-export const HugeGlobe = createHuge(GlobeIcon);
-export const HugeHelp = createHuge(HelpCircleIcon);
-export const HugeFileCheck = createHuge(DocumentValidationIcon);
-export const HugeLock = createHuge(LockIcon);
-export const HugeLogout = createHuge(Logout01Icon);
-export const HugeCrown = createHuge(CrownIcon);
-export const HugeBookmark = createHuge(Bookmark01Icon);
-export const HugeShare = createHuge(Share01Icon);
-export const HugeSend = createHuge(SentIcon);
-export const HugeDroplet = createHuge(DropletIcon);
-export const HugeActivity = createHuge(ActivityIcon);
-export const HugeZap = createHuge(ZapIcon);
-export const HugeLayers = createHuge(LayersIcon);
-export const HugeTruck = createHuge(TruckDeliveryIcon);
-export const HugeAlertCircle = createHuge(AlertCircleIcon);
-export const HugeAlertTriangle = createHuge(TriangleAlertIcon);
-export const HugeSofa = createHuge(Sofa01Icon);
-export const HugeMoney = createHuge(Money01Icon);
-export const HugeBed = createHuge(BedSingle01Icon);
-export const HugeCalculator = createHuge(Calculator01Icon);
-export const HugeCamera = createHuge(Camera01Icon);
-export const HugeCar = createHuge(Car01Icon);
-export const HugeCompass = createHuge(Compass01Icon);
-export const HugeCreditCard = createHuge(CreditCardIcon);
-export const HugeDownload = createHuge(Download01Icon);
-export const HugeFile = createHuge(File01Icon);
-export const HugeImage = createHuge(Image01Icon);
-export const HugeMail = createHuge(Mail01Icon);
-export const HugeMaximize = createHuge(Maximize01Icon);
-export const HugeMoreHorizontal = createHuge(MoreHorizontalIcon);
-export const HugeMoreVertical = createHuge(MoreVerticalIcon);
-export const HugePauseCircle = createHuge(PauseCircleIcon);
-export const HugeRuler = createHuge(RulerIcon);
-export const HugeSmartphone = createHuge(SmartPhone01Icon);
-export const HugeUpload = createHuge(Upload01Icon);
-export const HugeWallet = createHuge(Wallet01Icon);
-export const HugeWifiOff = createHuge(WifiOff01Icon);
-export const HugeWrench = createHuge(Wrench01Icon);
+// ================= Pre-configured RESTAMP icons =================
+export const HugeHome = createHuge(LucideHouse);
+export const HugeSearch = createHuge(LucideSearch);
+export const HugeUser = createHuge(LucideUser);
+export const HugeBell = createHuge(LucideBell);
+export const HugeSettings = createHuge(LucideSettings);
+export const HugeClock = createHuge(LucideClock);
+export const HugeMenu = createHuge(LucideMenu);
+export const HugeBuilding = createHuge(LucideBuilding);
+export const HugeBuilding2 = createHuge(LucideBuilding2);
+export const HugeDashboard = createHuge(LucideLayoutDashboard);
+export const HugeUsers = createHuge(LucideUsers);
+export const HugePlus = createHuge(LucidePlus);
+export const HugeMinus = createHuge(LucideMinus);
+export const HugeCalendar = createHuge(LucideCalendar);
+export const HugePhone = createHuge(LucidePhone);
+export const HugeMessage = createHuge(LucideMessageCircle);
+export const HugeHeart = createHuge(LucideHeart);
+export const HugeStar = createHuge(LucideStar);
+export const HugeEye = createHuge(LucideEye);
+export const HugeMapPin = createHuge(LucideMapPin);
+export const HugeShieldCheck = createHuge(LucideShieldCheck);
+export const HugeShield = createHuge(LucideShield);
+export const HugeCheck = createHuge(LucideCheck);
+export const HugeCheckCircle = createHuge(LucideCircleCheck);
+export const HugeClose = createHuge(LucideX);
+export const HugeChevronRight = createHuge(LucideChevronRight);
+export const HugeChevronLeft = createHuge(LucideChevronLeft);
+export const HugeChevronDown = createHuge(LucideChevronDown);
+export const HugeChevronUp = createHuge(LucideChevronUp);
+export const HugeArrowRight = createHuge(LucideArrowRight);
+export const HugeArrowLeft = createHuge(LucideArrowLeft);
+export const HugeArrowUpRight = createHuge(LucideArrowUpRight);
+export const HugeSorting = createHuge(LucideArrowUpDown);
+export const HugeBriefcase = createHuge(LucideBriefcase);
+export const HugeSliders = createHuge(LucideSlidersHorizontal);
+export const HugeFilter = createHuge(LucideFunnel);
+export const HugeTrendingUp = createHuge(LucideTrendingUp);
+export const HugeTag = createHuge(LucideTag);
+export const HugeInfo = createHuge(LucideInfo);
+export const HugeSparkles = createHuge(LucideSparkles);
+export const HugeCopy = createHuge(LucideCopy);
+export const HugePencil = createHuge(LucidePencil);
+export const HugeTrash = createHuge(LucideTrash2);
+export const HugeExternalLink = createHuge(LucideExternalLink);
+export const HugeRotateCcw = createHuge(LucideRotateCcw);
+export const HugeRefreshCw = createHuge(LucideRefreshCw);
+export const HugeAward = createHuge(LucideAward);
+export const HugeGlobe = createHuge(LucideGlobe);
+export const HugeHelp = createHuge(LucideCircleHelp);
+export const HugeFileCheck = createHuge(LucideFileCheck);
+export const HugeLock = createHuge(LucideLock);
+export const HugeLogout = createHuge(LucideLogOut);
+export const HugeCrown = createHuge(LucideCrown);
+export const HugeBookmark = createHuge(LucideBookmark);
+export const HugeShare = createHuge(LucideShare2);
+export const HugeSend = createHuge(LucideSend);
+export const HugeDroplet = createHuge(LucideDroplet);
+export const HugeActivity = createHuge(LucideActivity);
+export const HugeZap = createHuge(LucideZap);
+export const HugeLayers = createHuge(LucideLayers);
+export const HugeTruck = createHuge(LucideTruck);
+export const HugeAlertCircle = createHuge(LucideCircleAlert);
+export const HugeAlertTriangle = createHuge(LucideTriangleAlert);
+export const HugeSofa = createHuge(LucideArmchair);
+export const HugeMoney = createHuge(LucideBanknote);
+export const HugeBed = createHuge(LucideBed);
+export const HugeCalculator = createHuge(LucideCalculator);
+export const HugeCamera = createHuge(LucideCamera);
+export const HugeCar = createHuge(LucideCar);
+export const HugeCompass = createHuge(LucideCompass);
+export const HugeCreditCard = createHuge(LucideCreditCard);
+export const HugeDownload = createHuge(LucideDownload);
+export const HugeFile = createHuge(LucideFileText);
+export const HugeImage = createHuge(LucideImage);
+export const HugeMail = createHuge(LucideMail);
+export const HugeMaximize = createHuge(LucideMaximize2);
+export const HugeMoreHorizontal = createHuge(LucideEllipsis);
+export const HugeMoreVertical = createHuge(LucideEllipsisVertical);
+export const HugePauseCircle = createHuge(LucideCirclePause);
+export const HugeRuler = createHuge(LucideRuler);
+export const HugeSmartphone = createHuge(LucideSmartphone);
+export const HugeUpload = createHuge(LucideUpload);
+export const HugeWallet = createHuge(LucideWallet);
+export const HugeWifiOff = createHuge(LucideWifiOff);
+export const HugeWrench = createHuge(LucideWrench);
 
-// ================= Drop-in Component Aliases =================
+// ================= Drop-in Component Aliases (Lucide names) =================
 export const AlertCircle = HugeAlertCircle;
 export const AlertTriangle = HugeAlertTriangle;
 export const Armchair = HugeSofa;
@@ -267,7 +254,7 @@ export const CreditCard = HugeCreditCard;
 export const Crown = HugeCrown;
 export const Download = HugeDownload;
 export const Droplet = HugeDroplet;
-export const Edit = HugePencil;
+export const Edit = createHuge(LucideSquarePen);
 export const ExternalLink = HugeExternalLink;
 export const Eye = HugeEye;
 export const FileCheck = HugeFileCheck;
@@ -282,7 +269,7 @@ export const ImageIcon = HugeImage;
 export const Info = HugeInfo;
 export const Layers = HugeLayers;
 export const LayoutDashboard = HugeDashboard;
-export const LayoutGrid = HugeDashboard;
+export const LayoutGrid = createHuge(LucideLayoutGrid);
 export const Lock = HugeLock;
 export const LogOut = HugeLogout;
 export const Mail = HugeMail;
@@ -290,7 +277,7 @@ export const MapPin = HugeMapPin;
 export const Maximize2 = HugeMaximize;
 export const Menu = HugeMenu;
 export const MessageCircle = HugeMessage;
-export const MessageSquare = HugeMessage;
+export const MessageSquare = createHuge(LucideMessageSquare);
 export const Minus = HugeMinus;
 export const MoreHorizontal = HugeMoreHorizontal;
 export const MoreVertical = HugeMoreVertical;
@@ -298,9 +285,9 @@ export const PauseCircle = HugePauseCircle;
 export const Pencil = HugePencil;
 export const Phone = HugePhone;
 export const Plus = HugePlus;
-export const PlusCircle = HugePlus;
+export const PlusCircle = createHuge(LucideCirclePlus);
 export const RefreshCw = HugeRefreshCw;
-export const Repeat = createHuge(CircleArrowReload01Icon);
+export const Repeat = createHuge(LucideRepeat);
 export const RotateCcw = HugeRotateCcw;
 export const Ruler = HugeRuler;
 export const Search = HugeSearch;
@@ -313,7 +300,7 @@ export const ShieldCheck = HugeShieldCheck;
 export const SlidersHorizontal = HugeSliders;
 export const Smartphone = HugeSmartphone;
 export const Sparkles = HugeSparkles;
-export const SquarePen = HugePencil;
+export const SquarePen = createHuge(LucideSquarePen);
 export const Star = HugeStar;
 export const Tag = HugeTag;
 export const Trash2 = HugeTrash;
@@ -326,7 +313,7 @@ export const Wallet = HugeWallet;
 export const WifiOff = HugeWifiOff;
 export const Wrench = HugeWrench;
 export const X = HugeClose;
-export const XCircle = HugeClose;
+export const XCircle = createHuge(LucideCircleX);
 export const Zap = HugeZap;
 export const Activity = HugeActivity;
 

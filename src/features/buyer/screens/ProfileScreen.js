@@ -50,7 +50,6 @@ import { fetchMyEnquiries } from "../api/enquiries.js";
 import { linkGoogleAccount } from "../../auth/api/auth.js";
 import GoogleSignInButton from "../../auth/components/GoogleSignInButton.js";
 import ConfirmationModal from "../../owner/components/ConfirmationModal.js";
-import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 
 export default function ProfileScreen({ navigation }) {
@@ -254,9 +253,6 @@ export default function ProfileScreen({ navigation }) {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-        {/* TOP BRAND HEADER (Matching Buyer Home) */}
-        <AppBrandHeader currentRole="buyer" />
-
         <ScrollView
           style={styles.container}
           contentContainerStyle={styles.scrollContent}
@@ -292,9 +288,6 @@ export default function ProfileScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-
-      {/* TOP BRAND HEADER (Matching Buyer Home) */}
-      <AppBrandHeader currentRole="buyer" />
 
       <ScrollView
         style={styles.container}
@@ -360,373 +353,6 @@ export default function ProfileScreen({ navigation }) {
           <ArrowRight size={18} color={COLORS.primary} />
         </TouchableOpacity>
 
-        {/* =========================================================================
-            ACTIVE SUBSCRIPTIONS & MEMBERSHIPS (Owner & Agent)
-            ========================================================================= */}
-        <View style={styles.subscriptionsSection}>
-          <View style={styles.sectionHeadingRow}>
-            <View style={styles.sectionHeadingIcon}>
-              <Crown size={15} color="#2563EB" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sectionHeadingText}>ACTIVE MEMBERSHIPS & PLANS</Text>
-              <Text style={styles.sectionSubHeadingText}>
-                Purchased subscription details for your account
-              </Text>
-            </View>
-          </View>
-
-          {/* =========================================================================
-              PROJECT TICKET DESIGN (Active Memberships & Plans)
-              ========================================================================= */}
-          <View style={styles.ticketCard}>
-            {/* 1. Top Row: Status Pill on left + Action Buttons on right */}
-            <View style={styles.ticketTopRow}>
-              <View style={styles.ticketStatusPill}>
-                <View style={styles.ticketCheckCircle}>
-                  <Check size={9} color="#FFFFFF" />
-                </View>
-                <Text style={styles.ticketStatusText}>ACTIVE</Text>
-              </View>
-
-              <View style={styles.ticketHeaderButtons}>
-                {/* Stats Box (Grid of 3) */}
-                <View style={styles.statsGrid}>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>VALIDITY</Text>
-                    <Text style={styles.statValue}>
-                      {subscription?.validity || "90 Days"}
-                    </Text>
-                  </View>
-                  <View style={[styles.statBox, styles.statBoxBorder]}>
-                    <Text style={styles.statLabel}>LISTINGS QUOTA</Text>
-                    <Text style={styles.statValue}>
-                      {subscription?.usedListings || 0} / {subscription?.listingLimit || 5} Used
-                    </Text>
-                  </View>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>AMOUNT PAID</Text>
-                    <Text style={[styles.statValue, { color: "#16A34A" }]}>
-                      {subscription?.amountPaid || "Not purchased"}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Extra details row: Transaction ref & Features */}
-                <View style={styles.metaInfoRow}>
-                  <View style={styles.metaItem}>
-                    <ShieldCheck size={13} color="#16A34A" style={{ marginRight: 4 }} />
-                    <Text style={styles.metaItemText}>
-                      0% Brokerage • Direct Inquiries Active
-                    </Text>
-                  </View>
-                  <Text style={styles.metaItemRef}>
-                    {subscription?.txnId || "Not purchased"}
-                  </Text>
-                </View>
-
-                {subscription?.expiryDate ? (
-                  <View style={styles.expiryNoticeRow}>
-                    <Calendar size={12} color="#64748B" style={{ marginRight: 5 }} />
-                    <Text style={styles.expiryNoticeText}>
-                      Expires on {subscription.expiryDate} ({subscription?.daysRemaining || 90} days left)
-                    </Text>
-                  </View>
-                ) : null}
-
-                {/* Action Buttons Row */}
-                <View style={styles.planActionsRow}>
-                <TouchableOpacity
-                  style={styles.ticketDraftBtn}
-                  onPress={hasAgentPlan ? handleManageAgentPlan : handleManageOwnerPlan}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.ticketDraftBtnText}>
-                    {hasAgentPlan ? "Manage" : "Upgrade"}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.ticketSaveBtn}
-                  onPress={hasAgentPlan ? handleSwitchToAgent : handleSwitchToOwner}
-                  activeOpacity={0.88}
-                >
-                  <Text style={styles.ticketSaveBtnText}>Dashboard</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* 2. Plan Title */}
-            <Text
-              style={styles.ticketTitle}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {hasAgentPlan
-                ? (agentPlan?.name || "Agent Pro Plan")
-                : (subscription?.planName || "Owner Pro Plan")}
-            </Text>
-
-            {/* Divider */}
-            <View style={styles.ticketDivider} />
-
-            {/* 3. Metadata Grid */}
-            <View style={styles.ticketGrid}>
-              <View style={styles.ticketGridRow}>
-                <View style={styles.ticketGridCol}>
-                  <Text style={styles.ticketGridLabel}>Plan name</Text>
-                  <Text style={styles.ticketGridValue}>
-                    {hasAgentPlan
-                      ? (agentPlan?.name || "Agent Pro Plan")
-                      : (subscription?.planName || "Owner Pro Plan")}
-                  </Text>
-                  <Text style={styles.ticketGridSub}>
-                    {hasAgentPlan ? "Certified Agent Partner" : "Owner Partner Membership"}
-                  </Text>
-                </View>
-
-                <View style={styles.ticketGridCol}>
-                  <Text style={styles.ticketGridLabel}>
-                    {hasAgentPlan ? "Covered Localities" : "Listings Quota"}
-                  </Text>
-                  <Text style={styles.ticketGridValue}>
-                    {hasAgentPlan
-                      ? `${selectedLocalities?.length || 10} Areas`
-                      : `${subscription?.usedListings || 0} / ${subscription?.listingLimit || 5} Used`}
-                  </Text>
-                  <Text style={styles.ticketGridSub}>
-                    {hasAgentPlan ? "Active Territory" : "Available Slots"}
-                  </Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>AMOUNT PAID</Text>
-                  <Text style={[styles.statValue, { color: "#16A34A" }]}>
-                    {(hasAgentPlan ? agentPlan?.amountPaid : subscription?.amountPaid) || "Not purchased"}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Covered Localities preview — agent-plan only */}
-              {hasAgentPlan && (
-                <View style={styles.localitiesPreviewWrap}>
-                  <Text style={styles.localitiesPreviewTitle}>Covered Localities:</Text>
-                  <View style={styles.localitiesChipsRow}>
-                    {(selectedLocalities || []).slice(0, 4).map((loc, idx) => (
-                      <View key={idx} style={styles.localityChip}>
-                        <MapPin size={10} color="#2563EB" style={{ marginRight: 3 }} />
-                        <Text style={styles.localityChipText}>{loc}</Text>
-                      </View>
-                    ))}
-                    {(selectedLocalities?.length || 0) > 4 ? (
-                      <View style={styles.localityMoreChip}>
-                        <Text style={styles.localityMoreChipText}>
-                          +{(selectedLocalities?.length || 0) - 4} more
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-              )}
-
-              {/* Extra details row: Transaction / Broker / Invoice ref */}
-              <View style={styles.metaInfoRow}>
-                <View style={styles.metaItem}>
-                  <ShieldCheck size={13} color="#16A34A" style={{ marginRight: 4 }} />
-                  <Text style={styles.metaItemText}>
-                    {hasAgentPlan ? "Verified Broker • Exclusive Buyer Leads" : "0% Brokerage • Direct Inquiries Active"}
-                  </Text>
-                </View>
-                <Text style={styles.metaItemRef}>
-                  {hasAgentPlan ? (agentPlan?.invoiceNumber || "INV-2026-AGT-8821") : (subscription?.txnId || "Not purchased")}
-                </Text>
-              </View>
-
-              {((hasAgentPlan && agentPlan?.expiryDate) || (!hasAgentPlan && subscription?.expiryDate)) ? (
-                <View style={styles.expiryNoticeRow}>
-                  <Calendar size={12} color="#64748B" style={{ marginRight: 5 }} />
-                  <Text style={styles.expiryNoticeText}>
-                    Expires on {(hasAgentPlan ? agentPlan?.expiryDate : subscription?.expiryDate)} (
-                    {(hasAgentPlan ? agentPlan?.daysRemaining : subscription?.daysRemaining) || (hasAgentPlan ? 30 : 90)} days left)
-                  </Text>
-                </View>
-              ) : null}
-
-              {/* Action Buttons Row — agent-plan buttons kept, upstream layout */}
-              <View style={styles.planActionsRow}>
-                {hasAgentPlan ? (
-                  <>
-                    <TouchableOpacity
-                      style={styles.primaryPlanBtn}
-                      onPress={handleSwitchToAgent}
-                      activeOpacity={0.88}
-                    >
-                      <Text style={styles.primaryPlanBtnText}>Open Agent Dashboard</Text>
-                      <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.secondaryPlanBtn}
-                      onPress={handleManageAgentPlan}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.secondaryPlanBtnText}>Manage Areas</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      style={styles.primaryPlanBtn}
-                      onPress={handleManageOwnerPlan}
-                      activeOpacity={0.88}
-                    >
-                      <Text style={styles.primaryPlanBtnText}>Upgrade Plan</Text>
-                      <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.secondaryPlanBtn}
-                      onPress={handleManageOwnerPlan}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.secondaryPlanBtnText}>Browse Plans</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-              </View>
-            </View>
-
-            {/* 4. Details Section */}
-            <View style={styles.ticketTabsRow}>
-              <View style={[styles.ticketTabItem, styles.ticketTabItemActive]}>
-                <Text style={[styles.ticketTabText, styles.ticketTabTextActive]}>
-                  Details
-                </Text>
-              </View>
-            </View>
-
-            {/* 5. Details Content */}
-            <View style={styles.ticketTabBox}>
-              <View style={styles.ticketDetailRow}>
-                <Text style={styles.ticketDetailLabel}>Status:</Text>
-                <Text style={styles.ticketDetailValue}>ACTIVE • Verified Partner</Text>
-              </View>
-              <View style={styles.ticketDetailRow}>
-                <Text style={styles.ticketDetailLabel}>Timeline:</Text>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Calendar size={14} color="#0F172A" style={{ marginRight: 5 }} />
-                  <Text style={styles.ticketDetailValue}>
-                    {hasOwnerPlan && subscription?.expiryDate
-                      ? `Expires ${subscription.expiryDate}`
-                      : hasAgentPlan && agentPlan?.expiryDate
-                      ? `Expires ${agentPlan.expiryDate}`
-                      : "90 Days Active"}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.ticketDetailRow}>
-                <Text style={styles.ticketDetailLabel}>Validity Period:</Text>
-                <Text style={styles.ticketDetailValue}>
-                  {hasAgentPlan
-                    ? (agentPlan?.validity || "30 Days")
-                    : (subscription?.validity || "90 Days")}
-                </Text>
-              </View>
-              <View style={styles.ticketDetailRow}>
-                <Text style={styles.ticketDetailLabel}>
-                  {hasAgentPlan ? "Covered Localities:" : "Listings Quota:"}
-                </Text>
-                <Text style={styles.ticketDetailValue}>
-                  {hasAgentPlan
-                    ? `${selectedLocalities?.length || 10} Areas Active`
-                    : `${subscription?.usedListings || 0} / ${subscription?.listingLimit || 5} Used`}
-                </Text>
-              </View>
-              <View style={styles.ticketDetailRow}>
-                <Text style={styles.ticketDetailLabel}>Brokerage:</Text>
-                <Text style={[styles.ticketDetailValue, { color: "#16A34A" }]}>
-                  0% Zero Commission
-                </Text>
-              </View>
-              <View style={styles.ticketDetailRow}>
-                <Text style={styles.ticketDetailLabel}>Transaction Ref:</Text>
-                <Text style={styles.ticketDetailValue}>
-                  {hasAgentPlan
-                    ? (agentPlan?.invoiceNumber || "INV-2026-AGT-8821")
-                    : (subscription?.txnId || "TXN-2026-98124")}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Quick Partner Options below Ticket Card */}
-          {!hasOwnerPlan && !hasAgentPlan ? (
-            <View style={styles.emptyPlanCard}>
-              <View style={styles.emptyPlanIconWrap}>
-                <Sparkles size={22} color="#2563EB" />
-              </View>
-              <Text style={styles.emptyPlanTitle}>
-                {AGENT_MODULE_ENABLED
-                  ? "Become an Owner or Agent Partner"
-                  : "Become an Owner Partner"}
-              </Text>
-              <Text style={styles.emptyPlanSubtitle}>
-                {AGENT_MODULE_ENABLED
-                  ? "Post properties with zero brokerage or access high-intent buyer leads across Chennai."
-                  : "Post properties with zero brokerage and receive direct buyer inquiries."}
-              </Text>
-              <View style={styles.emptyPlanButtonsRow}>
-                <TouchableOpacity
-                  style={styles.emptyOwnerBtn}
-                  onPress={handleManageOwnerPlan}
-                  activeOpacity={0.85}
-                >
-                  <Crown size={14} color="#B45309" style={{ marginRight: 6 }} />
-                  <Text style={styles.emptyOwnerBtnText}>Owner Plans (from ₹0)</Text>
-                </TouchableOpacity>
-                {AGENT_MODULE_ENABLED ? (
-                  <TouchableOpacity
-                    style={styles.emptyAgentBtn}
-                    onPress={handleExploreAgentPlans}
-                    activeOpacity={0.85}
-                  >
-                    <Briefcase size={14} color="#4338CA" style={{ marginRight: 6 }} />
-                    <Text style={styles.emptyAgentBtnText}>Agent Plans (from ₹2,499)</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            </View>
-          ) : AGENT_MODULE_ENABLED && hasOwnerPlan && !hasAgentPlan ? (
-            <TouchableOpacity
-              style={styles.addOtherPlanRow}
-              onPress={handleExploreAgentPlans}
-              activeOpacity={0.8}
-            >
-              <View style={styles.addOtherLeft}>
-                <Briefcase size={16} color="#2563EB" style={{ marginRight: 10 }} />
-                <View>
-                  <Text style={styles.addOtherTitle}>Add Agent Membership</Text>
-                  <Text style={styles.addOtherSub}>Claim buyer leads in your top Chennai localities</Text>
-                </View>
-              </View>
-              <ArrowRight size={16} color="#2563EB" />
-            </TouchableOpacity>
-          ) : hasAgentPlan && !hasOwnerPlan ? (
-            <TouchableOpacity
-              style={styles.addOtherPlanRow}
-              onPress={handleManageOwnerPlan}
-              activeOpacity={0.8}
-            >
-              <View style={styles.addOtherLeft}>
-                <Crown size={16} color="#D97706" style={{ marginRight: 10 }} />
-                <View>
-                  <Text style={styles.addOtherTitle}>Add Owner Membership</Text>
-                  <Text style={styles.addOtherSub}>Post your properties with 0% brokerage</Text>
-                </View>
-              </View>
-              <ArrowRight size={16} color="#D97706" />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
         {/* 1. ACCOUNT */}
         <View style={styles.menuGroup}>
           <Text style={styles.groupHeading}>ACCOUNT</Text>
@@ -749,7 +375,7 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.menuRow, { borderBottomWidth: 0 }]}
+            style={styles.menuRow}
             onPress={() =>
               Alert.alert(
                 "Saved Address",
@@ -761,6 +387,18 @@ export default function ProfileScreen({ navigation }) {
             <View style={styles.menuLeft}>
               <MapPin size={18} color="#334155" style={styles.menuIcon} />
               <Text style={styles.menuLabel}>Saved Address</Text>
+            </View>
+            <ChevronRight size={16} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 0 }]}
+            onPress={() => nav.navigate("ActiveMemberships")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <Crown size={18} color="#2563EB" style={styles.menuIcon} />
+              <Text style={styles.menuLabel}>Active Memberships & Plans</Text>
             </View>
             <ChevronRight size={16} color="#94A3B8" />
           </TouchableOpacity>
@@ -1487,9 +1125,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   ticketTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: "column",
+    alignItems: "stretch",
     marginBottom: 10,
   },
   ticketTitle: {
@@ -1499,10 +1136,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   ticketHeaderButtons: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "column",
+    alignItems: "stretch",
     gap: 6,
-    flexShrink: 0,
   },
   ticketDraftBtn: {
     paddingHorizontal: 11,
@@ -1535,12 +1171,14 @@ const styles = StyleSheet.create({
   ticketStatusPill: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "flex-start",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 7,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
+    marginBottom: 12,
   },
   ticketCheckCircle: {
     width: 13,
@@ -1885,6 +1523,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginBottom: 3,
     letterSpacing: 0.4,
+    textAlign: "center",
   },
   statValue: {
     fontSize: 12.5,
@@ -1894,8 +1533,10 @@ const styles = StyleSheet.create({
   },
   metaInfoRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 6,
     marginBottom: 8,
     paddingHorizontal: 2,
   },
@@ -1932,6 +1573,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginTop: 4,
+    marginBottom: 16,
   },
   primaryPlanBtn: {
     flex: 1.4,
