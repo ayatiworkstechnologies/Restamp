@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary || "#2563EB",
     paddingHorizontal: 20,
     paddingVertical: 11,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   offlineRetryText: {
     color: "#FFFFFF",

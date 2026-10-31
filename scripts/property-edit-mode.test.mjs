@@ -198,7 +198,7 @@ const resaleForm = toEditForm(rentDetail({
   price_period: "TOTAL", bedrooms: 4, rent_terms: null,
 }));
 check("F9 resale lookingTo+price+villa", resaleForm.lookingTo === "Resale"
-  && resaleForm.monthlyRent === "9000000" && resaleForm.propertyType === "Independent House / Villa"
+  && resaleForm.monthlyRent === "9000000" && resaleForm.propertyType === "Villa"
   && resaleForm.securityDeposit === "" && resaleForm.availableFrom === "Immediately");
 const buyForm = toEditForm(rentDetail({ transaction_type: "BUY" }));
 check("F10 buy lookingTo", buyForm.lookingTo === "New");

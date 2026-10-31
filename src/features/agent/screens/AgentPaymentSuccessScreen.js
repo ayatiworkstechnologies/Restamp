@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
   },
   dashboardBtn: {
     backgroundColor: COLORS.primary,
-    borderRadius: 100,
+    borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",

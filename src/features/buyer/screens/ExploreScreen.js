@@ -1177,7 +1177,7 @@ const styles = StyleSheet.create({
   sheetCallBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",

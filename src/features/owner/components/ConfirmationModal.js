@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   confirmBtn: {
     flex: 1,
     height: 46,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",

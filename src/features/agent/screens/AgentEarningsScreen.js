@@ -1228,7 +1228,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: COLORS.primary,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   modalPrimaryBtnText: {
     fontSize: 13,

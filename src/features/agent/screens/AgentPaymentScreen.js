@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
   },
   payNowBtn: {
     height: 54,
-    borderRadius: 27,
+    borderRadius: 10,
     backgroundColor: "#2563EB",
     justifyContent: "center",
     alignItems: "center",
@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
   },
   modalAddBtn: {
     height: 48,
-    borderRadius: 24,
+    borderRadius: 10,
     backgroundColor: "#2563EB",
     justifyContent: "center",
     alignItems: "center",

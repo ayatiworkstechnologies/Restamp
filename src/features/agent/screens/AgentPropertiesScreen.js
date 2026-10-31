@@ -816,7 +816,7 @@ const styles = StyleSheet.create({
   matchLeadBtn: {
     flex: 1,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",

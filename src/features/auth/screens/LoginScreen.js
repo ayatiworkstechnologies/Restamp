@@ -1286,7 +1286,7 @@ const styles = StyleSheet.create({
   },
   perplexityPrimaryBtn: {
     height: 52,
-    borderRadius: 26,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
@@ -1566,7 +1566,7 @@ const styles = StyleSheet.create({
   /* Action Buttons */
   primaryActionButton: {
     height: 52,
-    borderRadius: 26,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",

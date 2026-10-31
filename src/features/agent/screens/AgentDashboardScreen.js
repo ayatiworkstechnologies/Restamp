@@ -1060,7 +1060,7 @@ const styles = StyleSheet.create({
   enquiryActionPrimaryBtn: {
     flex: 1.2,
     height: 34,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
@@ -1224,7 +1224,7 @@ const styles = StyleSheet.create({
   },
   modalDoneBtn: {
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
+    borderRadius: 10,
     paddingVertical: 13,
     alignItems: "center",
   },

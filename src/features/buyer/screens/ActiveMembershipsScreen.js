@@ -610,7 +610,7 @@ const styles = StyleSheet.create({
   primaryPlanBtn: {
     flex: 1.4,
     height: 42,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: "#2563EB",
     flexDirection: "row",
     alignItems: "center",

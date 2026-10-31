@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
   primaryBtn: {
     flex: 2,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",

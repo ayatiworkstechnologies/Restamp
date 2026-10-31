@@ -793,7 +793,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingHorizontal: 22,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   editButtonText: {
     fontSize: 14,

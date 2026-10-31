@@ -710,7 +710,7 @@ const styles = StyleSheet.create({
   },
   continueBtn: {
     height: 54,
-    borderRadius: 27,
+    borderRadius: 10,
     backgroundColor: "#2563EB",
     justifyContent: "center",
     alignItems: "center",

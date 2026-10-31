@@ -235,7 +235,7 @@ export default function HomeScreen({ navigation }) {
   }, []);
   const [selectedLocality, setSelectedLocality] = useState("");
   const [localityInput, setLocalityInput] = useState("");
-  const [modalType, setModalType] = useState("Apartment");
+  const [modalType, setModalType] = useState("");
   const [modalBudget, setModalBudget] = useState("All Budgets");
   const [minBudget, setMinBudget] = useState(0);
   const [maxBudget, setMaxBudget] = useState(Infinity);
@@ -1578,7 +1578,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   listingRetryText: {
     ...TYPOGRAPHY.button,
@@ -1891,7 +1891,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 100,
+    borderRadius: 10,
   },
   viewNumberBtnText: {
     color: "#FFFFFF",
@@ -2547,7 +2547,7 @@ const styles = StyleSheet.create({
   modalShowBtn: {
     flex: 1,
     height: 46,
-    borderRadius: 100,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",

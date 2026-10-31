@@ -693,7 +693,7 @@ const styles = StyleSheet.create({
   },
   confirmBtn: {
     backgroundColor: "#2563EB",
-    borderRadius: 14,
+    borderRadius: 10,
     height: 50,
     flexDirection: "row",
     alignItems: "center",

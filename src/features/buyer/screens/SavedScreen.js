@@ -2534,7 +2534,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 10,
   },
   exploreBtnText: {
     color: "#FFFFFF",
@@ -2632,7 +2632,7 @@ const styles = StyleSheet.create({
   saveModalBtn: {
     flex: 2,
     height: 48,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
@@ -2721,7 +2721,7 @@ const styles = StyleSheet.create({
   sheetCallBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",

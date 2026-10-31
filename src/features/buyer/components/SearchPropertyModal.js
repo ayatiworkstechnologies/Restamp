@@ -130,7 +130,7 @@ function SearchPropertyModal({
   onSelectProperty,
   dealType: initialDealType = "Buy",
   initialLocality = "",
-  initialPropertyType = "Apartment",
+  initialPropertyType = "",
   initialBhk = "All BHK",
   initialStatus = "All Status",
   initialMinBudget = 0,
@@ -212,12 +212,14 @@ function SearchPropertyModal({
       setDealType(initialDealType || "Buy");
       setLocalityInput(initialLocality || "");
       setSelectedLocality(initialLocality || "");
-      setModalType(initialPropertyType || "Apartment");
-      setModalBhk(initialBhk || "All BHK");
-      setConstructionStatus(initialStatus || "All Status");
+      setModalType(initialPropertyType || "");
+      // "" = not picked yet, so nothing is highlighted on open. Tapping an
+      // "All ..." chip stores that value and highlights it.
+      setModalBhk(initialBhk && initialBhk !== "All BHK" ? initialBhk : "");
+      setConstructionStatus(initialStatus && initialStatus !== "All Status" ? initialStatus : "");
       setMinBudget(initialMinBudget || 0);
       setMaxBudget(initialMaxBudget !== undefined ? initialMaxBudget : Infinity);
-      setModalBudget(initialBudgetPreset || "All Budgets");
+      setModalBudget(initialBudgetPreset && initialBudgetPreset !== "All Budgets" ? initialBudgetPreset : "");
       setIsMinDropdownOpen(false);
       setIsMaxDropdownOpen(false);
     }
@@ -335,7 +337,7 @@ function SearchPropertyModal({
   const filterConflictNote = useMemo(() => {
     const parsed = parseSmartQuery(selectedLocality || localityInput || "");
     const conflicts = [];
-    if (parsed.bedrooms != null && modalBhk !== "All BHK") {
+    if (parsed.bedrooms != null && modalBhk && modalBhk !== "All BHK") {
       const sel = parseInt(modalBhk, 10);
       if (modalBhk !== "4+ BHK" && sel !== parsed.bedrooms) {
         conflicts.push(`“${parsed.bedrooms} BHK” in text but ${modalBhk} selected`);
@@ -363,12 +365,12 @@ function SearchPropertyModal({
   const handleClearFilters = () => {
     setSelectedLocality("");
     setLocalityInput("");
-    setModalType("Apartment");
-    setModalBhk("All BHK");
+    setModalType("");
+    setModalBhk("");
     setMinBudget(0);
     setMaxBudget(Infinity);
-    setModalBudget("All Budgets");
-    setConstructionStatus("All Status");
+    setModalBudget("");
+    setConstructionStatus("");
     setIsMinDropdownOpen(false);
     setIsMaxDropdownOpen(false);
   };
@@ -380,11 +382,11 @@ function SearchPropertyModal({
       onApply({
         locality: selectedLocality || localityInput || "",
         propertyType: modalType,
-        bhk: modalBhk,
+        bhk: modalBhk || "All BHK",
         budgetMin: minBudget,
         budgetMax: maxBudget,
-        modalBudget: modalBudget,
-        constructionStatus: constructionStatus,
+        modalBudget: modalBudget || "All Budgets",
+        constructionStatus: constructionStatus || "All Status",
         dealType: dealType,
       });
     }
@@ -551,7 +553,7 @@ function SearchPropertyModal({
                   <TouchableOpacity
                     key={type}
                     style={[styles.modalFilterChip, isSelected && styles.modalFilterChipActive]}
-                    onPress={() => setModalType(type)}
+                    onPress={() => setModalType(isSelected ? "" : type)}
                   >
                     <Text style={[styles.modalFilterChipText, isSelected && styles.modalFilterChipTextActive]}>
                       {type}
@@ -1098,7 +1100,7 @@ const styles = StyleSheet.create({
   modalShowBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",

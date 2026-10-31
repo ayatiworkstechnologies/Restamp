@@ -876,7 +876,7 @@ const styles = StyleSheet.create({
   sheetCallBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 10,
     backgroundColor: "#2563EB",
     flexDirection: "row",
     alignItems: "center",

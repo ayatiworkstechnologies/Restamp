@@ -1338,7 +1338,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   saveNoteBtnDisabled: {
     backgroundColor: "#94A3B8",

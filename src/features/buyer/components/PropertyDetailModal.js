@@ -2437,7 +2437,7 @@ const styles = StyleSheet.create({
   sendEnquiryBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 100,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
@@ -2516,7 +2516,7 @@ const styles = StyleSheet.create({
     height: 44,
     backgroundColor: COLORS.primary,
     paddingHorizontal: 16,
-    borderRadius: 100,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2752,7 +2752,7 @@ const styles = StyleSheet.create({
   },
   enquirySubmitBtn: {
     height: 50,
-    borderRadius: 25,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",

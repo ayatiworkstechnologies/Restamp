@@ -1945,7 +1945,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     backgroundColor: COLORS.primary,
-    borderRadius: 100,
+    borderRadius: 10,
   },
   clearFiltersBtnText: {
     fontSize: 13,
@@ -2076,7 +2076,7 @@ const styles = StyleSheet.create({
   applyBtn: {
     flex: 2,
     height: 44,
-    borderRadius: 100,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
@@ -2256,7 +2256,7 @@ const styles = StyleSheet.create({
   callNowBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 100,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     justifyContent: "center",

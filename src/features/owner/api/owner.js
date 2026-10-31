@@ -114,7 +114,8 @@ export function buildPayload(property) {
     "BUILDER FLOOR": "APARTMENT",
     VILLA: "VILLA",
     "INDEPENDENT HOUSE / VILLA": "VILLA",
-    "INDEPENDENT HOUSE": "VILLA",
+    "INDEPENDENT HOUSE": "HOUSE",
+    HOME: "HOUSE",
     HOUSE: "HOUSE",
     COMMERCIAL: "COMMERCIAL",
     OFFICE: "COMMERCIAL",
@@ -126,6 +127,7 @@ export function buildPayload(property) {
     "CO-WORKING SPACE": "COMMERCIAL",
     PLOT: "PLOT",
     "PLOT / LAND": "PLOT",
+    LAND: "AGRICULTURAL_LAND",
     "AGRICULTURAL LAND": "AGRICULTURAL_LAND",
     AGRICULTURAL_LAND: "AGRICULTURAL_LAND",
   };
@@ -1140,8 +1142,8 @@ function _countChip(value, plusAt, plusLabel) {
  * OwnerAddPropertyScreen form-state keys. This is the SOLE source for Edit
  * hydration — never the lossy display card. Every key buildPayload reads is
  * restored; approved approximations (documented):
- * - commercial subtype / HOUSE / AGRICULTURAL_LAND collapse to the closest
- *   UI option (the forward mapper is already lossy there);
+ * - commercial subtypes collapse to the closest UI option (the forward
+ *   mapper is already lossy there);
  * - bedrooms>=5 → "5"/"5+" chips, bathrooms>=4 → "4"/"4+", balconies>=3 →
  *   "3"/"3+" (exact chip cannot be inferred);
  * - available_from null → "Immediately" (step-4 validation requires a value);
@@ -1157,13 +1159,17 @@ export function toEditForm(detail) {
   let propertyType = "Apartment";
   if (category === "Commercial") {
     propertyType = "Office";
-  } else if (detail.property_type === "VILLA" || detail.property_type === "HOUSE") {
-    propertyType = "Independent House / Villa";
-  } else if (detail.property_type === "PLOT" || detail.property_type === "AGRICULTURAL_LAND") {
-    propertyType = "Plot / Land";
+  } else if (detail.property_type === "VILLA") {
+    propertyType = "Villa";
+  } else if (detail.property_type === "HOUSE") {
+    propertyType = "Home";
+  } else if (detail.property_type === "PLOT") {
+    propertyType = "Plot";
+  } else if (detail.property_type === "AGRICULTURAL_LAND") {
+    propertyType = "Land";
   }
   const bd = detail.bedrooms;
-  const bhk = category !== "Residential" || propertyType === "Plot / Land"
+  const bhk = category !== "Residential" || propertyType === "Plot" || propertyType === "Land"
     ? "N/A"
     : bd === 1 ? "1 BHK" : bd === 2 ? "2 BHK" : bd === 3 ? "3 BHK"
     : bd === 4 ? "4 BHK" : typeof bd === "number" && bd >= 5 ? "4+ BHK" : "2 BHK";

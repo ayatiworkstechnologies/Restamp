@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   chipBase: {
     paddingHorizontal: 15,
     paddingVertical: 9,
-    borderRadius: 20,
+    borderRadius: 6,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   // 2. Segmented Pill Control (Apple iOS 18 style with COLORS.primary)
   segmentedBase: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingVertical: 9,
     backgroundColor: "transparent",
     alignItems: "center",
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   },
   segmentedSelected: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingVertical: 9,
     backgroundColor: "#FFFFFF",
     alignItems: "center",
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
 
   // 3. Card Selection
   cardBase: {
-    borderRadius: 14,
+    borderRadius: 6,
     paddingHorizontal: 16,
     paddingVertical: 14,
     minWidth: 100,

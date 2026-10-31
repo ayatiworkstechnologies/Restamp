@@ -53,7 +53,6 @@ import COLORS from "../../../shared/constants/colors.js";
 import { useOwner } from "../context/OwnerContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { createOwnerListing, updateOwnerListing, buildUpdatePayload, resolveEditingListingId, toEditForm, headerExitAction, isValidChennaiPincode, CHENNAI_PINCODE_ERROR, isValidOwnerEmail, OWNER_EMAIL_ERROR, freshAddParams, fetchOwnerListing, submitListing, isLocalPhotoUri, uploadListingPhoto, createDraft, updateDraft, fetchDraft, deleteDraft, syncIdSetWithPhotos, pendingLocalPhotos } from "../api/owner.js";
-import RestampLogo from "../../../shared/components/RestampLogo.js";
 import StepIndicator from "../components/StepIndicator.js";
 import FormInput from "../components/FormInput.js";
 import SelectionChip from "../components/SelectionChip.js";
@@ -72,11 +71,16 @@ const RENT_STEPS = [
 
 const RESIDENTIAL_TYPES = [
   "Apartment",
-  "Independent House / Villa",
+  "Home",
+  "Villa",
   "Builder Floor",
-  "Plot / Land",
+  "Plot",
+  "Land",
   "Studio Apartment",
 ];
+
+// Plot and Land have no bedrooms/BHK.
+const isLandType = (type) => type === "Plot" || type === "Land" || type === "Plot / Land";
 
 const COMMERCIAL_TYPES = [
   "Office",
@@ -593,7 +597,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   };
 
   const buildDraftTitle = () =>
-    category === "Residential" && propertyType !== "Plot / Land"
+    category === "Residential" && !isLandType(propertyType)
       ? `${bhk} ${propertyType}`
       : `${category} ${propertyType}`;
 
@@ -987,7 +991,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       if (!propertyType) {
         newErrors.propertyType = "Please select a property type";
       }
-      if (category === "Residential" && propertyType !== "Plot / Land" && !bhk) {
+      if (category === "Residential" && !isLandType(propertyType) && !bhk) {
         newErrors.bhk = "Please select a BHK configuration";
       }
     }
@@ -1235,7 +1239,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     }
 
     const calculatedTitle =
-      category === "Residential" && propertyType !== "Plot / Land"
+      category === "Residential" && !isLandType(propertyType)
         ? `${bhk} ${propertyType}`
         : `${category} ${propertyType}`;
 
@@ -1433,14 +1437,9 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     }
   };
 
-  const currentStepInfo = RENT_STEPS[currentStep - 1] || RENT_STEPS[0];
-  const stepFullLabel =
-    currentStep === 4 && (lookingTo === "Resale" || lookingTo === "New")
-      ? "Price & Terms"
-      : currentStepInfo.fullLabel;
   const coverPhoto = photosList.find((p) => p.isCover) || photosList[0];
   const propertyTitle =
-    category === "Residential" && propertyType !== "Plot / Land"
+    category === "Residential" && !isLandType(propertyType)
       ? `${bhk} ${propertyType}`
       : `${category} ${propertyType}`;
 
@@ -1510,17 +1509,6 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
           >
             <ArrowLeft size={19} color="#111111" strokeWidth={2.2} />
           </TouchableOpacity>
-
-          <View style={styles.brandIconWrapper}>
-            <RestampLogo size={28} />
-          </View>
-
-          <View style={styles.headerTitles}>
-            <Text style={styles.headerSubtitle}>RESTAMP Owner Studio</Text>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {stepFullLabel}
-            </Text>
-          </View>
         </View>
 
         <View style={styles.headerRight}>
@@ -1593,7 +1581,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
                 return (
                   <TouchableOpacity
                     key={opt}
-                    style={styles.underlineTabItem}
+                    style={[styles.underlineTabItem, isSelected && styles.underlineTabItemActive]}
                     onPress={() => {
                       setLookingTo(opt);
                       if (opt === "New" || opt === "Resale") {
@@ -1618,7 +1606,6 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
                     >
                       {opt}
                     </Text>
-                    {isSelected && <View style={styles.underlineTabIndicator} />}
                   </TouchableOpacity>
                 );
               })}
@@ -1660,7 +1647,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
             )}
 
             {/* Section: BHK (if Residential and not Plot) */}
-            {category === "Residential" && propertyType !== "Plot / Land" && (
+            {category === "Residential" && !isLandType(propertyType) && (
               <>
                 <Text style={styles.fieldHeading}>BHK Configuration</Text>
                 <View style={styles.chipsRow}>
@@ -2578,7 +2565,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
             {/* CORE HEADLINE CARD */}
             <View style={styles.buyerCard}>
               <Text style={styles.buyerTitle}>
-                {category === "Residential" && propertyType !== "Plot / Land"
+                {category === "Residential" && !isLandType(propertyType)
                   ? `${bhk} ${propertyType}`
                   : `${category} ${propertyType}`}
               </Text>
@@ -3223,7 +3210,7 @@ const styles = StyleSheet.create({
   saveDraftBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     borderWidth: 1,
     borderColor: COLORS.primary,
@@ -3288,44 +3275,39 @@ const styles = StyleSheet.create({
   segmentedRow: {
     flexDirection: "row",
     backgroundColor: "#F1F5F9",
-    borderRadius: 14,
+    borderRadius: 6,
     padding: 3.5,
     marginBottom: 14,
   },
   underlineTabRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
     marginBottom: 16,
   },
+  // "You're looking to?" tabs: selected = filled brand block, others plain text.
   underlineTabItem: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 11,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
-    position: "relative",
-    marginRight: 6,
+  },
+  underlineTabItemActive: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
   },
   underlineTabText: {
-    fontSize: 14.5,
+    fontSize: 16,
     letterSpacing: -0.2,
   },
   underlineTabTextActive: {
-    color: "#0F172A",
-    fontWeight: "700",
-  },
-  underlineTabTextInactive: {
-    color: "#64748B",
+    color: "#FFFFFF",
     fontWeight: "500",
   },
-  underlineTabIndicator: {
-    position: "absolute",
-    bottom: 0,
-    left: 16,
-    right: 16,
-    height: 2.5,
-    backgroundColor: COLORS.primary,
-    borderRadius: 2,
+  underlineTabTextInactive: {
+    color: "#111827",
+    fontWeight: "400",
   },
   chipsRow: {
     flexDirection: "row",
@@ -3389,7 +3371,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
+    borderRadius: 10,
     paddingVertical: 11,
     marginTop: 12,
   },
@@ -3404,7 +3386,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderRadius: 12,
+    borderRadius: 6,
     paddingHorizontal: 14,
     minHeight: 48,
   },
@@ -3554,7 +3536,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: "#CBD5E1",
     paddingHorizontal: 4,
@@ -3563,7 +3545,7 @@ const styles = StyleSheet.create({
   stepperBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 6,
     backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
@@ -3622,7 +3604,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EFF6FF",
     borderWidth: 1,
     borderColor: "#BFDBFE",
-    borderRadius: 18,
+    borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
@@ -3858,7 +3840,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     height: 50,
     paddingHorizontal: 20,
-    borderRadius: 25,
+    borderRadius: 6,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -3873,7 +3855,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     height: 50,
-    borderRadius: 25,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
@@ -3890,7 +3872,7 @@ const styles = StyleSheet.create({
   modalActionBtn: {
     flexDirection: "row",
     height: 50,
-    borderRadius: 25,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
