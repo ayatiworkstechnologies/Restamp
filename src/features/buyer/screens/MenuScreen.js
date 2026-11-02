@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   X,
   Building,
-  Building2,
   Home,
   Briefcase,
   Calculator,
@@ -32,6 +31,7 @@ import COLORS from "../../../shared/constants/colors.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { enterOwnerFlow, ensureOwnerRole } from "../../../shared/api/users.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
+import { useOwner } from "../../owner/context/OwnerContext.js";
 import { useAgent } from "../../agent/context/AgentContext.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 
@@ -153,56 +153,82 @@ const COMMERCIAL_TYPES = [
   },
 ];
 
-/* 3 Compact Owner Plans */
+/* 4 Official Owner Plans */
 const OWNER_PLANS = {
   residential: [
     {
-      id: "owner-basic",
-      name: "Basic",
+      id: "owner-starter",
+      name: "RESTAMP STARTER",
       titleColor: "#0F172A",
-      price: "₹0",
-      priceSub1: "free forever",
-      priceSub2: "zero brokerage assurance",
+      price: "₹599",
+      originalPrice: "₹1,198",
+      priceNumeric: 599,
+      validity: "30 Days",
+      listingLimit: 1,
+      priceSub1: "One-time payment · 30 Days",
+      priceSub2: "1 property listing",
       isPopular: false,
-      buttonText: "Get started",
+      buttonText: "Choose Plan",
       features: [
-        "30 Days listing visibility",
-        "Direct buyer in-app inquiries",
-        "Zero brokerage assurance",
+        "Unlimited Leads",
+        "City-Wide Reach",
+      ],
+    },
+    {
+      id: "owner-plus",
+      name: "RESTAMP PLUS",
+      titleColor: "#0F172A",
+      price: "₹999",
+      originalPrice: "₹1,998",
+      priceNumeric: 999,
+      validity: "30 Days",
+      listingLimit: 2,
+      priceSub1: "One-time payment · 30 Days",
+      priceSub2: "2 property listings",
+      isPopular: false,
+      buttonText: "Choose Plan",
+      features: [
+        "Unlimited Leads",
+        "City-Wide Reach",
       ],
     },
     {
       id: "owner-gold",
-      name: "Gold Assist",
-      titlePrefix: "Gold ",
-      titlePrefixColor: "#2563EB",
+      name: "RESTAMP GOLD",
       titleColor: "#0F172A",
       price: "₹1,999",
-      priceSub1: "for 90 days validity",
-      priceSub2: "+ GST • verified owner tag",
+      originalPrice: "₹3,998",
+      priceNumeric: 1999,
+      validity: "60 Days",
+      listingLimit: 5,
+      priceSub1: "One-time payment · 60 Days",
+      priceSub2: "5 property listings",
       isPopular: true,
-      buttonText: "Get started",
+      buttonText: "Choose Plan",
       features: [
-        "90 Days top search placement",
-        "Verified Owner badge ⭐",
-        "Direct WhatsApp & instant phone leads",
+        "Unlimited Leads",
+        "City-Wide Reach",
+        "Relationship Manager Assistance",
       ],
     },
     {
-      id: "owner-titanium",
-      name: "Titanium VIP",
-      titlePrefix: "Titanium ",
-      titlePrefixColor: "#2563EB",
+      id: "owner-premium",
+      name: "RESTAMP PREMIUM",
       titleColor: "#0F172A",
       price: "₹4,999",
-      priceSub1: "until deal closed",
-      priceSub2: "full managed advisory",
+      originalPrice: "₹9,998",
+      priceNumeric: 4999,
+      validity: "90 Days",
+      listingLimit: 10,
+      priceSub1: "One-time payment · 90 Days",
+      priceSub2: "10 property listings",
       isPopular: false,
-      buttonText: "Get started",
+      buttonText: "Choose Plan",
       features: [
-        "Listing live until sold or rented",
-        "Dedicated relationship manager",
-        "Professional photoshoot & legal drafting",
+        "Unlimited Leads",
+        "City-Wide Reach",
+        "Relationship Manager Assistance",
+        "Social Media Promotion Assistance",
       ],
     },
   ],
@@ -273,6 +299,7 @@ export default function MenuScreen({ navigation, route }) {
   const auth = useAuth();
   // Guests log in first; the plan checkout resumes after login.
   const requireAuth = useRequireAuth(navigation);
+  const { setSelectedPlanForCheckout } = useOwner();
   const [ownerSwitching, setOwnerSwitching] = useState(false);
 
   // P0 fix: backend requires the OWNER role for /owner/* endpoints.
@@ -326,35 +353,44 @@ export default function MenuScreen({ navigation, route }) {
 
   const handleSelectPlan = (plan, planRole) => {
     if (planRole === "Owner") {
-      const priceNumeric = parseInt(String(plan.price).replace(/[^0-9]/g, ""), 10) || 0;
+      const priceNumeric =
+        plan.priceNumeric !== undefined
+          ? plan.priceNumeric
+          : parseInt(String(plan.price).replace(/[^0-9]/g, ""), 10) || 0;
+
       // Free plan: no payment, straight to the Owner Dashboard.
       if (priceNumeric === 0) {
         handleOpenOwnerDashboard();
         return;
       }
-      // Paid plan: switch to OWNER first (owner screens need the role), then
-      // confirm -> payment -> success -> Owner Dashboard.
-      requireAuth(async () => {
-        if (ownerSwitching) return;
-        setOwnerSwitching(true);
-        try {
-          await ensureOwnerRole(auth);
-          navigation.navigate("OwnerPlanConfirm", {
-            plan: {
-              id: plan.id,
-              name: plan.name,
-              price: plan.price,
-              priceNumeric,
-              validity: plan.validity || planValidityLabel(plan.priceSub1),
-              listingLimit: plan.listingLimit || 5,
-            },
-          });
-        } catch (e) {
-          Alert.alert("Could not open Owner plans", "Please try again in a moment.");
-        } finally {
-          setOwnerSwitching(false);
-        }
-      });
+
+      const planPayload = {
+        id: plan.id,
+        name: plan.name,
+        price: plan.price,
+        originalPrice: plan.originalPrice,
+        priceNumeric,
+        validity: plan.validity || planValidityLabel(plan.priceSub1),
+        listingLimit: plan.listingLimit || 1,
+        features: plan.features,
+      };
+
+      try {
+        setSelectedPlanForCheckout?.({
+          ...planPayload,
+          category: propertyCategory,
+        });
+      } catch (err) {
+        // Safe fallback if context is unavailable
+      }
+
+      // Smooth direct navigation to OwnerPlanConfirm
+      const rootNav = navigation?.getParent?.() || navigation;
+      try {
+        rootNav.navigate("OwnerPlanConfirm", { plan: planPayload });
+      } catch (err) {
+        navigation.navigate("OwnerPlanConfirm", { plan: planPayload });
+      }
       return;
     }
 
@@ -487,11 +523,6 @@ export default function MenuScreen({ navigation, route }) {
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.paneSubtitle}>
-                  {isAgentTab
-                    ? "Pick 5, 10 or 15 Chennai localities for buyer enquiries"
-                    : "Direct buyer inquiries • 0% brokerage in Chennai"}
-                </Text>
               </View>
 
               {/* Active agent plan: jump straight to the dashboard */}
@@ -518,33 +549,10 @@ export default function MenuScreen({ navigation, route }) {
                 </View>
               )}
 
-              {/* Quick Direct Owner Access Banner (Testing - Skip Payment) */}
-              {activeVerticalTab === "owner" && (
-                <View style={styles.ownerTestBanner}>
-                  <View style={styles.ownerTestLeft}>
-                    <Building2 size={17} color="#2563EB" style={{ marginRight: 8 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.ownerTestTitle}>Owner Mode (Testing)</Text>
-                      <Text style={styles.ownerTestSub}>
-                        Skip payment & open Owner Dashboard
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.ownerTestBtn}
-                    onPress={handleOpenOwnerDashboard}
-                    disabled={ownerSwitching}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.ownerTestBtnText}>Open</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
               {/* Section Header */}
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.paneSectionHeader}>
-                  CHOOSE A PLAN • 3 TIERS
+                  CHOOSE A PLAN • {currentPlans.length} TIERS
                 </Text>
               </View>
 

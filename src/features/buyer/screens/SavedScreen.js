@@ -78,6 +78,7 @@ import {
   toUiCallEvent,
 } from "../api/calls.js";
 import { revealContactPhone } from "../../../shared/api/contact.js";
+import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
 import { fetchListingDetail } from "../api/listings.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 
@@ -425,6 +426,10 @@ export default function SavedScreen({ navigation, route }) {
         onDigits(digits);
       },
       (e) => {
+        if (isBuyerPlanRequired(e)) {
+          navigation.navigate(BUYER_PLANS_ROUTE, { reason: "quota" });
+          return;
+        }
         if (e && (e.status === 401 || e.kind === "login")) {
           requireAuth(retry);
           return;

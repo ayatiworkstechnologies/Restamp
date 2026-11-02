@@ -1380,6 +1380,29 @@ export function toOwnerProperty(apiListing) {
     builtUpArea: apiListing.area_value ? `${apiListing.area_value} ${apiListing.area_unit || "sqft"}` : "",
     bedrooms: apiListing.bedrooms !== null ? String(apiListing.bedrooms) : "",
     bathrooms: apiListing.bathrooms !== null ? String(apiListing.bathrooms) : "",
+    // Full detail fields for the owner preview modal (previously dropped).
+    balconies: apiListing.balconies != null ? String(apiListing.balconies) : "",
+    bhk: apiListing.bedrooms != null ? String(apiListing.bedrooms) : "",
+    carpetArea:
+      apiListing.built_up_area != null && apiListing.area_value != null &&
+      apiListing.area_value !== apiListing.built_up_area
+        ? `${apiListing.area_value} ${apiListing.area_unit || "sqft"}`
+        : "",
+    superBuiltUpArea: apiListing.super_built_up_area ? `${apiListing.super_built_up_area} sqft` : "",
+    furnishing: apiListing.furnishing
+      ? { SEMI_FURNISHED: "Semi-Furnished", FURNISHED: "Furnished", UNFURNISHED: "Unfurnished" }[apiListing.furnishing] || apiListing.furnishing
+      : "",
+    floor: apiListing.floor_on || "",
+    totalFloors: apiListing.total_floors != null ? String(apiListing.total_floors) : "",
+    facing: apiListing.facing || "",
+    propertyAge: apiListing.property_age_band || "",
+    coveredParking: apiListing.covered_parking ?? null,
+    openParking: apiListing.open_parking ?? null,
+    deposit: apiListing.rent_terms?.security_deposit_paise ? apiListing.rent_terms.security_deposit_paise / 100 : null,
+    maintenance: apiListing.rent_terms?.maintenance_paise ? apiListing.rent_terms.maintenance_paise / 100 : null,
+    availableFrom: apiListing.rent_terms?.available_from || "",
+    amenities: (apiListing.amenities || []).map((a) => (typeof a === "string" ? a : a?.name || a?.label)).filter(Boolean),
+    photos: (apiListing.photos || []).map((p) => ({ url: p.url, category: p.category })),
     // UI status buckets mirror the backend state machine: terminal
     // SOLD/RENTED/LEASED read as closed (off-market); only VERIFIED+AVAILABLE
     // is active. PENDING/REJECTED/CLOSED/EXPIRED keep their own buckets.
@@ -1393,7 +1416,7 @@ export function toOwnerProperty(apiListing) {
     verification_status: apiListing.verification_status,
     listing_status: apiListing.listing_status,
     removed: apiListing.removed === true,
-    images: [coverPhoto],
+    images: Array.isArray(apiListing.gallery) && apiListing.gallery.length ? apiListing.gallery : [coverPhoto],
     coverPhoto,
     description: apiListing.description || "",
     // Enquiry/visit totals come from the backend's owner-scoped counters

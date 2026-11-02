@@ -9,7 +9,7 @@ export default function SubscriptionCard({
   onManagePlan,
   style,
 }) {
-  const planName = subscription?.planName || subscription?.name || "Owner Pro Plan";
+  const planName = subscription?.planName || subscription?.name || "RESTAMP STARTER";
   const daysRemaining = subscription?.daysRemaining ?? 24;
   const usedListings = subscription?.usedListings ?? 3;
   const listingLimit = subscription?.listingLimit ?? 5;

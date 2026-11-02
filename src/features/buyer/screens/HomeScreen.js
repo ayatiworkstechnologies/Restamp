@@ -51,6 +51,7 @@ import { useWishlist } from "../context/WishlistContext.js";
 import { useOwner } from "../../owner/context/OwnerContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
+import ViewNumberButton from "../components/ViewNumberButton.js";
 import { enterOwnerFlow } from "../../../shared/api/users.js";
 import PropertyDetailModal from "../components/PropertyDetailModal.js";
 import CategoryFilledIcon from "../components/CategoryFilledIcon.js";
@@ -839,6 +840,12 @@ export default function HomeScreen({ navigation }) {
                       {property.location}
                     </Text>
                   </View>
+                  <ViewNumberButton
+                    property={property}
+                    navigation={navigation}
+                    onLoginRequired={(resume) => requireAuth(resume)}
+                    style={{ marginTop: 12 }}
+                  />
                 </View>
               </TouchableOpacity>
             );

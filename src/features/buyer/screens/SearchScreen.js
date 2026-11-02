@@ -47,6 +47,7 @@ import {
   searchCardSpecs,
   validConstructionStatus,
 } from "../utils/searchCardSpecs.js";
+import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
 import { recordCallTap } from "../api/calls.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 import { useWishlist } from "../context/WishlistContext.js";
@@ -409,8 +410,13 @@ export default function SearchScreen({ navigation, route }) {
           setRevealState("failed");
         }
       },
-      () => {
+      (e) => {
         if (revealReq.current !== myReq) return;
+        if (isBuyerPlanRequired(e)) {
+          setRevealState("idle");
+          navigation.navigate(BUYER_PLANS_ROUTE, { reason: "quota" });
+          return;
+        }
         setRevealState("failed");
       }
     );

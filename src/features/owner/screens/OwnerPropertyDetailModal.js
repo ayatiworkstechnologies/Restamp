@@ -29,6 +29,10 @@ import {
   Banknote,
   Wallet,
   Wrench,
+  Bed,
+  Droplet,
+  Building2,
+  Car,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import StatusBadge from "../components/StatusBadge.js";
@@ -85,20 +89,39 @@ export default function OwnerPropertyDetailModal({
     extrapolate: "clamp",
   });
 
+  const typeLabel = property.propertyType
+    ? String(property.propertyType).charAt(0) + String(property.propertyType).slice(1).toLowerCase().replace(/_/g, " ")
+    : null;
+
   const detailItems = [
-    { label: "Built-up", value: property.builtUpArea, icon: Ruler },
-    { label: "Carpet", value: property.carpetArea, icon: Home },
+    { label: "Property Type", value: typeLabel, icon: Home },
+    { label: "Bedrooms", value: property.bedrooms, icon: Bed },
+    { label: "Bathrooms", value: property.bathrooms, icon: Droplet },
+    { label: "Balconies", value: property.balconies, icon: Building2 },
+    { label: "Built-up Area", value: property.builtUpArea, icon: Ruler },
+    { label: "Carpet Area", value: property.carpetArea, icon: Home },
     { label: "Furnishing", value: property.furnishing, icon: Armchair },
     {
-      label: "Floor",
+      label: "Floor Level",
       value:
         property.floor && property.totalFloors
           ? `${property.floor} of ${property.totalFloors}`
           : null,
       icon: Layers,
     },
-    { label: "Facing", value: property.facing, icon: ArrowUpDown },
-    { label: "Age", value: property.propertyAge, icon: Calendar },
+    { label: "Facing Direction", value: property.facing, icon: ArrowUpDown },
+    { label: "Property Age", value: property.propertyAge, icon: Calendar },
+    {
+      label: "Parking",
+      value:
+        property.coveredParking || property.openParking
+          ? [
+              property.coveredParking ? `${property.coveredParking} Covered` : null,
+              property.openParking ? `${property.openParking} Open` : null,
+            ].filter(Boolean).join(", ")
+          : null,
+      icon: Car,
+    },
   ].filter((item) => item.value);
 
   const metaString = [
@@ -275,21 +298,38 @@ export default function OwnerPropertyDetailModal({
           <View style={styles.divider} />
 
           {/* Property Details */}
+          {/* Overview — mirrors the buyer property detail page */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Overview</Text>
+            <Text style={styles.descriptionText}>
+              {property.description || "You haven't added a description yet."}
+            </Text>
+          </View>
+
+          <View style={styles.divider} />
+
           {detailItems.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Details</Text>
+              <Text style={styles.sectionTitle}>Property Details</Text>
               <View style={styles.detailGrid}>
                 {detailItems.map((item, idx) => {
                   const IconComp = item.icon;
                   return (
                     <View key={idx} style={styles.detailCell}>
-                      <IconComp
-                        size={15}
-                        color={COLORS.textSecondary}
-                        style={{ marginBottom: 6 }}
-                      />
-                      <Text style={styles.detailValue}>{item.value}</Text>
-                      <Text style={styles.detailLabel}>{item.label}</Text>
+                      <View style={styles.detailValueRow}>
+                        <IconComp
+                          size={18}
+                          color="#0F172A"
+                          strokeWidth={1.8}
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text style={styles.detailValue} numberOfLines={1}>
+                          {item.value}
+                        </Text>
+                      </View>
+                      <Text style={styles.detailLabel} numberOfLines={1}>
+                        {item.label}
+                      </Text>
                     </View>
                   );
                 })}
@@ -652,35 +692,44 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "600",
-    color: COLORS.textDark,
-    marginBottom: 14,
-    letterSpacing: -0.1,
+    color: "#0F172A",
+    marginBottom: 10,
+  },
+  descriptionText: {
+    fontSize: 15,
+    color: "#475569",
+    lineHeight: 23,
+    fontWeight: "400",
   },
 
-  /* ── Detail grid ── */
+  /* ── Detail grid (same layout as buyer PropertyDetailModal) ── */
   detailGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    rowGap: 18,
+    marginTop: 6,
   },
   detailCell: {
-    width: "33.33%",
+    width: "50%",
+    paddingRight: 10,
+  },
+  detailValueRow: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
   },
   detailValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textDark,
-    textAlign: "center",
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+    flexShrink: 1,
   },
   detailLabel: {
-    fontSize: 11,
+    fontSize: 13,
+    color: "#64748B",
+    marginTop: 3,
     fontWeight: "400",
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    letterSpacing: 0.2,
   },
 
   /* ── Amenities ── */

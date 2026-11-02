@@ -20,6 +20,7 @@ import MenuScreen from "../../features/buyer/screens/MenuScreen.js";
 import EnquiriesScreen from "../../features/buyer/screens/EnquiriesScreen.js";
 import NotificationScreen from "../../features/buyer/screens/NotificationScreen.js";
 import ActiveMembershipsScreen from "../../features/buyer/screens/ActiveMembershipsScreen.js";
+import BuyerPlansScreen from "../../features/buyer/screens/BuyerPlansScreen.js";
 
 import OwnerNavigator from "../../features/owner/navigation/OwnerNavigator.js";
 import OwnerPlansScreen from "../../features/owner/screens/OwnerPlansScreen.js";
@@ -182,6 +183,7 @@ const guarded = (Component) => {
 const GuardedProfile = guarded(ProfileScreen);
 const GuardedEnquiries = guarded(EnquiriesScreen);
 const GuardedActiveMemberships = guarded(ActiveMembershipsScreen);
+const GuardedBuyerPlans = guarded(BuyerPlansScreen);
 const GuardedNotifications = guarded(NotificationScreen);
 const GuardedOwnerNavigator = guarded(OwnerNavigator);
 const GuardedOwnerPlans = guarded(OwnerPlansScreen);
@@ -257,9 +259,12 @@ export default function AppNavigator() {
           }}
         />
 
+        {/* BUYER PLANS (lead quota — reached when free contacts are used up) */}
+        <Stack.Screen name="BuyerPlans" component={GuardedBuyerPlans} />
+
         {/* OWNER FLOW (Entry, Subscription, Payment, Success/Failed, Navigator) */}
         <Stack.Screen name="OwnerPlans" component={GuardedOwnerPlans} />
-        <Stack.Screen name="OwnerPlanConfirm" component={GuardedOwnerPlanConfirm} />
+        <Stack.Screen name="OwnerPlanConfirm" component={OwnerPlanConfirmScreen} />
         <Stack.Screen name="OwnerPayment" component={GuardedOwnerPayment} />
         <Stack.Screen name="OwnerPaymentSuccess" component={GuardedOwnerPaymentSuccess} />
         <Stack.Screen name="OwnerPaymentFailed" component={GuardedOwnerPaymentFailed} />

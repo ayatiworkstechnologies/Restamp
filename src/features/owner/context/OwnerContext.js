@@ -87,25 +87,26 @@ export function OwnerProvider({ children }) {
 
   // Methods
   const activateSubscription = (plan) => {
-    const validityStr = plan?.validity || "3 Months (90 Days)";
-    let days = 90;
+    const validityStr = plan?.validity || "30 Days";
+    let days = 30;
     if (validityStr.includes("30")) days = 30;
-    else if (validityStr.includes("Until Deal Closed") || validityStr.includes("VIP")) days = 365;
+    else if (validityStr.includes("60")) days = 60;
     else if (validityStr.includes("90") || validityStr.includes("3 Month")) days = 90;
+    else if (validityStr.includes("Until Deal Closed") || validityStr.includes("VIP")) days = 365;
 
     const now = new Date();
     const expiryObj = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
     const formattedStart = now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
     const formattedExpiry = expiryObj.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-    const formattedAmount = plan?.amountPaid || plan?.price || "₹2,999";
+    const formattedAmount = plan?.amountPaid || plan?.price || "₹599";
 
     const newSub = {
-      id: plan?.id || "owner-pro",
-      name: plan?.name || "Owner Pro Plan",
-      planName: plan?.name || "Owner Pro Plan",
+      id: plan?.id || "owner-starter",
+      name: plan?.name || "RESTAMP STARTER",
+      planName: plan?.name || "RESTAMP STARTER",
       validity: validityStr,
       daysRemaining: days,
-      listingLimit: plan?.listingLimit || 5,
+      listingLimit: plan?.listingLimit ?? 1,
       usedListings: properties.filter((p) => p.status === "active").length,
       price: formattedAmount,
       amountPaid: formattedAmount,

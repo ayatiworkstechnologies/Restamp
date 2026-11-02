@@ -25,17 +25,20 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useOwner } from "../context/OwnerContext.js";
+import { useAuth } from "../../auth/context/AuthContext.js";
+import { ensureOwnerRole } from "../../../shared/api/users.js";
 
 export default function OwnerPaymentScreen({ route, navigation }) {
+  const auth = useAuth();
   const { activateSubscription } = useOwner();
   const plan = route?.params?.plan || {
-    id: "owner-pro",
-    name: "Owner Pro Plan",
-    price: "₹2,999",
-    validity: "3 Months",
-    listingLimit: 5,
+    id: "owner-starter",
+    name: "RESTAMP STARTER",
+    price: "₹599",
+    validity: "30 Days",
+    listingLimit: 1,
   };
-  const totalAmount = route?.params?.totalAmount || 2999;
+  const totalAmount = route?.params?.totalAmount || 599;
   const formattedAmount = route?.params?.formattedAmount || `₹${totalAmount.toLocaleString("en-IN")}`;
   // Order summary from the confirmed plan (price before coupon, coupon discount).
   const orderAmount = route?.params?.basePrice ?? plan.priceNumeric ?? totalAmount;
@@ -91,10 +94,11 @@ export default function OwnerPaymentScreen({ route, navigation }) {
       }
       const txnId = `SIM-${Date.now().toString().slice(-8)}`;
       activateSubscription({ ...plan, amountPaid: formattedAmount, txnId });
+      ensureOwnerRole(auth).catch(() => {});
       navigation.navigate("OwnerPaymentSuccess", {
         planName: plan.name,
-        planValidity: plan.validity || "3 Months (90 Days)",
-        listingLimit: `Up to ${plan.listingLimit || 5} Active Listings`,
+        planValidity: plan.validity || "30 Days",
+        listingLimit: `Up to ${plan.listingLimit || 1} Active Listing${(plan.listingLimit || 1) > 1 ? "s" : ""}`,
         amountPaid: formattedAmount,
         txnId,
       });

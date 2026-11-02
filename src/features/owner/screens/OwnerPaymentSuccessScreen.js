@@ -20,12 +20,15 @@ import {
   CheckCircle2,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import { useAuth } from "../../auth/context/AuthContext.js";
+import { ensureOwnerRole } from "../../../shared/api/users.js";
 
 export default function OwnerPaymentSuccessScreen({ route, navigation }) {
-  const planName = route?.params?.planName || "Owner Pro Plan";
-  const planValidity = route?.params?.planValidity || "3 Months";
-  const listingLimit = route?.params?.listingLimit || "Up to 5 Active Listings";
-  const amountPaid = route?.params?.amountPaid || "₹2,999";
+  const auth = useAuth();
+  const planName = route?.params?.planName || "RESTAMP STARTER";
+  const planValidity = route?.params?.planValidity || "30 Days";
+  const listingLimit = route?.params?.listingLimit || "Up to 1 Active Listing";
+  const amountPaid = route?.params?.amountPaid || "₹599";
   const txnId = route?.params?.txnId || "—";
 
   const scaleAnim = useRef(new Animated.Value(0.4)).current;
@@ -36,6 +39,7 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
       clearTimeout(redirectTimerRef.current);
       redirectTimerRef.current = null;
     }
+    ensureOwnerRole(auth).catch(() => {});
     // Navigate strictly to OwnerNavigator, never to Buyer Home!
     navigation.reset({
       index: 0,

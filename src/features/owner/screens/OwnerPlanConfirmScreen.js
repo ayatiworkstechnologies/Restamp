@@ -21,22 +21,27 @@ import {
   Zap,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import { useRequireAuth } from "../../auth/useRequireAuth.js";
 
 export default function OwnerPlanConfirmScreen({ route, navigation }) {
   const plan = route?.params?.plan || {
-    id: "owner-pro",
-    name: "Owner Pro Plan",
-    price: "₹2,999",
-    priceNumeric: 2999,
-    validity: "3 Months (90 Days)",
-    listingLimit: 5,
+    id: "owner-starter",
+    name: "RESTAMP STARTER",
+    price: "₹599",
+    priceNumeric: 599,
+    validity: "30 Days",
+    listingLimit: 1,
+    features: [
+      "Unlimited Leads",
+      "City-Wide Reach",
+    ],
   };
 
   const [couponCode, setCouponCode] = useState("");
   const [discount, setDiscount] = useState(0);
   const [couponApplied, setCouponApplied] = useState(false);
 
-  const basePrice = plan.priceNumeric || 2999;
+  const basePrice = plan.priceNumeric || 599;
   const totalAmount = basePrice - discount;
 
   const handleApplyCoupon = () => {
@@ -51,13 +56,17 @@ export default function OwnerPlanConfirmScreen({ route, navigation }) {
     }
   };
 
+  const requireAuth = useRequireAuth(navigation);
+
   const handleProceedToPayment = () => {
-    navigation.navigate("OwnerPayment", {
-      plan,
-      basePrice,
-      discount,
-      totalAmount,
-      formattedAmount: `₹${totalAmount.toLocaleString("en-IN")}`,
+    requireAuth(() => {
+      navigation.navigate("OwnerPayment", {
+        plan,
+        basePrice,
+        discount,
+        totalAmount,
+        formattedAmount: `₹${totalAmount.toLocaleString("en-IN")}`,
+      });
     });
   };
 
@@ -122,18 +131,16 @@ export default function OwnerPlanConfirmScreen({ route, navigation }) {
           {/* Benefits Checklist */}
           <View style={styles.benefitsDivider} />
           <View style={styles.benefitsList}>
-            <View style={styles.benefitItem}>
-              <CheckCircle2 size={13} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.benefitText}>0% Brokerage & direct buyer inquiries</Text>
-            </View>
-            <View style={styles.benefitItem}>
-              <CheckCircle2 size={13} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.benefitText}>Verified Owner badge on search results</Text>
-            </View>
-            <View style={styles.benefitItem}>
-              <CheckCircle2 size={13} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.benefitText}>Site visit scheduling & priority placement</Text>
-            </View>
+            {(plan.features && plan.features.length > 0 ? plan.features : [
+              "0% Brokerage & direct buyer inquiries",
+              "Verified Owner badge on search results",
+              "Site visit scheduling & priority placement",
+            ]).map((feat, fIdx) => (
+              <View key={fIdx} style={styles.benefitItem}>
+                <CheckCircle2 size={13} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.benefitText}>{feat}</Text>
+              </View>
+            ))}
           </View>
         </View>
 

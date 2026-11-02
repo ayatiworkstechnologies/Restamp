@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
   },
   filterPillActive: {
-    backgroundColor: "#0F172A",
+    backgroundColor: "#2563EB",
   },
   filterPillText: {
     fontSize: 13.5,

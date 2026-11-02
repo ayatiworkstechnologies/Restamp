@@ -61,6 +61,8 @@ import PropertyGalleryModal from "./PropertyGalleryModal.js";
 import ScheduleVisitModal from "./ScheduleVisitModal.js";
 import { createEnquiry } from "../api/enquiries.js";
 import { revealContactPhone } from "../../../shared/api/contact.js";
+import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
+import { useNavigation } from "@react-navigation/native";
 import { recordViewed } from "../api/viewed.js";
 import { recordCallTap } from "../api/calls.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
@@ -140,6 +142,7 @@ function PropertyDetailModal({
   onViewRecorded,
 }) {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("overview");
   const [questionText, setQuestionText] = useState("");
@@ -607,6 +610,12 @@ function PropertyDetailModal({
         });
       },
       (e) => {
+        if (isBuyerPlanRequired(e)) {
+          // Free leads used up: close the sheet and open the buyer plans.
+          if (onClose) onClose();
+          navigation.navigate(BUYER_PLANS_ROUTE, { reason: "quota" });
+          return;
+        }
         if (e && e.status === 404) {
           Alert.alert(
             "Contact Number Unavailable",
@@ -849,7 +858,9 @@ function PropertyDetailModal({
                   </TouchableOpacity>
                 ))}
 
-                {/* Final slot opens the full real gallery */}
+                {/* Final slot opens the full gallery — only when more photos exist
+                    beyond the ones shown (otherwise it just repeated photo 1). */}
+                {morePhotosCount > 0 ? (
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={() => setIsGalleryOpen(true)}
@@ -860,12 +871,11 @@ function PropertyDetailModal({
                     style={styles.thumbCardImg}
                     resizeMode="cover"
                   />
-                  {morePhotosCount > 0 ? (
-                    <View style={styles.thumbOverlay}>
-                      <Text style={styles.thumbOverlayText}>+{morePhotosCount}</Text>
-                    </View>
-                  ) : null}
+                  <View style={styles.thumbOverlay}>
+                    <Text style={styles.thumbOverlayText}>+{morePhotosCount}</Text>
+                  </View>
                 </TouchableOpacity>
+                ) : null}
               </View>
               ) : null}
             </View>
@@ -1765,15 +1775,13 @@ const styles = StyleSheet.create({
   },
   floatingThumbCard: {
     position: "absolute",
-    bottom: 14,
-    left: 14,
-    right: 14,
+    bottom: 12,
+    left: 12,
     backgroundColor: "rgba(255, 255, 255, 0.96)",
-    borderRadius: 14,
-    padding: 6,
+    borderRadius: 12,
+    padding: 4,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.14,
@@ -1783,10 +1791,10 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.7)",
   },
   thumbCardSlot: {
-    flex: 1,
-    aspectRatio: 1,
+    width: 52,
+    height: 52,
     borderRadius: 8,
-    marginHorizontal: 3,
+    marginHorizontal: 2,
     overflow: "hidden",
     position: "relative",
     backgroundColor: "#E2E8F0",

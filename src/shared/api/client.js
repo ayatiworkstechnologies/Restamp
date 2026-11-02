@@ -278,19 +278,27 @@ async function authedFetch(url, options = {}) {
  */
 async function toHttpError(response) {
   let serverDetail;
+  let serverData;
   try {
     const body = await response.json();
     serverDetail =
       body && typeof body.detail === "string" ? body.detail : undefined;
+    // Structured reasons (e.g. 402 BUYER_PLAN_REQUIRED) ride on `.data` so
+    // `.detail` stays a display-safe string for existing callers.
+    if (body && body.detail && typeof body.detail === "object" && !Array.isArray(body.detail)) {
+      serverData = body.detail;
+    }
   } catch {
     // Non-JSON (or empty) error body: no server reason to attach.
   }
-  return new ApiError(
+  const err = new ApiError(
     mapStatus(response.status),
     response.status,
     serverDetail,
     `Request failed (${response.status}).`,
   );
+  if (serverData) err.data = serverData;
+  return err;
 }
 
 export async function apiPost(path, body, extraHeaders) {
