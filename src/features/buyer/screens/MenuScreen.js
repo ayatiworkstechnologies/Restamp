@@ -34,7 +34,8 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
-import { enterOwnerFlow } from "../../../shared/api/users.js";
+import { enterOwnerFlow, ensureOwnerRole } from "../../../shared/api/users.js";
+import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import { useAgent } from "../../agent/context/AgentContext.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 
@@ -329,9 +330,20 @@ const PROPERTY_TYPE_OPTIONS = [
   "Commercial Office",
 ];
 
+// "for 90 days validity" -> "90 Days"; "until deal closed" -> "Until Deal Closed".
+const planValidityLabel = (caption) => {
+  const text = String(caption || "");
+  const days = text.match(/(\d+)\s*days?/i);
+  if (days) return `${days[1]} Days`;
+  if (/until/i.test(text)) return text.trim().replace(/\b\w/g, (c) => c.toUpperCase());
+  return "3 Months (90 Days)";
+};
+
 export default function MenuScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const auth = useAuth();
+  // Guests log in first; the plan checkout resumes after login.
+  const requireAuth = useRequireAuth(navigation);
   const [ownerSwitching, setOwnerSwitching] = useState(false);
 
   // P0 fix: backend requires the OWNER role for /owner/* endpoints.
@@ -439,8 +451,35 @@ export default function MenuScreen({ navigation, route }) {
 
   const handleSelectPlan = (plan, planRole) => {
     if (planRole === "Owner") {
-      // Switch backend role to OWNER first, then open Owner Dashboard.
-      handleOpenOwnerDashboard();
+      const priceNumeric = parseInt(String(plan.price).replace(/[^0-9]/g, ""), 10) || 0;
+      // Free plan: no payment, straight to the Owner Dashboard.
+      if (priceNumeric === 0) {
+        handleOpenOwnerDashboard();
+        return;
+      }
+      // Paid plan: switch to OWNER first (owner screens need the role), then
+      // confirm -> payment -> success -> Owner Dashboard.
+      requireAuth(async () => {
+        if (ownerSwitching) return;
+        setOwnerSwitching(true);
+        try {
+          await ensureOwnerRole(auth);
+          navigation.navigate("OwnerPlanConfirm", {
+            plan: {
+              id: plan.id,
+              name: plan.name,
+              price: plan.price,
+              priceNumeric,
+              validity: plan.validity || planValidityLabel(plan.priceSub1),
+              listingLimit: plan.listingLimit || 5,
+            },
+          });
+        } catch (e) {
+          Alert.alert("Could not open Owner plans", "Please try again in a moment.");
+        } finally {
+          setOwnerSwitching(false);
+        }
+      });
       return;
     }
 

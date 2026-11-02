@@ -21,7 +21,15 @@ export async function fetchListingDetail(listingId) {
   // No stock/fallback photographs: a detail with no real photos shows an
   // honest empty gallery instead of presenting stock images as the property.
   const gallery = validGallery;
-  return { ...ui, gallery };
+  // Owner-entered details shown in the Property Details grid (null when absent).
+  return {
+    ...ui,
+    gallery,
+    furnishing: data.furnishing || ui.furnishing,
+    facing: data.facing || null,
+    floorOn: data.floor_on ?? null,
+    totalFloors: data.total_floors ?? null,
+  };
 }
 
 /**

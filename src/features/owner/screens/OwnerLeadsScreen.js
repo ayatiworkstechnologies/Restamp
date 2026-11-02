@@ -11,6 +11,7 @@ import {
   Modal,
   Pressable,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -31,6 +32,8 @@ import {
   MoreVertical,
   Zap,
   Star,
+  SlidersHorizontal,
+  Search,
 } from "../../../shared/components/HugeIcon.js";
 
 import COLORS from "../../../shared/constants/colors.js";
@@ -45,7 +48,6 @@ import EmptyState from "../components/EmptyState.js";
 import OwnerSiteVisitModal from "./OwnerSiteVisitModal.js";
 import OwnerCloseLeadModal from "./OwnerCloseLeadModal.js";
 import OwnerPropertyDetailModal from "./OwnerPropertyDetailModal.js";
-import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 
 const LEAD_FILTERS = [
   "All",
@@ -120,6 +122,9 @@ export default function OwnerLeadsScreen({ navigation, route }) {
     }
   }, [route?.params?.initialTab]);
   const [showPropertyPicker, setShowPropertyPicker] = useState(false);
+  // Filter pop-up (all status filters) and free-text lead search.
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
+  const [leadSearch, setLeadSearch] = useState("");
   const [showPropertyDetailModal, setShowPropertyDetailModal] = useState(false);
   const [selectedLeadForVisit, setSelectedLeadForVisit] = useState(null);
   const [selectedLeadForClose, setSelectedLeadForClose] = useState(null);
@@ -331,6 +336,15 @@ export default function OwnerLeadsScreen({ navigation, route }) {
 
   // Filtered leads based on horizontal filter chips
   const filteredLeads = useMemo(() => {
+    const q = leadSearch.trim().toLowerCase();
+    const byStatus = filterLeadsByStatus();
+    if (!q) return byStatus;
+    return byStatus.filter((l) =>
+      [l.customerName, l.lastMessage, l.message, l.phone]
+        .some((v) => v && String(v).toLowerCase().includes(q))
+    );
+
+    function filterLeadsByStatus() {
     if (activeFilter === "All") return propertyLeads;
     if (activeFilter === "New") {
       return propertyLeads.filter((l) => l.status === "new");
@@ -348,7 +362,19 @@ export default function OwnerLeadsScreen({ navigation, route }) {
       return propertyLeads.filter((l) => l.status === "closed");
     }
     return propertyLeads;
-  }, [propertyLeads, activeFilter, activeVisitByBuyer]);
+    }
+  }, [propertyLeads, activeFilter, activeVisitByBuyer, leadSearch]);
+
+  // Lead count per status filter (chips + filter pop-up).
+  const countForFilter = (filter) => {
+    if (filter === "All") return propertyLeads.length;
+    if (filter === "New") return summaryCounts.new;
+    if (filter === "Contacted") return summaryCounts.contacted;
+    if (filter === "Visit") return summaryCounts.siteVisits;
+    if (filter === "Negotiating") return propertyLeads.filter((l) => l.status === "negotiating").length;
+    if (filter === "Closed") return propertyLeads.filter((l) => l.status === "closed").length;
+    return 0;
+  };
 
   // Actions (P3 honesty: real leads carry no phone; contact actions show an
   // honest unavailable message instead of dialing a sample number.)
@@ -441,8 +467,6 @@ export default function OwnerLeadsScreen({ navigation, route }) {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* ================= TOP BRAND HEADER (Matching Buyer Page) ================= */}
-      <AppBrandHeader currentRole="owner" />
 
       <ScrollView
         style={styles.container}
@@ -454,121 +478,26 @@ export default function OwnerLeadsScreen({ navigation, route }) {
           <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A", letterSpacing: -0.4 }}>
             Buyer Leads
           </Text>
-          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-            Manage enquiries received for your properties
-          </Text>
-        </View>
-        {/* ================= 1ST SECTION: SEGMENTED PILL BAR ================= */}
-        <View style={styles.pillContainer}>
-          <TouchableOpacity
-            style={[
-              styles.pillItem,
-              activeFilter === "All" && styles.pillItemActive,
-            ]}
-            onPress={() => setActiveFilter("All")}
-            activeOpacity={0.75}
-          >
-            <Text
-              style={[
-                styles.pillLabel,
-                activeFilter === "All" && styles.pillLabelActive,
-              ]}
-              numberOfLines={1}
-            >
-              Total
-            </Text>
-            <Text
-              style={[
-                styles.pillCount,
-                activeFilter === "All" && styles.pillCountActive,
-              ]}
-            >
-              {summaryCounts.all}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.pillItem,
-              activeFilter === "New" && styles.pillItemActive,
-            ]}
-            onPress={() => setActiveFilter("New")}
-            activeOpacity={0.75}
-          >
-            <Text
-              style={[
-                styles.pillLabel,
-                activeFilter === "New" && styles.pillLabelActive,
-              ]}
-              numberOfLines={1}
-            >
-              New
-            </Text>
-            <Text
-              style={[
-                styles.pillCount,
-                activeFilter === "New" && styles.pillCountActive,
-              ]}
-            >
-              {summaryCounts.new}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.pillItem,
-              activeFilter === "Contacted" && styles.pillItemActive,
-            ]}
-            onPress={() => setActiveFilter("Contacted")}
-            activeOpacity={0.75}
-          >
-            <Text
-              style={[
-                styles.pillLabel,
-                activeFilter === "Contacted" && styles.pillLabelActive,
-              ]}
-              numberOfLines={1}
-            >
-              Contacted
-            </Text>
-            <Text
-              style={[
-                styles.pillCount,
-                activeFilter === "Contacted" && styles.pillCountActive,
-              ]}
-            >
-              {summaryCounts.contacted}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.pillItem,
-              activeFilter === "Visit" && styles.pillItemActive,
-            ]}
-            onPress={() => setActiveFilter("Visit")}
-            activeOpacity={0.75}
-          >
-            <Text
-              style={[
-                styles.pillLabel,
-                activeFilter === "Visit" && styles.pillLabelActive,
-              ]}
-              numberOfLines={1}
-            >
-              Visits
-            </Text>
-            <Text
-              style={[
-                styles.pillCount,
-                activeFilter === "Visit" && styles.pillCountActive,
-              ]}
-            >
-              {summaryCounts.siteVisits}
-            </Text>
-          </TouchableOpacity>
         </View>
 
+        {/* Lead search: buyer name, message or phone */}
+        <View style={styles.leadSearchBox}>
+          <Search size={17} color="#94A3B8" />
+          <TextInput
+            style={styles.leadSearchInput}
+            value={leadSearch}
+            onChangeText={setLeadSearch}
+            placeholder="Search buyer leads"
+            placeholderTextColor="#94A3B8"
+            returnKeyType="search"
+            underlineColorAndroid="transparent"
+          />
+          {leadSearch ? (
+            <TouchableOpacity onPress={() => setLeadSearch("")} hitSlop={8} accessibilityLabel="Clear search">
+              <X size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
         {/* ================= PROPERTY SELECTOR ================= */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionLabel}>SELECTED PROPERTY</Text>
@@ -643,18 +572,18 @@ export default function OwnerLeadsScreen({ navigation, route }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filtersScroll}
           >
+            {/* Filter icon: opens the pop-up with all lead filters. */}
+            <TouchableOpacity
+              style={styles.filterIconBtn}
+              onPress={() => setShowFilterSheet(true)}
+              activeOpacity={0.8}
+              accessibilityLabel="Open lead filters"
+            >
+              <SlidersHorizontal size={16} color="#475569" strokeWidth={2} />
+            </TouchableOpacity>
             {LEAD_FILTERS.map((filter) => {
               const isActive = activeFilter === filter;
-              let filterCount = 0;
-              if (filter === "All") filterCount = propertyLeads.length;
-              else if (filter === "New") filterCount = summaryCounts.new;
-              else if (filter === "Contacted") filterCount = summaryCounts.contacted;
-              else if (filter === "Visit") filterCount = summaryCounts.siteVisits;
-              else if (filter === "Negotiating") {
-                filterCount = propertyLeads.filter((l) => l.status === "negotiating").length;
-              } else if (filter === "Closed") {
-                filterCount = propertyLeads.filter((l) => l.status === "closed").length;
-              }
+              const filterCount = countForFilter(filter);
 
               return (
                 <TouchableOpacity
@@ -880,6 +809,75 @@ export default function OwnerLeadsScreen({ navigation, route }) {
       </ScrollView>
 
       {/* ================= PROPERTY PICKER MODAL ================= */}
+      {/* ================= ALL FILTERS POP-UP ================= */}
+      <Modal
+        visible={showFilterSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFilterSheet(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowFilterSheet(false)}>
+          <Pressable style={styles.pickerSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Filter Leads</Text>
+                <Text style={styles.sheetSubtitle}>Show buyer leads by status or property</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowFilterSheet(false)}
+                activeOpacity={0.7}
+                style={styles.sheetCloseBtn}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.filterSheetLabel}>STATUS</Text>
+            {LEAD_FILTERS.map((filter) => {
+              const isActive = activeFilter === filter;
+              return (
+                <TouchableOpacity
+                  key={filter}
+                  style={[styles.filterSheetRow, isActive && styles.filterSheetRowActive]}
+                  onPress={() => {
+                    setActiveFilter(filter);
+                    setShowFilterSheet(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.filterSheetRowText, isActive && styles.filterSheetRowTextActive]}>
+                    {filter}
+                  </Text>
+                  <View style={styles.filterSheetRowRight}>
+                    <Text style={styles.filterSheetCount}>{countForFilter(filter)}</Text>
+                    {isActive ? <Check size={16} color="#2563EB" /> : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            <Text style={[styles.filterSheetLabel, { marginTop: 16 }]}>PROPERTY</Text>
+            <TouchableOpacity
+              style={styles.filterSheetRow}
+              onPress={() => {
+                setShowFilterSheet(false);
+                setShowPropertyPicker(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.filterSheetRowText} numberOfLines={1}>
+                {selectedProperty?.title || "Choose property"}
+              </Text>
+              <View style={styles.filterSheetRowRight}>
+                <Text style={styles.filterSheetLink}>Switch</Text>
+                <ChevronRight size={16} color="#2563EB" />
+              </View>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal
         visible={showPropertyPicker}
         transparent
@@ -913,6 +911,18 @@ export default function OwnerLeadsScreen({ navigation, route }) {
               style={styles.pickerList}
               showsVerticalScrollIndicator={false}
             >
+              {/* Empty state: the owner has no listed properties yet. */}
+              {leadGroups.entries.length === 0 ? (
+                <View style={styles.pickerEmpty}>
+                  <View style={styles.pickerEmptyIcon}>
+                    <Building2 size={22} color="#94A3B8" />
+                  </View>
+                  <Text style={styles.pickerEmptyTitle}>0 Properties</Text>
+                  <Text style={styles.pickerEmptyText}>
+                    You have no listed properties yet. Add a property to start receiving buyer leads.
+                  </Text>
+                </View>
+              ) : null}
               {leadGroups.entries.map((prop) => {
                 const isSelected = prop.id === selectedProperty?.id;
                 const propLeadsCount = leadGroups.leadsFor(prop).length;
@@ -1128,53 +1138,6 @@ const styles = StyleSheet.create({
   },
 
   /* 1ST SECTION: SEGMENTED PILL BAR */
-  pillContainer: {
-    flexDirection: "row",
-    backgroundColor: "#F1F5F9",
-    borderRadius: 24,
-    padding: 4,
-    marginBottom: 20,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  pillItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 9,
-    paddingHorizontal: 2,
-    borderRadius: 20,
-  },
-  pillItemActive: {
-    backgroundColor: "#2563EB",
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.22,
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  pillLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#64748B",
-    marginBottom: 2,
-    textAlign: "center",
-  },
-  pillLabelActive: {
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "700",
-  },
-  pillCount: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#0F172A",
-    textAlign: "center",
-    letterSpacing: -0.2,
-  },
-  pillCountActive: {
-    color: "#FFFFFF",
-  },
 
   /* SECTION HEADER */
   sectionHeaderRow: {
@@ -1214,7 +1177,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
-    marginBottom: 18,
+    marginBottom: 10,
   },
   propertyThumb: {
     width: 82,
@@ -1309,57 +1272,146 @@ const styles = StyleSheet.create({
   },
 
   /* LEAD FILTERS (HORIZONTAL CHIPS) */
+  // marginTop keeps the chips clear of "SELECTED PROPERTY" when no property
+  // card is shown; with a card the total gap stays ~18.
   filtersWrapper: {
     marginHorizontal: -20,
+    marginTop: 8,
     marginBottom: 16,
   },
   filtersScroll: {
     paddingHorizontal: 20,
     gap: 8,
+    alignItems: "center",
   },
+  leadSearchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 44,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+
+  leadSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#0F172A",
+    paddingVertical: 0,
+    outlineStyle: "none",
+  },
+
+  filterSheetLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94A3B8",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+
+  filterSheetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginBottom: 6,
+    backgroundColor: "#F8FAFC",
+  },
+
+  filterSheetRowActive: {
+    backgroundColor: "#EFF6FF",
+  },
+
+  filterSheetRowText: {
+    flexShrink: 1,
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#334155",
+  },
+
+  filterSheetRowTextActive: {
+    color: "#2563EB",
+    fontWeight: "700",
+  },
+
+  filterSheetRowRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  filterSheetCount: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+
+  filterSheetLink: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#2563EB",
+  },
+
+  filterIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   filterChip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: 20,
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 17,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E2E8F0",
   },
   filterChipActive: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#EFF6FF",
     borderColor: "#2563EB",
   },
   filterChipText: {
-    fontSize: 12.5,
-    fontWeight: "600",
-    color: "#475569",
-    marginRight: 6,
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#334155",
+    marginRight: 7,
   },
   filterChipTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "700",
+    color: "#2563EB",
+    fontWeight: "600",
   },
   filterCountBadge: {
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
     backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
   },
   filterCountBadgeActive: {
-    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    backgroundColor: "#DBEAFE",
   },
   filterCountText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#475569",
+    fontSize: 10.5,
+    fontWeight: "600",
+    color: "#64748B",
   },
   filterCountTextActive: {
-    color: "#FFFFFF",
+    color: "#2563EB",
   },
 
   /* LEADS LIST & CARDS */
@@ -1541,6 +1593,36 @@ const styles = StyleSheet.create({
   pickerList: {
     maxHeight: 400,
   },
+  pickerEmpty: {
+    alignItems: "center",
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+  },
+
+  pickerEmptyIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+
+  pickerEmptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 4,
+  },
+
+  pickerEmptyText: {
+    fontSize: 13,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 19,
+  },
+
   pickerItem: {
     flexDirection: "row",
     alignItems: "center",

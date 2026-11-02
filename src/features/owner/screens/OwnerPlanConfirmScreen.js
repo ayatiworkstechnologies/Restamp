@@ -54,6 +54,8 @@ export default function OwnerPlanConfirmScreen({ route, navigation }) {
   const handleProceedToPayment = () => {
     navigation.navigate("OwnerPayment", {
       plan,
+      basePrice,
+      discount,
       totalAmount,
       formattedAmount: `₹${totalAmount.toLocaleString("en-IN")}`,
     });

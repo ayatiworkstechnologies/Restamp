@@ -223,6 +223,11 @@ export default function LoginScreen({ navigation }) {
     }
   }, [step]);
 
+  // Server role of the account that just signed in. OWNER means the account
+  // was last used in owner mode (e.g. after the owner plan flow), so it lands
+  // on the Owner dashboard instead of buyer Home.
+  const loginRoleRef = useRef(null);
+
   const enterAfterLogin = () => {
     loginSucceededRef.current = true;
     let continuation = null;
@@ -248,6 +253,18 @@ export default function LoginScreen({ navigation }) {
         navigation?.navigate("MainTabs");
       }
       plan.action();
+      return;
+    }
+    if (loginRoleRef.current === "OWNER") {
+      // Buyer tabs stay underneath so leaving owner mode still works.
+      if (navigation?.reset) {
+        navigation.reset({
+          index: 1,
+          routes: [{ name: "MainTabs" }, { name: "OwnerNavigator", params: { screen: "Dashboard" } }],
+        });
+      } else {
+        navigation?.navigate("OwnerNavigator", { screen: "Dashboard" });
+      }
       return;
     }
     if (navigation?.reset) {
@@ -345,6 +362,7 @@ export default function LoginScreen({ navigation }) {
         phone: fullPhone(),
         countryCode: selectedCountry.code,
       });
+      loginRoleRef.current = userObj?.role ?? null;
       if (userObj && userObj.isProfileComplete) {
         enterAfterLogin();
       } else {
@@ -505,6 +523,7 @@ export default function LoginScreen({ navigation }) {
     try {
       const tokenResp = await googleSignIn(idToken);
       const userObj = await loginWithToken(tokenResp.access_token);
+      loginRoleRef.current = userObj?.role ?? null;
       if (userObj && userObj.isProfileComplete) {
         enterAfterLogin();
       } else {
@@ -1286,7 +1305,7 @@ const styles = StyleSheet.create({
   },
   perplexityPrimaryBtn: {
     height: 52,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
