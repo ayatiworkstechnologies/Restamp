@@ -111,6 +111,14 @@ const getFurnishingLabel = (val) => {
 // Neutral label for a detail the owner has not provided.
 const NOT_SPECIFIED = "Not specified";
 
+// "Floor 3 of 8" / "Ground of 2" / "Floor 3" from the owner's floor fields.
+const getFloorLabel = (floorOn, totalFloors) => {
+  const raw = floorOn == null ? "" : String(floorOn).trim();
+  if (!raw) return null;
+  const floor = raw === "0" || /^g/i.test(raw) ? "Ground" : `Floor ${raw}`;
+  return totalFloors ? `${floor} of ${totalFloors}` : floor === "Ground" ? "Ground floor" : floor;
+};
+
 function PropertyDetailModal({
   visible,
   property,
@@ -149,7 +157,13 @@ function PropertyDetailModal({
   const [enquiryMessage, setEnquiryMessage] = useState(
     "Hello, I am interested in this property. Please share further details."
   );
-  const furnishingLabel = getFurnishingLabel(property?.furnishing);
+  // Owner-entered details from the live listing detail (furnishing, facing,
+  // floor). Cards opened from lists do not carry them.
+  const [liveDetail, setLiveDetail] = useState(null);
+  const furnishingLabel = getFurnishingLabel(liveDetail?.furnishing || property?.furnishing);
+  const facingLabel = liveDetail?.facing || property?.facing || null;
+  const floorLabel =
+    getFloorLabel(liveDetail?.floorOn, liveDetail?.totalFloors) || property?.floor || null;
 
   useEffect(() => {
     if (property) {
@@ -226,16 +240,18 @@ function PropertyDetailModal({
         if (!cancelled) setLiveSimilar(null);
       }
     );
-    if (!property.gallery || property.gallery.length === 0) {
-      fetchListingDetail(backendId).then(
-        (detail) => {
-          if (!cancelled) setLiveGallery(detail.gallery || []);
-        },
-        () => {
-          if (!cancelled) setLiveGallery(null);
-        }
-      );
-    }
+    const needsGallery = !property.gallery || property.gallery.length === 0;
+    setLiveDetail(null);
+    fetchListingDetail(backendId).then(
+      (detail) => {
+        if (cancelled) return;
+        setLiveDetail(detail);
+        if (needsGallery) setLiveGallery(detail.gallery || []);
+      },
+      () => {
+        if (!cancelled && needsGallery) setLiveGallery(null);
+      }
+    );
     return () => {
       cancelled = true;
     };
@@ -1057,7 +1073,7 @@ function PropertyDetailModal({
                 <View style={styles.detailValueRow}>
                   <Compass size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
                   <Text style={styles.detailValueText} numberOfLines={1}>
-                    {property.facing || NOT_SPECIFIED}
+                    {facingLabel || NOT_SPECIFIED}
                   </Text>
                 </View>
                 <Text style={styles.detailLabelText} numberOfLines={1}>
@@ -1069,7 +1085,7 @@ function PropertyDetailModal({
                 <View style={styles.detailValueRow}>
                   <Layers size={18} color="#0F172A" strokeWidth={1.8} style={{ marginRight: 6 }} />
                   <Text style={styles.detailValueText} numberOfLines={1}>
-                    {property.floor || NOT_SPECIFIED}
+                    {floorLabel || NOT_SPECIFIED}
                   </Text>
                 </View>
                 <Text style={styles.detailLabelText} numberOfLines={1}>
@@ -1321,13 +1337,13 @@ function PropertyDetailModal({
                   <CheckCircle2
                     size={17}
                     color="#16A34A"
-                    style={{ marginRight: 6 }}
+                    style={{ marginRight: 5 }}
                   />
                 ) : (
                   <Calendar
-                    size={18}
+                    size={16}
                     color={COLORS.primary}
-                    style={{ marginRight: 6 }}
+                    style={{ marginRight: 5 }}
                   />
                 )}
                 <Text
@@ -1336,6 +1352,8 @@ function PropertyDetailModal({
                     scheduledVisit && styles.siteVisitBtnTextActive,
                   ]}
                   numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
                 >
                   {scheduledVisit ? `Visit: ${scheduledVisit.date}` : "Request Site Visit"}
                 </Text>
@@ -1353,24 +1371,39 @@ function PropertyDetailModal({
               >
                 {enquirySent ? (
                   <CheckCircle2
-                    size={18}
+                    size={16}
                     color="#FFFFFF"
-                    style={{ marginRight: 6 }}
+                    style={{ marginRight: 5 }}
                   />
                 ) : (
                   <MessageSquare
-                    size={18}
+                    size={16}
                     color="#FFFFFF"
-                    style={{ marginRight: 6 }}
+                    style={{ marginRight: 5 }}
                   />
                 )}
-                <Text style={styles.sendEnquiryBtnText}>
+                <Text
+                  style={styles.sendEnquiryBtnText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
                   {enquirySending
                     ? "Sending…"
                     : enquirySent
                       ? "Enquiry Sent ✓"
                       : "Send Enquiry"}
                 </Text>
+              </TouchableOpacity>
+
+              {/* Call owner (reveals the number, then dials) */}
+              <TouchableOpacity
+                style={styles.bottomCallBtn}
+                activeOpacity={0.85}
+                onPress={() => handleCallOwner()}
+                accessibilityLabel="Call owner"
+              >
+                <Phone size={20} color="#FFFFFF" fill="#FFFFFF" />
               </TouchableOpacity>
             </>
           )}
@@ -2410,24 +2443,38 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 10,
   },
-  siteVisitBtn: {
-    flex: 1,
+  bottomCallBtn: {
+    width: 48,
     height: 48,
-    borderRadius: 100,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#16A34A",
+    backgroundColor: "#16A34A",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+
+  siteVisitBtn: {
+    flex: 1.25,
+    paddingHorizontal: 6,
+    height: 48,
+    borderRadius: 8,
     borderWidth: 1.5,
     borderColor: COLORS.primary,
     backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
+    marginRight: 8,
   },
   siteVisitBtnActive: {
     borderColor: "#16A34A",
     backgroundColor: "#F0FDF4",
   },
   siteVisitBtnText: {
-    fontSize: 16,
+    flexShrink: 1,
+    fontSize: 13,
     fontWeight: "600",
     color: COLORS.primary,
   },
@@ -2436,8 +2483,9 @@ const styles = StyleSheet.create({
   },
   sendEnquiryBtn: {
     flex: 1,
+    paddingHorizontal: 6,
     height: 48,
-    borderRadius: 10,
+    borderRadius: 8,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
@@ -2447,7 +2495,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#16A34A",
   },
   sendEnquiryBtnText: {
-    fontSize: 16,
+    flexShrink: 1,
+    fontSize: 13,
     fontWeight: "600",
     color: "#FFFFFF",
   },
@@ -2486,7 +2535,7 @@ const styles = StyleSheet.create({
   locationPickerCloseBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 8,
     backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",

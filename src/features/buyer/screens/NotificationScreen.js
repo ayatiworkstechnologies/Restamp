@@ -244,10 +244,11 @@ export default function NotificationScreen({ navigation }) {
             <View style={styles.emptyIconCircle}>
               <Bell size={34} color={COLORS.primary} strokeWidth={1.8} />
             </View>
-            <Text style={styles.emptyTitle}>All Caught Up</Text>
+            <Text style={styles.emptyTitle}>No notifications yet</Text>
             <Text style={styles.emptySubtitle}>
-              You have no {selectedCategory !== "All" ? selectedCategory.toLowerCase() : ""}{" "}
-              notifications right now.
+              {selectedCategory !== "All"
+                ? `You have no ${selectedCategory.toLowerCase()} notifications right now.`
+                : "When there are updates about your enquiries, site visits or saved homes, they will appear here."}
             </Text>
           </View>
         ) : (

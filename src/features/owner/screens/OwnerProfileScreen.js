@@ -40,7 +40,6 @@ import COLORS from "../../../shared/constants/colors.js";
 import { useOwner } from "../context/OwnerContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import ConfirmationModal from "../components/ConfirmationModal.js";
-import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 import { initialOwnerNameDraft, validateOwnerName, OWNER_NAME_MAX_LENGTH } from "../utils/ownerProfile.js";
 
 export default function OwnerProfileScreen({ navigation }) {
@@ -115,8 +114,6 @@ export default function OwnerProfileScreen({ navigation }) {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* TOP BRAND HEADER (Matching Buyer Page) */}
-      <AppBrandHeader currentRole="owner" />
 
       <ScrollView
         style={styles.container}

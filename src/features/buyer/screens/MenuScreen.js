@@ -17,24 +17,21 @@ import {
   Building2,
   Home,
   Briefcase,
-  TrendingUp,
   Calculator,
   ChevronRight,
-  ShieldCheck,
   Check,
   Search,
   Layers,
   Sparkles,
   Crown,
-  Plus,
-  Minus,
   ChevronDown,
   ArrowUpRight,
   MapPin,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
-import { enterOwnerFlow } from "../../../shared/api/users.js";
+import { enterOwnerFlow, ensureOwnerRole } from "../../../shared/api/users.js";
+import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import { useAgent } from "../../agent/context/AgentContext.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 
@@ -262,76 +259,20 @@ const OWNER_PLANS = {
   ],
 };
 
-const CHENNAI_PRICE_TRENDS = [
-  {
-    locality: "Anna Nagar",
-    avgPrice: "₹12,800/sqft",
-    change: "+8.4%",
-    rentYield: "3.8%",
-  },
-  {
-    locality: "OMR IT Corridor",
-    avgPrice: "₹6,850/sqft",
-    change: "+11.2%",
-    rentYield: "4.6%",
-  },
-  {
-    locality: "Adyar & Besant Nagar",
-    avgPrice: "₹14,500/sqft",
-    change: "+6.1%",
-    rentYield: "3.2%",
-  },
-  {
-    locality: "Velachery",
-    avgPrice: "₹8,200/sqft",
-    change: "+9.0%",
-    rentYield: "4.2%",
-  },
-  {
-    locality: "ECR Coastal Strip",
-    avgPrice: "₹10,200/sqft",
-    change: "+13.5%",
-    rentYield: "5.1%",
-  },
-  {
-    locality: "Porur & West Chennai",
-    avgPrice: "₹6,100/sqft",
-    change: "+7.8%",
-    rentYield: "4.4%",
-  },
-];
-
-const MARKET_INSIGHTS = [
-  {
-    title: "Chennai Metro Phase 2 Impact",
-    summary:
-      "Corridors near Porur and OMR Sholinganallur seeing 15% increase in capital appreciation ahead of metro line completion.",
-    tag: "High Growth",
-  },
-  {
-    title: "Commercial Grade-A Tech Parks",
-    summary:
-      "Record 4.2 million sq ft gross absorption in Chennai tech parks driven by Global Capability Centers (GCCs).",
-    tag: "Commercial Demand",
-  },
-  {
-    title: "CMDA & DTCP Approval Guide",
-    summary:
-      "Essential checklist to verify layout regularization, parent deeds, and RERA registration before buying land in Tamil Nadu.",
-    tag: "Legal Guide",
-  },
-];
-
-const PROPERTY_TYPE_OPTIONS = [
-  "Apartment / Flat",
-  "Independent House",
-  "Residential Plot",
-  "Commercial Office",
-];
+// "for 90 days validity" -> "90 Days"; "until deal closed" -> "Until Deal Closed".
+const planValidityLabel = (caption) => {
+  const text = String(caption || "");
+  const days = text.match(/(\d+)\s*days?/i);
+  if (days) return `${days[1]} Days`;
+  if (/until/i.test(text)) return text.trim().replace(/\b\w/g, (c) => c.toUpperCase());
+  return "3 Months (90 Days)";
+};
 
 export default function MenuScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const auth = useAuth();
+  // Guests log in first; the plan checkout resumes after login.
+  const requireAuth = useRequireAuth(navigation);
   const [ownerSwitching, setOwnerSwitching] = useState(false);
 
   // P0 fix: backend requires the OWNER role for /owner/* endpoints.
@@ -359,69 +300,15 @@ export default function MenuScreen({ navigation, route }) {
   // Category: 'residential' | 'commercial'
   const [propertyCategory, setPropertyCategory] = useState("residential");
 
-  // Price Estimator state (Modular Reference Style)
+  // Locality + deal type for the "Search in <locality>" shortcut. No price,
+  // rate, yield or valuation is computed: there is no verified price data.
   const [estLocality, setEstLocality] = useState("OMR");
-  const [estSqft, setEstSqft] = useState("1500");
   const [priceDealType, setPriceDealType] = useState("Buy"); // "Buy" | "Rent" | "Lease"
-  const [pricePropertyType, setPricePropertyType] =
-    useState("Apartment / Flat");
-
-  const getLocalityData = () => {
-    switch (estLocality) {
-      case "Anna Nagar":
-        return { rate: 12800, yield: "3.8%", change: "+8.4%" };
-      case "Adyar":
-        return { rate: 14500, yield: "3.2%", change: "+6.1%" };
-      case "Velachery":
-        return { rate: 8200, yield: "4.2%", change: "+9.0%" };
-      case "ECR":
-        return { rate: 10200, yield: "5.1%", change: "+13.5%" };
-      case "Porur":
-        return { rate: 6100, yield: "4.4%", change: "+7.8%" };
-      default:
-        return { rate: 6850, yield: "4.6%", change: "+11.2%" };
-    }
-  };
-
-  const calculateEstimate = () => {
-    const sqftNum = parseInt(estSqft) || 1200;
-    const data = getLocalityData();
-    if (priceDealType === "Rent") {
-      const yieldPct = parseFloat(data.yield) / 100;
-      const monthlyRent = Math.round((sqftNum * data.rate * yieldPct) / 12);
-      return `₹${monthlyRent.toLocaleString("en-IN")}/mo`;
-    } else if (priceDealType === "Lease") {
-      const leaseAmt = Math.round(sqftNum * data.rate * 0.22);
-      return `₹${(leaseAmt / 100000).toFixed(1)} Lakhs`;
-    } else {
-      const totalPrice = sqftNum * data.rate;
-      if (totalPrice >= 10000000) {
-        return `₹${(totalPrice / 10000000).toFixed(2)} Cr`;
-      }
-      return `₹${(totalPrice / 100000).toFixed(1)} Lakhs`;
-    }
-  };
-
-  const handleDecrementSqft = () => {
-    const current = parseInt(estSqft) || 1200;
-    setEstSqft(Math.max(300, current - 100).toString());
-  };
-
-  const handleIncrementSqft = () => {
-    const current = parseInt(estSqft) || 1200;
-    setEstSqft((current + 100).toString());
-  };
 
   const cyclePriceDealType = () => {
     if (priceDealType === "Buy") setPriceDealType("Rent");
     else if (priceDealType === "Rent") setPriceDealType("Lease");
     else setPriceDealType("Buy");
-  };
-
-  const cyclePropertyType = () => {
-    const idx = PROPERTY_TYPE_OPTIONS.indexOf(pricePropertyType);
-    const nextIdx = (idx + 1) % PROPERTY_TYPE_OPTIONS.length;
-    setPricePropertyType(PROPERTY_TYPE_OPTIONS[nextIdx]);
   };
 
   const handleNavigateToSearch = (params = {}) => {
@@ -439,8 +326,35 @@ export default function MenuScreen({ navigation, route }) {
 
   const handleSelectPlan = (plan, planRole) => {
     if (planRole === "Owner") {
-      // Switch backend role to OWNER first, then open Owner Dashboard.
-      handleOpenOwnerDashboard();
+      const priceNumeric = parseInt(String(plan.price).replace(/[^0-9]/g, ""), 10) || 0;
+      // Free plan: no payment, straight to the Owner Dashboard.
+      if (priceNumeric === 0) {
+        handleOpenOwnerDashboard();
+        return;
+      }
+      // Paid plan: switch to OWNER first (owner screens need the role), then
+      // confirm -> payment -> success -> Owner Dashboard.
+      requireAuth(async () => {
+        if (ownerSwitching) return;
+        setOwnerSwitching(true);
+        try {
+          await ensureOwnerRole(auth);
+          navigation.navigate("OwnerPlanConfirm", {
+            plan: {
+              id: plan.id,
+              name: plan.name,
+              price: plan.price,
+              priceNumeric,
+              validity: plan.validity || planValidityLabel(plan.priceSub1),
+              listingLimit: plan.listingLimit || 5,
+            },
+          });
+        } catch (e) {
+          Alert.alert("Could not open Owner plans", "Please try again in a moment.");
+        } finally {
+          setOwnerSwitching(false);
+        }
+      });
       return;
     }
 
@@ -487,7 +401,6 @@ export default function MenuScreen({ navigation, route }) {
       : OWNER_PLANS.commercial;
 
   const safeTopPadding = Math.max(insets.top, Platform.OS === "ios" ? 48 : 14);
-  const currentLocData = getLocalityData();
 
   return (
     <View style={styles.screenRoot}>
@@ -740,31 +653,15 @@ export default function MenuScreen({ navigation, route }) {
             <View>
               <View style={styles.paneHeader}>
                 <Text style={styles.paneMainTitle}>
-                  Price Estimator & Rates
+                  Locality Prices
                 </Text>
                 <Text style={styles.paneSubtitle}>
-                  Real-time micro-market valuation and sqft rates across Chennai
+                  Pick a Chennai locality and search its live listings
                 </Text>
               </View>
 
               {/* Modular Stack matching reference design */}
               <View style={styles.flightModuleStack}>
-                {/* 1. Dark Block: Estimated Valuation Output */}
-                <View style={styles.flightDarkCard}>
-                  <View style={styles.flightCardHeaderRow}>
-                    <Text style={styles.flightCardLabel}>
-                      CHENNAI, TN • VALUATION RESULT
-                    </Text>
-                    <TrendingUp size={16} color={COLORS.primary} />
-                  </View>
-                  <Text style={styles.flightDarkValueText}>
-                    {calculateEstimate()}
-                  </Text>
-                  <Text style={styles.flightDarkSubText}>
-                    Based on {estSqft} sqft • {priceDealType} in {estLocality}
-                  </Text>
-                </View>
-
                 {/* 2. Dark Block: Micro-Market Locality */}
                 <View style={[styles.flightDarkCard, styles.flightDarkCardAlt]}>
                   <View style={styles.flightCardHeaderRow}>
@@ -813,90 +710,26 @@ export default function MenuScreen({ navigation, route }) {
                   </ScrollView>
                 </View>
 
-                {/* 3. Light Block: Valuation Mode (Tap to switch) */}
+                {/* 3. Light Block: Deal type for the Search shortcut (Tap to switch) */}
                 <TouchableOpacity
                   style={styles.flightLightCard}
                   activeOpacity={0.8}
                   onPress={cyclePriceDealType}
                 >
                   <Text style={styles.flightCardLabelLight}>
-                    VALUATION TYPE
+                    LOOKING TO
                   </Text>
                   <View style={styles.flightLightValueRow}>
                     <Text style={styles.flightLightValueText}>
                       {priceDealType === "Buy"
-                        ? "BUY / SALE VALUE"
+                        ? "BUY"
                         : priceDealType === "Rent"
-                          ? "MONTHLY RENT"
-                          : "LONG LEASE VALUE"}
+                          ? "RENT"
+                          : "LEASE"}
                     </Text>
                     <ChevronDown size={18} color="#64748B" />
                   </View>
                 </TouchableOpacity>
-
-                {/* 4. Light Block: Property Type (Tap to switch) */}
-                <TouchableOpacity
-                  style={styles.flightLightCard}
-                  activeOpacity={0.8}
-                  onPress={cyclePropertyType}
-                >
-                  <Text style={styles.flightCardLabelLight}>PROPERTY TYPE</Text>
-                  <View style={styles.flightLightValueRow}>
-                    <Text style={styles.flightLightValueText}>
-                      {pricePropertyType.toUpperCase()}
-                    </Text>
-                    <ChevronDown size={18} color="#64748B" />
-                  </View>
-                </TouchableOpacity>
-
-                {/* 5 & 6. Side-by-Side Split Cards (Rate & Yield) */}
-                <View style={styles.flightSplitRow}>
-                  <View style={styles.flightSplitCard}>
-                    <Text style={styles.flightCardLabelLight}>
-                      AVG SQ FT RATE
-                    </Text>
-                    <Text style={styles.flightSplitValue}>
-                      ₹{currentLocData.rate}/sqft
-                    </Text>
-                  </View>
-
-                  <View style={styles.flightSplitCard}>
-                    <Text style={styles.flightCardLabelLight}>
-                      RENTAL YIELD
-                    </Text>
-                    <Text style={styles.flightSplitValue}>
-                      {currentLocData.yield} AVG
-                    </Text>
-                  </View>
-                </View>
-
-                {/* 7. Stepper Counter Block (Built-Up Area [ - ] [ + ]) */}
-                <View style={styles.flightStepperCard}>
-                  <Text style={styles.flightCardLabelLight}>BUILT-UP AREA</Text>
-                  <View style={styles.flightStepperValueRow}>
-                    <Text style={styles.flightStepperValueText}>
-                      {estSqft} SQ FT
-                    </Text>
-
-                    <View style={styles.flightStepperControls}>
-                      <TouchableOpacity
-                        style={styles.flightStepBtn}
-                        onPress={handleDecrementSqft}
-                        activeOpacity={0.7}
-                      >
-                        <Minus size={16} color="#0F172A" />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.flightStepBtn}
-                        onPress={handleIncrementSqft}
-                        activeOpacity={0.7}
-                      >
-                        <Plus size={16} color="#0F172A" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
 
                 {/* 8. Full-Width Action Button (App Original Color) */}
                 <TouchableOpacity
@@ -917,29 +750,15 @@ export default function MenuScreen({ navigation, route }) {
                 </Text>
               </View>
               <View style={styles.ratesCard}>
-                {CHENNAI_PRICE_TRENDS.map((trend, tIdx) => (
-                  <View
-                    key={trend.locality}
-                    style={[
-                      styles.rateItemRow,
-                      tIdx < CHENNAI_PRICE_TRENDS.length - 1 &&
-                        styles.rateItemBorder,
-                    ]}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.rateLocalityText}>
-                        {trend.locality}
-                      </Text>
-                      <Text style={styles.rateYieldText}>
-                        Yield: {trend.rentYield}
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text style={styles.ratePriceText}>{trend.avgPrice}</Text>
-                      <Text style={styles.rateGrowthText}>{trend.change}</Text>
-                    </View>
-                  </View>
-                ))}
+                <View style={styles.ratesEmptyRow}>
+                  <Text style={styles.ratesEmptyTitle}>
+                    Price trends are not available yet.
+                  </Text>
+                  <Text style={styles.ratesEmptySub}>
+                    Verified locality prices, changes and rental yields will
+                    appear here once real data is available.
+                  </Text>
+                </View>
               </View>
             </View>
           )}
@@ -952,45 +771,29 @@ export default function MenuScreen({ navigation, route }) {
                   Chennai Market Insights
                 </Text>
                 <Text style={styles.paneSubtitle}>
-                  Market intelligence, growth corridors, and CMDA approval
-                  checklists
+                  Search live listings across Chennai localities
                 </Text>
               </View>
 
-              {MARKET_INSIGHTS.map((insight, idx) => (
-                <View key={idx} style={styles.insightBox}>
-                  <View style={styles.insightTagBadge}>
-                    <Text style={styles.insightTagBadgeText}>
-                      {insight.tag}
-                    </Text>
-                  </View>
-                  <Text style={styles.insightTitleText}>{insight.title}</Text>
-                  <Text style={styles.insightDescText}>{insight.summary}</Text>
-                  <TouchableOpacity
-                    style={styles.insightLink}
-                    onPress={() => handleNavigateToSearch()}
-                  >
-                    <Text style={styles.insightLinkText}>
-                      Explore Properties
-                    </Text>
-                    <ChevronRight size={13} color={COLORS.primary} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-
-              <View style={styles.shieldCard}>
-                <ShieldCheck
-                  size={20}
-                  color="#16A34A"
-                  style={{ marginRight: 10 }}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.shieldTitle}>CMDA & RERA Verified</Text>
-                  <Text style={styles.shieldSub}>
-                    RESTAMP inspects parent title deeds and approval layouts
-                    before listing.
+              {/* No verified market-insights source exists, so no statistics,
+                  growth figures or guides are shown. */}
+              <View style={styles.insightBox}>
+                <Text style={styles.insightTitleText}>
+                  Market insights are not available yet.
+                </Text>
+                <Text style={styles.insightDescText}>
+                  Verified market data for Chennai localities will appear here
+                  once it is available. You can still browse live listings.
+                </Text>
+                <TouchableOpacity
+                  style={styles.insightLink}
+                  onPress={() => handleNavigateToSearch()}
+                >
+                  <Text style={styles.insightLinkText}>
+                    Explore Properties
                   </Text>
-                </View>
+                  <ChevronRight size={13} color={COLORS.primary} />
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -1394,11 +1197,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     letterSpacing: -0.5,
   },
-  flightDarkSubText: {
-    fontSize: 11.5,
-    color: "#94A3B8",
-    marginTop: 2,
-  },
   flightLocalityChipsRow: {
     marginTop: 10,
   },
@@ -1452,59 +1250,8 @@ const styles = StyleSheet.create({
   },
 
   /* Split Cards Row */
-  flightSplitRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  flightSplitCard: {
-    flex: 1,
-    backgroundColor: "#F1F5F9",
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  flightSplitValue: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#0F172A",
-    marginTop: 2,
-  },
 
   /* Stepper Counter Card */
-  flightStepperCard: {
-    backgroundColor: "#F1F5F9",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  flightStepperValueRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 2,
-  },
-  flightStepperValueText: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  flightStepperControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  flightStepBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#E2E8F0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
 
   /* Big Search Button (Original App Color) */
   flightSearchActionBtn: {
@@ -1535,34 +1282,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#EEF2F6",
   },
-  rateItemRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 10,
+  ratesEmptyRow: {
+    paddingVertical: 14,
   },
-  rateItemBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
-  rateLocalityText: {
+  ratesEmptyTitle: {
     fontSize: 13,
     fontWeight: "700",
     color: "#0F172A",
   },
-  rateYieldText: {
-    fontSize: 10.5,
+  ratesEmptySub: {
+    fontSize: 11,
     color: "#64748B",
-  },
-  ratePriceText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  rateGrowthText: {
-    fontSize: 10.5,
-    fontWeight: "700",
-    color: "#16A34A",
+    marginTop: 4,
   },
 
   /* Insights Box */
@@ -1573,19 +1304,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#EEF2F6",
     marginBottom: 10,
-  },
-  insightTagBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 5,
-    marginBottom: 6,
-  },
-  insightTagBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: COLORS.primary,
   },
   insightTitleText: {
     fontSize: 13.5,
@@ -1608,27 +1326,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.primary,
     marginRight: 2,
-  },
-  shieldCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F0FDF4",
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#DCFCE7",
-    marginTop: 12,
-  },
-  shieldTitle: {
-    fontSize: 12.5,
-    fontWeight: "700",
-    color: "#15803D",
-  },
-  shieldSub: {
-    fontSize: 11,
-    color: "#166534",
-    marginTop: 2,
-    lineHeight: 15,
   },
   activePlanBanner: {
     flexDirection: "row",

@@ -63,7 +63,9 @@ function toRow(e) {
     propertyPrice: e.listing ? formatPaise(e.listing.price_paise, e.listing.price_period) : "",
     propertyLocation: "",
     propertyImage: undefined,
-    lastMessage: e.message || "",
+    // Latest message on the thread (buyer's or the owner's reply); the
+    // opening message only for enquiries listed before threads existed.
+    lastMessage: e.last_message || e.message || "",
     time: undefined,
     unread: false,
     category: undefined,

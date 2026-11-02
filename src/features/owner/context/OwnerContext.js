@@ -109,12 +109,15 @@ export function OwnerProvider({ children }) {
       usedListings: properties.filter((p) => p.status === "active").length,
       price: formattedAmount,
       amountPaid: formattedAmount,
-      active: false,
-      hasPurchased: false,
-      status: "Inactive",
+      // Called after the in-app (simulated) payment completes: the plan is
+      // active on this device. No gateway or backend plans API exists yet.
+      active: true,
+      hasPurchased: true,
+      simulated: true,
+      status: "Active",
       startDate: formattedStart,
       expiryDate: formattedExpiry,
-      txnId: null,
+      txnId: plan?.txnId || null,
       invoiceNumber: null,
       category: plan?.category || "Residential",
     };

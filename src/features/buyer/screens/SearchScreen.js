@@ -40,6 +40,13 @@ import { useListings } from "../api/useListings.js";
 import { parseSmartQuery } from "../../../shared/api/mappers.js";
 import { fetchListingDetail } from "../api/listings.js";
 import { revealContactPhone } from "../../../shared/api/contact.js";
+import {
+  displayCount,
+  displayRating,
+  matchesStatusFilter,
+  searchCardSpecs,
+  validConstructionStatus,
+} from "../utils/searchCardSpecs.js";
 import { recordCallTap } from "../api/calls.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 import { useWishlist } from "../context/WishlistContext.js";
@@ -308,10 +315,8 @@ export default function SearchScreen({ navigation, route }) {
         }
       }
       // Construction status has no backend filter param; applied client-side.
-      if (selectedStatus !== "All Status") {
-        const itemStatus = item.constructionStatus || "Ready to move";
-        if (itemStatus.toLowerCase() !== selectedStatus.toLowerCase()) return false;
-      }
+      // A listing without a real status matches no specific status.
+      if (!matchesStatusFilter(item.constructionStatus, selectedStatus)) return false;
       return true;
     });
   }, [apiProperties, selectedCategory, selectedStatus]);
@@ -434,28 +439,16 @@ export default function SearchScreen({ navigation, route }) {
     setActiveDropdown(null);
   };
 
-  // Helper calculations for cards
-  const getCardSpecs = (property) => {
-    const sqftNum = parseInt(String(property.sqft).replace(/,/g, "")) || 1500;
-    const perSqft = property.rawPrice && sqftNum
-      ? `₹${Math.round(property.rawPrice / sqftNum).toLocaleString("en-IN")}/sqft`
-      : "₹6,800/sqft";
-    const statusText = property.constructionStatus || (property.badge === "Just Added" ? "New Launch" : "Ready to move");
-
-    // Dynamic feature chips
-    let tags = ["Gated Society", "Power Backup", "Covered Parking", "Lift Access"];
-    if (property.type === "Apartment") {
-      tags = ["Gated Society", "Power Backup", "Covered Parking", "Lift Access"];
-    } else if (property.type === "Villa" || property.type === "House") {
-      tags = ["Independent Villa", "Private Garden", "Corner Property", "2 Car Parking"];
-    } else if (property.type === "Commercial") {
-      tags = ["Grade A Tech Park", "100% Power Backup", "High Speed Lifts", "Visitor Parking"];
-    } else if (property.type === "Plot") {
-      tags = ["CMDA Approved", "Corner Property", "2 Side Open", "Clear Title"];
-    }
-
-    return { perSqft, statusText, tags };
-  };
+  // Card specs from real listing data only (see utils/searchCardSpecs.js):
+  // no assumed area, rate, rating, bed/bath count, status or feature chips.
+  // Each is null when the backend sent no valid value, and is then hidden.
+  const getCardSpecs = (property) => ({
+    ...searchCardSpecs(property),
+    statusText: validConstructionStatus(property.constructionStatus),
+    ratingText: displayRating(property.rating),
+    beds: displayCount(property.beds),
+    baths: displayCount(property.baths),
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -731,7 +724,7 @@ export default function SearchScreen({ navigation, route }) {
         ) : (
           filteredProperties.map((property, idx) => {
             const saved = isWishlisted(property.id);
-            const { perSqft, statusText, tags } = getCardSpecs(property);
+            const { perSqft, areaValue, areaUnitLabel, statusText, tags, ratingText, beds, baths } = getCardSpecs(property);
 
             return (
               <View key={property.id}>
@@ -771,15 +764,17 @@ export default function SearchScreen({ navigation, route }) {
 
                 {/* Card Details Body (Matching Image 2 + Adapted Details from Image 1) */}
                 <View style={styles.cardBody}>
-                  {/* Row 1: Title on Left, Rating on Right (e.g. 7 Stonesilver Drive    ★ 4.9) */}
+                  {/* Row 1: Title on Left, Rating on Right (only when the backend sends a real rating) */}
                   <View style={styles.titleRatingRow}>
                     <Text style={styles.propertyTitle} numberOfLines={1}>
                       {property.address ? property.address.split(",")[0] : property.title}
                     </Text>
-                    <View style={styles.ratingBadge}>
-                      <Star size={13} color={COLORS.star} fill={COLORS.star} style={{ marginRight: 3 }} />
-                      <Text style={styles.ratingText}>{property.rating || 4.9}</Text>
-                    </View>
+                    {ratingText ? (
+                      <View style={styles.ratingBadge}>
+                        <Star size={13} color={COLORS.star} fill={COLORS.star} style={{ marginRight: 3 }} />
+                        <Text style={styles.ratingText}>{ratingText}</Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   {/* Row 2: Price (e.g. $4.688/month or ₹1.45 Cr • ₹7,838 /sqft) */}
@@ -787,26 +782,36 @@ export default function SearchScreen({ navigation, route }) {
                     <Text style={styles.priceMainText}>
                       {property.price}
                     </Text>
-                    <Text style={styles.pricePeriodSubtext}>
-                      {property.pricePeriod ? property.pricePeriod : ` • ${perSqft}`}
-                    </Text>
+                    {property.pricePeriod || perSqft ? (
+                      <Text style={styles.pricePeriodSubtext}>
+                        {property.pricePeriod ? property.pricePeriod : ` • ${perSqft}`}
+                      </Text>
+                    ) : null}
                   </View>
 
                   {/* Row 3: Specs (5 beds    2 baths    3,457 sq ft - as in Image 2) */}
-                  <View style={styles.specsRow}>
-                    <Text style={styles.specItem}>
-                      <Text style={styles.specBold}>{property.beds > 0 ? property.beds : 3} </Text>
-                      <Text style={styles.specLabel}>beds</Text>
-                    </Text>
-                    <Text style={styles.specItem}>
-                      <Text style={styles.specBold}>{property.baths > 0 ? property.baths : 2} </Text>
-                      <Text style={styles.specLabel}>baths</Text>
-                    </Text>
-                    <Text style={styles.specItem}>
-                      <Text style={styles.specBold}>{property.sqft} </Text>
-                      <Text style={styles.specLabel}>sq ft</Text>
-                    </Text>
-                  </View>
+                  {beds || baths || areaValue ? (
+                    <View style={styles.specsRow}>
+                      {beds ? (
+                        <Text style={styles.specItem}>
+                          <Text style={styles.specBold}>{beds} </Text>
+                          <Text style={styles.specLabel}>{beds === 1 ? "bed" : "beds"}</Text>
+                        </Text>
+                      ) : null}
+                      {baths ? (
+                        <Text style={styles.specItem}>
+                          <Text style={styles.specBold}>{baths} </Text>
+                          <Text style={styles.specLabel}>{baths === 1 ? "bath" : "baths"}</Text>
+                        </Text>
+                      ) : null}
+                      {areaValue ? (
+                        <Text style={styles.specItem}>
+                          <Text style={styles.specBold}>{areaValue} </Text>
+                          <Text style={styles.specLabel}>{areaUnitLabel}</Text>
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
 
                   {/* Row 4: Locality Address & Status Badge (Adapted Details from Image 1) */}
                   <View style={styles.locationStatusRow}>
@@ -816,19 +821,23 @@ export default function SearchScreen({ navigation, route }) {
                         {property.address || property.location}
                       </Text>
                     </View>
-                    <View style={styles.statusPill}>
-                      <Text style={styles.statusPillText}>{statusText}</Text>
-                    </View>
+                    {statusText ? (
+                      <View style={styles.statusPill}>
+                        <Text style={styles.statusPillText}>{statusText}</Text>
+                      </View>
+                    ) : null}
                   </View>
 
-                  {/* Row 5: Feature Tags (Gated Society, Power Backup, Covered Parking...) */}
-                  <View style={styles.featureChipsRow}>
-                    {tags.map((tag, idx) => (
-                      <View key={idx} style={styles.featureChip}>
-                        <Text style={styles.featureChipText}>{tag}</Text>
-                      </View>
-                    ))}
-                  </View>
+                  {/* Row 5: Feature Tags — only features the listing data actually carries */}
+                  {tags.length > 0 ? (
+                    <View style={styles.featureChipsRow}>
+                      {tags.map((tag, idx) => (
+                        <View key={idx} style={styles.featureChip}>
+                          <Text style={styles.featureChipText}>{tag}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
 
                   {/* Row 6: Builder Footer & Action Buttons */}
                   <View style={styles.builderFooterRow}>

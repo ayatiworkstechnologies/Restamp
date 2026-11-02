@@ -2,6 +2,8 @@
 // contract. Keep disabled until the APIs, authorization, and payment flows
 // exist; never re-enable seeded demo data as a substitute.
 // Agent flow (plans -> Chennai localities -> payment -> agent dashboard) is
-// enabled. Payment is simulated in-app like the owner flow; no gateway or
-// agent backend API is connected yet, and agent leads start empty.
-export const AGENT_MODULE_ENABLED = true;
+// DISABLED: payment would only be simulated in-app and no agent backend
+// contract is connected yet. While false, the agent routes are not
+// registered (AppNavigator), the Agent Plan tab and membership entry points
+// are hidden, and AgentContext actions are no-ops.
+export const AGENT_MODULE_ENABLED = false;

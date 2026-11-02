@@ -17,7 +17,7 @@ import {
   Check,
   ShieldCheck,
   Zap,
-  AlertCircle,
+  CheckCircle2,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 
@@ -26,6 +26,7 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
   const planValidity = route?.params?.planValidity || "3 Months";
   const listingLimit = route?.params?.listingLimit || "Up to 5 Active Listings";
   const amountPaid = route?.params?.amountPaid || "₹2,999";
+  const txnId = route?.params?.txnId || "—";
 
   const scaleAnim = useRef(new Animated.Value(0.4)).current;
   const redirectTimerRef = useRef(null);
@@ -94,7 +95,7 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
           onPress={() =>
             Alert.alert(
               "Owner Plan",
-              "Owner plan payments are not yet available. No payment was processed and no invoice or transaction was issued."
+              "This is a simulated in-app payment: your plan is active in the app, but no real money was charged and no tax invoice was issued."
             )
           }
           activeOpacity={0.7}
@@ -108,14 +109,17 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* CARD 1: PAYMENT NOT AVAILABLE */}
-        <View style={styles.successCard}>
-          <AlertCircle size={28} color="#D97706" />
-          <Text style={styles.statusTitle}>Payments Not Available</Text>
+        {/* CARD 1: PAYMENT SUCCESSFUL (simulated) */}
+        <Animated.View style={[styles.successCard, { transform: [{ scale: scaleAnim }] }]}>
+          <CheckCircle2 size={34} color="#16A34A" />
+          <Text style={styles.statusTitle}>Payment Successful</Text>
           <Text style={styles.statusSubtitle}>
-            Owner plan payments are not yet available. No payment was processed, no invoice was issued, and no plan was activated.
+            Your {planName} is now active. You can start listing properties right away.
           </Text>
-        </View>
+          <Text style={[styles.statusSubtitle, { fontSize: 11, marginTop: 6 }]}>
+            Simulated payment — no real money was charged.
+          </Text>
+        </Animated.View>
 
         {/* CARD 2: SUBSCRIPTION STATUS */}
         <View style={styles.summaryCard}>
@@ -128,17 +132,32 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Status</Text>
-            <Text style={styles.summaryVal}>Not activated</Text>
+            <Text style={[styles.summaryVal, { color: "#16A34A" }]}>Active</Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryKey}>Validity</Text>
+            <Text style={styles.summaryVal}>{planValidity}</Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryKey}>Listing Limit</Text>
+            <Text style={styles.summaryVal}>{listingLimit}</Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryKey}>Amount Paid</Text>
+            <Text style={styles.summaryVal}>{amountPaid}</Text>
           </View>
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Transaction</Text>
-            <Text style={styles.summaryVal}>None</Text>
+            <Text style={styles.summaryVal}>{txnId}</Text>
           </View>
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Invoice</Text>
-            <Text style={styles.summaryVal}>None</Text>
+            <Text style={styles.summaryVal}>Not issued (simulated)</Text>
           </View>
         </View>
 

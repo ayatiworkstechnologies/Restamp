@@ -800,6 +800,99 @@ export async function addLeadNote(leadId, bodyText) {
   return toOwnerLeadNote(note);
 }
 
+/** Server limit for one thread message (backend OwnerMessageIn). */
+export const OWNER_REPLY_MAX_LENGTH = 2000;
+
+/**
+ * Reply to the buyer on one of the owner's leads:
+ * POST /owner/leads/{lead_id}/messages {message}. Unlike internal notes the
+ * reply is visible to the buyer. The text is trimmed and must be 1–2000
+ * characters, so an empty or over-long reply never reaches the network (it
+ * is rejected, never silently cut). Returns the server-confirmed message
+ * (sender "OWNER"); an identical reply re-sent within the server's
+ * double-tap window comes back as the already-stored message (HTTP 200,
+ * same id), which mergeLeadMessage keeps only once.
+ */
+export async function sendOwnerReply(leadId, text) {
+  const message = String(text ?? "").trim();
+  if (!message || message.length > OWNER_REPLY_MAX_LENGTH) {
+    const error = new Error(`Write a reply of 1–${OWNER_REPLY_MAX_LENGTH} characters.`);
+    error.kind = "validation";
+    throw error;
+  }
+  const row = await apiPost(`/owner/leads/${leadId}/messages`, { message });
+  return toOwnerLeadMessage(row);
+}
+
+/**
+ * Thread label from the owner's side. Only the backend's "OWNER" marks the
+ * owner's own reply; everything else on a lead thread — including opening
+ * messages stored before senders were recorded (sender null) — is the
+ * buyer's.
+ */
+export function leadMessageSenderLabel(sender) {
+  return String(sender || "").toUpperCase() === "OWNER" ? "Owner" : "Buyer";
+}
+
+/**
+ * Add one server-confirmed message to a thread exactly once. Messages are
+ * matched by server id, so a duplicate reply (the server returning the
+ * stored message again) never appears twice; new messages go last, which is
+ * chronological because the server only ever returns the newest message.
+ */
+export function mergeLeadMessage(messages, message) {
+  const list = Array.isArray(messages) ? messages : [];
+  if (!message) return list;
+  if (message.id != null && list.some((m) => m && m.id === message.id)) return list;
+  return [...list, message];
+}
+
+/**
+ * The lead after a server-confirmed owner reply: the thread gains the
+ * message once and the summary fields (count, latest message and its time)
+ * follow it. A duplicate leaves the lead unchanged.
+ */
+export function applyOwnerReply(lead, message) {
+  if (!lead || !message) return lead;
+  const before = Array.isArray(lead.messages) ? lead.messages : [];
+  const messages = mergeLeadMessage(before, message);
+  if (messages === before) return lead;
+  const at = message.createdAt ? new Date(message.createdAt) : null;
+  return {
+    ...lead,
+    messages,
+    messageCount: typeof lead.messageCount === "number" ? lead.messageCount + 1 : messages.length,
+    lastMessage: message.body,
+    lastMessageAt: message.createdAt || null,
+    lastMessageAtText: at ? formatLocalDateTime(at) : undefined,
+  };
+}
+
+/**
+ * Honest, specific text for a failed reply. The draft is kept by the
+ * screen, so every message tells the owner what happened, never that the
+ * reply was sent.
+ */
+export function ownerReplyErrorMessage(error) {
+  const status = error && error.status;
+  const detail = error && typeof error.detail === "string" ? error.detail : "";
+  if (status === 422 && detail === "Lead is closed") {
+    return "This lead is closed, so replies are turned off.";
+  }
+  if (status === 429) {
+    return "You've sent a lot of messages on this lead in the last hour. Please wait a while before sending more.";
+  }
+  if (status === 404) return "This lead is no longer available.";
+  if (status === 401 || (error && error.kind === "login")) {
+    return "Your session has expired. Please sign in again to reply.";
+  }
+  if (status === 403) return "Switch to your owner account to reply to buyers.";
+  if (status === 422) return detail && detail !== "Invalid request" ? detail : `A reply must be 1–${OWNER_REPLY_MAX_LENGTH} characters.`;
+  if (error && error.kind === "validation") return error.message;
+  if (error && (error.kind === "offline" || error.kind === "timeout")) return error.message;
+  return "Your reply wasn't sent. Please check your connection and try again.";
+}
+
 /**
  * Persist an owner-side lead status change (P4).
  * Status accepts either UI casing ("contacted") or backend casing

@@ -22,7 +22,6 @@ import {
   XCircle,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
-import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 import ScheduleVisitModal from "../../buyer/components/ScheduleVisitModal.js";
 import StatusBadge from "../components/StatusBadge.js";
 import EmptyState from "../components/EmptyState.js";
@@ -236,7 +235,6 @@ export default function OwnerVisitsScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <AppBrandHeader currentRole="owner" />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

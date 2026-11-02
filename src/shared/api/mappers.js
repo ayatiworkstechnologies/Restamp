@@ -185,6 +185,8 @@ export function toUiProperty(card) {
     beds: card.bedrooms ?? undefined,
     baths: card.bathrooms ?? undefined,
     sqft: areaNum != null ? areaNum.toLocaleString("en-IN") : undefined,
+    // Backend unit for `sqft` (e.g. "sqft"); undefined when not sent.
+    areaUnit: card.area_unit || undefined,
     isVerified: true, // server guarantees VERIFIED
     badge: card.badge || "Verified",
     // Real value only: the buyer API sends no furnishing today, so this is

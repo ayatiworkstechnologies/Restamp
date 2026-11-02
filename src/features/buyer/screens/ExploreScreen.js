@@ -41,17 +41,17 @@ import { useWishlist } from "../context/WishlistContext.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import PropertyDetailModal from "../components/PropertyDetailModal.js";
 import SafeImage from "../../../shared/components/SafeImage.js";
+import { localityCountLabel } from "../utils/exploreLocality.js";
 
-// Enriched neighborhood data for Chennai localities
+// Descriptive neighborhood guide for Chennai localities (shown with the
+// "indicative, not live market data" note). No listing counts, prices,
+// growth or yield figures live here: the only number shown comes from the
+// backend (the selected locality's verified listing total).
 const LOCALITY_DATA = [
   {
     id: "loc-anna",
     name: "Anna Nagar",
     region: "Prime Central",
-    count: "850+ Props",
-    avgPrice: "₹9,800/sqft",
-    growth: "+12.4% YoY",
-    yield: "3.6%",
     metro: "Green Line (3 Stations)",
     vibe: "Upscale residential hub with wide avenues, premier schools, boutique dining, and rapid metro access.",
     image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80",
@@ -61,10 +61,6 @@ const LOCALITY_DATA = [
     id: "loc-omr",
     name: "OMR",
     region: "IT Expressway",
-    count: "1,420+ Props",
-    avgPrice: "₹6,800/sqft",
-    growth: "+15.2% YoY",
-    yield: "4.4%",
     metro: "Phase 2 Metro Corridor",
     vibe: "Chennai's premier tech corridor hosting Fortune 500 tech parks, gated communities, and high rental yields.",
     image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80",
@@ -74,10 +70,6 @@ const LOCALITY_DATA = [
     id: "loc-ecr",
     name: "ECR",
     region: "Coastal Beachfront",
-    count: "680+ Props",
-    avgPrice: "₹12,500/sqft",
-    growth: "+14.1% YoY",
-    yield: "3.2%",
     metro: "Scenic Highway & Sea-Link",
     vibe: "Prestigious coastal stretch famous for luxury sea-facing villas, private beach resorts, and tranquil living.",
     image: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80",
@@ -87,10 +79,6 @@ const LOCALITY_DATA = [
     id: "loc-adyar",
     name: "Adyar",
     region: "Prime Central",
-    count: "530+ Props",
-    avgPrice: "₹14,200/sqft",
-    growth: "+9.8% YoY",
-    yield: "3.1%",
     metro: "Corridor 3 Metro",
     vibe: "Historic, heritage-rich luxury enclave bordered by the Adyar river and coastline, home to elite educational institutions.",
     image: "https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=600&q=80",
@@ -100,10 +88,6 @@ const LOCALITY_DATA = [
     id: "loc-velachery",
     name: "Velachery",
     region: "IT Expressway",
-    count: "640+ Props",
-    avgPrice: "₹7,600/sqft",
-    growth: "+11.0% YoY",
-    yield: "4.1%",
     metro: "MRTS & Inner Ring Metro",
     vibe: "Vibrant residential and commercial hotspot connecting South Chennai with OMR, packed with malls and transit hubs.",
     image: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=600&q=80",
@@ -113,10 +97,6 @@ const LOCALITY_DATA = [
     id: "loc-tnagar",
     name: "T. Nagar",
     region: "Prime Central",
-    count: "910+ Props",
-    avgPrice: "₹13,800/sqft",
-    growth: "+8.5% YoY",
-    yield: "3.5%",
     metro: "Blue Line Metro",
     vibe: "Chennai's retail heartbeat offering prime luxury flats, commercial headquarters, and central connectivity.",
     image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80",
@@ -126,10 +106,6 @@ const LOCALITY_DATA = [
     id: "loc-guindy",
     name: "Guindy",
     region: "Suburban Hubs",
-    count: "490+ Props",
-    avgPrice: "₹11,000/sqft",
-    growth: "+10.6% YoY",
-    yield: "4.2%",
     metro: "Multi-Modal Blue Line",
     vibe: "Strategic corporate nexus bridging the airport with central business hubs, surrounded by national parks.",
     image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&q=80",
@@ -139,10 +115,6 @@ const LOCALITY_DATA = [
     id: "loc-tambaram",
     name: "Tambaram",
     region: "Suburban Hubs",
-    count: "720+ Props",
-    avgPrice: "₹5,200/sqft",
-    growth: "+13.7% YoY",
-    yield: "4.5%",
     metro: "South Suburban Railway Hub",
     vibe: "Thriving suburban hub offering high affordability, excellent schools, and rapid connectivity via GST Road.",
     image: "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=600&q=80",
@@ -171,6 +143,8 @@ export default function ExploreScreen({ navigation }) {
   const [localityProperties, setLocalityProperties] = useState([]);
   const [propertiesLoading, setPropertiesLoading] = useState(false);
   const [propertiesFailed, setPropertiesFailed] = useState(false);
+  // Backend total for the selected locality (null until known / on failure).
+  const [localityTotal, setLocalityTotal] = useState(null);
 
   // Filtered localities by region and search query
   const filteredLocalities = useMemo(() => {
@@ -191,6 +165,7 @@ export default function ExploreScreen({ navigation }) {
     const locality = selectedLocality?.name;
     if (!locality) {
       setLocalityProperties([]);
+      setLocalityTotal(null);
       return undefined;
     }
     setPropertiesLoading(true);
@@ -200,11 +175,13 @@ export default function ExploreScreen({ navigation }) {
         if (cancelled) return;
         const items = Array.isArray(data?.items) ? data.items : [];
         setLocalityProperties(items.map(toUiProperty));
+        setLocalityTotal(Number.isInteger(data?.total) ? data.total : null);
         setPropertiesLoading(false);
       },
       () => {
         if (cancelled) return;
         setLocalityProperties([]);
+        setLocalityTotal(null);
         setPropertiesFailed(true);
         setPropertiesLoading(false);
       }
@@ -397,9 +374,11 @@ export default function ExploreScreen({ navigation }) {
             Properties in {selectedLocality?.name || "Chennai"}
           </Text>
           <Text style={styles.sectionMeta}>
-            {propertiesLoading
-              ? "Loading..."
-              : `${localityProperties.length} Available`}
+            {localityCountLabel({
+              loading: propertiesLoading,
+              failed: propertiesFailed,
+              total: localityTotal,
+            })}
           </Text>
         </View>
 

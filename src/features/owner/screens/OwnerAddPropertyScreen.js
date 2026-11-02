@@ -1810,7 +1810,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
           <View style={styles.card}>
             <Text style={styles.cardHeaderTitle}>Property Details</Text>
             <Text style={styles.cardHeaderSub}>
-              Specify room configurations, areas, floor level, and readiness.
+              Specify room configurations, areas, floor level, furnishing, facing and readiness.
             </Text>
 
             {/* Section 1: Room Details */}
@@ -1947,6 +1947,43 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
                   onPress={() => setPropertyAge(age)}
                 />
               ))}
+            </View>
+
+            {/* Section: Furnishing */}
+            <Text style={[styles.sectionHeading, { marginTop: 16 }]}>Furnishing</Text>
+            <View style={styles.chipsRow}>
+              {FURNISHING_OPTIONS.map((opt) => (
+                <SelectionChip
+                  key={opt}
+                  label={opt}
+                  selected={furnishing === opt}
+                  onPress={() => setFurnishing(opt)}
+                />
+              ))}
+            </View>
+
+            {/* Section: Property Facing */}
+            <Text style={[styles.sectionHeading, { marginTop: 16 }]}>Property Facing</Text>
+            <View style={styles.chipsRow}>
+              {PROPERTY_FACING_OPTIONS.map((f) => (
+                <SelectionChip
+                  key={f}
+                  label={f}
+                  selected={propertyFacing === f}
+                  onPress={() => setPropertyFacing(f)}
+                />
+              ))}
+            </View>
+
+            {/* Listing Status: set by Restamp verification, shown for information only. */}
+            <Text style={[styles.sectionHeading, { marginTop: 16 }]}>Listing Status</Text>
+            <View style={styles.listingStatusInfo}>
+              <Text style={styles.listingStatusInfoValue}>
+                {isEditing ? "Under review after changes" : "Pending verification"}
+              </Text>
+              <Text style={styles.listingStatusInfoText}>
+                New listings are checked by Restamp before they go live to buyers.
+              </Text>
             </View>
           </View>
         )}
@@ -2239,19 +2276,6 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
               ))}
             </View>
 
-            {/* Section: Furnishing */}
-            <Text style={[styles.sectionHeading, { marginTop: 16 }]}>Furnishing</Text>
-            <View style={styles.chipsRow}>
-              {FURNISHING_OPTIONS.map((opt) => (
-                <SelectionChip
-                  key={opt}
-                  label={opt}
-                  selected={furnishing === opt}
-                  onPress={() => setFurnishing(opt)}
-                />
-              ))}
-            </View>
-
             {/* Section: Reserved Parking */}
             <Text style={[styles.sectionHeading, { marginTop: 16 }]}>Reserved Parking</Text>
             <View style={styles.parkingCountersBox}>
@@ -2456,18 +2480,6 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
               ))}
             </View>
 
-            {/* Section: Property Facing */}
-            <Text style={[styles.sectionHeading, { marginTop: 16 }]}>Property Facing</Text>
-            <View style={styles.chipsRow}>
-              {PROPERTY_FACING_OPTIONS.map((f) => (
-                <SelectionChip
-                  key={f}
-                  label={f}
-                  selected={propertyFacing === f}
-                  onPress={() => setPropertyFacing(f)}
-                />
-              ))}
-            </View>
           </View>
         )}
 
@@ -3308,6 +3320,25 @@ const styles = StyleSheet.create({
   underlineTabTextInactive: {
     color: "#111827",
     fontWeight: "400",
+  },
+  listingStatusInfo: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    backgroundColor: "#FFFBEB",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  listingStatusInfoValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#92400E",
+  },
+  listingStatusInfoText: {
+    fontSize: 12,
+    color: "#A16207",
+    marginTop: 3,
+    lineHeight: 17,
   },
   chipsRow: {
     flexDirection: "row",

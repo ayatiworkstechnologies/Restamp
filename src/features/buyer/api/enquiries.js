@@ -47,6 +47,15 @@ const formatStamp = (d) =>
     : "Date unavailable";
 
 /**
+ * Thread label from the buyer's side: the listing owner's replies (backend
+ * sender "OWNER") read "Owner"; the buyer's own messages — including opening
+ * messages stored before senders were recorded — read "You".
+ */
+export function enquirySenderLabel(sender) {
+  return String(sender || "").toUpperCase() === "OWNER" ? "Owner" : "You";
+}
+
+/**
  * Map a backend EnquiryOut to the shape the Messages tab renders. Only
  * genuine backend fields are forwarded: the owner's phone or name is never
  * part of an enquiry, so the UI must reveal contact separately. Timestamps

@@ -66,6 +66,7 @@ import {
   fetchEnquiryDetail,
   createEnquiry,
   toUiEnquiry,
+  enquirySenderLabel,
 } from "../api/enquiries.js";
 import {
   fetchViewed,
@@ -1306,7 +1307,7 @@ export default function SavedScreen({ navigation, route }) {
                             thread.messages.map((m) => (
                               <View key={m.id} style={styles.msgBubble}>
                                 <Text style={styles.msgBubbleText}>{m.body}</Text>
-                                <Text style={styles.threadTime}>You · {m.timestamp}</Text>
+                                <Text style={styles.threadTime}>{enquirySenderLabel(m.sender)} · {m.timestamp}</Text>
                               </View>
                             ))
                           ) : null}

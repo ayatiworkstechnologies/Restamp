@@ -37,6 +37,10 @@ export default function OwnerPaymentScreen({ route, navigation }) {
   };
   const totalAmount = route?.params?.totalAmount || 2999;
   const formattedAmount = route?.params?.formattedAmount || `₹${totalAmount.toLocaleString("en-IN")}`;
+  // Order summary from the confirmed plan (price before coupon, coupon discount).
+  const orderAmount = route?.params?.basePrice ?? plan.priceNumeric ?? totalAmount;
+  const promoDiscount = route?.params?.discount ?? 0;
+  const inr = (n) => `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const [selectedMethodId, setSelectedMethodId] = useState("card_1");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -75,11 +79,26 @@ export default function OwnerPaymentScreen({ route, navigation }) {
     },
   ]);
 
-  const handlePay = () => {
-    Alert.alert(
-      "Payments Not Available",
-      "Owner plan payments are not yet available. Please contact support to activate your plan. No payment is processed and no invoice is issued."
-    );
+  // Simulated payment (no gateway connected yet), same as the agent flow.
+  const handlePay = (shouldSucceed = true) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    setTimeout(() => {
+      setIsProcessing(false);
+      if (!shouldSucceed) {
+        Alert.alert("Payment Failed", "The payment could not be completed. Please try again.");
+        return;
+      }
+      const txnId = `SIM-${Date.now().toString().slice(-8)}`;
+      activateSubscription({ ...plan, amountPaid: formattedAmount, txnId });
+      navigation.navigate("OwnerPaymentSuccess", {
+        planName: plan.name,
+        planValidity: plan.validity || "3 Months (90 Days)",
+        listingLimit: `Up to ${plan.listingLimit || 5} Active Listings`,
+        amountPaid: formattedAmount,
+        txnId,
+      });
+    }, 1200);
   };
 
   const handleAddNewMethod = () => {
@@ -294,12 +313,14 @@ export default function OwnerPaymentScreen({ route, navigation }) {
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Order Amount</Text>
-            <Text style={styles.summaryVal}>₹2,999.00</Text>
+            <Text style={styles.summaryVal}>{inr(orderAmount)}</Text>
           </View>
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Promo-code</Text>
-            <Text style={[styles.summaryVal, { color: "#16A34A" }]}>-₹300.00</Text>
+            <Text style={[styles.summaryVal, { color: "#16A34A" }]}>
+              {promoDiscount > 0 ? `-${inr(promoDiscount)}` : inr(0)}
+            </Text>
           </View>
 
           <View style={styles.summaryRow}>

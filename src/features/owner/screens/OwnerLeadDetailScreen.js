@@ -38,6 +38,11 @@ import {
   fetchOwnerLead,
   fetchLeadNotes,
   addLeadNote as addLeadNoteApi,
+  sendOwnerReply as sendOwnerReplyApi,
+  applyOwnerReply,
+  leadMessageSenderLabel,
+  ownerReplyErrorMessage,
+  OWNER_REPLY_MAX_LENGTH,
   updateOwnerLeadStatus,
   toOwnerLead,
   selectPropertyLeads,
@@ -91,6 +96,10 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
   const [notesError, setNotesError] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
   const notesReqId = useRef(0);
+
+  // Reply to the buyer (shared thread, unlike the private notes above).
+  const [replyText, setReplyText] = useState("");
+  const [replySending, setReplySending] = useState(false);
 
   // Reload the lead from the server (request-ID guard so a late response can
   // never overwrite newer rows). The snapshot from the list stays on screen
@@ -409,6 +418,29 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
     }
   };
 
+  const handleSendReply = async () => {
+    // Same guard as notes: the button is disabled while sending, so a second
+    // tap can never send the reply twice.
+    if (replySending) return;
+    const replyContent = String(replyText ?? "").trim();
+    if (!replyContent || typeof lead?.id !== "number") return;
+    setReplySending(true);
+    try {
+      // Only the server-confirmed message is added (applyOwnerReply keeps a
+      // duplicate returned by the server once). Nothing shows as sent first.
+      const sent = await sendOwnerReplyApi(lead.id, replyContent);
+      setLead((prev) => applyOwnerReply(prev, sent));
+      setReplyText("");
+    } catch (error) {
+      // The draft stays in the input box — nothing is lost on a failure.
+      Alert.alert("Reply not sent", ownerReplyErrorMessage(error));
+      // A closed or missing lead: reload so the screen shows the server state.
+      if (error?.status === 422 || error?.status === 404) loadLead();
+    } finally {
+      setReplySending(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -621,15 +653,25 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
             </View>
           </View>
 
-          {/* The buyer's message thread (§D). List and detail rows render the
-              same mapped fields; when a thread exists from the detail response
-              it is shown with each real message, otherwise the legacy opening
-              message is shown, and when neither exists nothing is fabricated. */}
+          {/* The lead's message thread (§D), buyer messages and the owner's
+              replies in server (chronological) order, each labelled by its
+              server-reported sender. When a thread exists from the detail
+              response it is shown with each real message, otherwise the legacy
+              opening message is shown, and when neither exists nothing is
+              fabricated. */}
           {Array.isArray(lead.messages) && lead.messages.length > 0 ? (
             <View style={styles.buyerMessageQuote}>
-              <Text style={styles.buyerMessageLabel}>Buyer Messages</Text>
+              <Text style={styles.buyerMessageLabel}>Messages</Text>
               {lead.messages.map((entry, idx) => (
                 <View key={entry.id ?? `msg-${idx}`} style={styles.threadItem}>
+                  <Text
+                    style={[
+                      styles.threadSender,
+                      leadMessageSenderLabel(entry.sender) === "Owner" && styles.threadSenderOwner,
+                    ]}
+                  >
+                    {leadMessageSenderLabel(entry.sender)}
+                  </Text>
                   <Text style={styles.buyerMessageText}>"{entry.body}"</Text>
                   {entry.timestamp ? (
                     <Text style={styles.threadTime}>{entry.timestamp}</Text>
@@ -646,6 +688,47 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
             <View style={styles.buyerMessageQuote}>
               <Text style={styles.buyerMessageLabel}>Buyer Message</Text>
               <Text style={styles.buyerMessageText}>No messages yet.</Text>
+            </View>
+          )}
+
+          {/* Reply to the buyer (POST /owner/leads/{id}/messages). Sending
+              disables the button + input so a reply can't be sent twice; the
+              draft survives a failure; the reply joins the thread only once
+              the server confirms it. Closed leads accept no replies. */}
+          {lead.status === "closed" ? (
+            <Text style={[styles.noNotesPlaceholder, styles.replyClosedText]}>
+              This lead is closed, so replies are turned off.
+            </Text>
+          ) : (
+            <View style={[styles.noteInputBox, styles.replyBox]}>
+              <TextInput
+                style={styles.noteInput}
+                placeholder="Reply to the buyer…"
+                placeholderTextColor="#94A3B8"
+                value={replyText}
+                onChangeText={setReplyText}
+                underlineColorAndroid="transparent"
+                editable={!replySending}
+                multiline
+                maxLength={OWNER_REPLY_MAX_LENGTH}
+              />
+              <View style={styles.replyFooter}>
+                <Text style={styles.replyHint}>Visible to the buyer</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.saveNoteBtn,
+                    (!replyText.trim() || replySending) && styles.saveNoteBtnDisabled,
+                  ]}
+                  onPress={handleSendReply}
+                  disabled={!replyText.trim() || replySending}
+                  activeOpacity={0.8}
+                >
+                  <Send size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.saveNoteBtnText}>
+                    {replySending ? "Sending…" : "Send Reply"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -1451,6 +1534,33 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     color: "#94A3B8",
     marginTop: 2,
+  },
+  // Sender line on each thread message (same type ramp as buyerMessageLabel).
+  threadSender: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+    marginBottom: 2,
+  },
+  threadSenderOwner: {
+    color: COLORS.primary,
+  },
+  // Reply box reuses noteInputBox/noteInput/saveNoteBtn; only spacing differs.
+  replyBox: {
+    marginTop: 12,
+    marginBottom: 0,
+  },
+  replyFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  replyHint: {
+    fontSize: 11,
+    color: COLORS.lightText,
+  },
+  replyClosedText: {
+    marginTop: 12,
   },
 
   errorContainer: {

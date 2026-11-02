@@ -9,6 +9,8 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
+  Modal,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -20,6 +22,7 @@ import {
   Filter,
   ArrowUpRight,
   MoreHorizontal,
+  Check,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useOwner, selectOwnerScopedProperties } from "../context/OwnerContext.js";
@@ -27,7 +30,6 @@ import { useAuth } from "../../auth/context/AuthContext.js";
 import { fetchAllOwnerListings, toOwnerProperty, fetchDrafts, deleteDraft, freshAddParams, verifyListing, publishListing, archiveListing, updateListingStatus, deleteOwnerListing } from "../api/owner.js";
 import { resetToLogin } from "../../../shared/navigation/navRef.js";
 import RestampLogo from "../../../shared/components/RestampLogo.js";
-import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 import OwnerHeader from "../components/OwnerHeader.js";
 import OwnerPropertyCard from "../components/OwnerPropertyCard.js";
 import EmptyState from "../components/EmptyState.js";
@@ -59,7 +61,8 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
   const initialTab = route?.params?.initialTab || "All";
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showSearch, setShowSearch] = useState(false);
+  // Filter pop-up with every status tab.
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [liveProperties, setLiveProperties] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -192,6 +195,14 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
   });
 
   // Filtered properties (Draft tab reads server drafts, not listings)
+  // Property count per status tab (chips + filter pop-up).
+  const countForTab = (tab) =>
+    tab === "All"
+      ? properties.length
+      : tab === "Draft"
+        ? draftCards.length
+        : properties.filter((p) => p.status.toLowerCase() === tab.toLowerCase()).length;
+
   const filteredProperties = useMemo(() => {
     if (activeTab === "Draft") return draftCards;
     return properties.filter((prop) => {
@@ -463,30 +474,6 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* TOP BRAND HEADER (Matching Buyer Page) */}
-      <AppBrandHeader
-        currentRole="owner"
-        rightActions={
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <TouchableOpacity
-              style={[styles.headerCircleBtn, showSearch && styles.headerCircleBtnActive]}
-              onPress={() => setShowSearch(!showSearch)}
-              activeOpacity={0.7}
-            >
-              <Search size={18} color={showSearch ? COLORS.primary : "#111111"} strokeWidth={2.2} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.addPropertyCircleBtn}
-              onPress={() => navigation.navigate("Add", freshAddParams())}
-              activeOpacity={0.8}
-            >
-              <Plus size={18} color="#FFFFFF" strokeWidth={2.4} />
-            </TouchableOpacity>
-          </View>
-        }
-        showNotification={false}
-      />
 
       {/* Main Scrollable View */}
       <ScrollView
@@ -502,37 +489,44 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
           />
         }
       >
-        {/* Search Input Bar (Expandable) */}
-        {showSearch && (
-          <View style={styles.searchBarWrapper}>
-            <View style={styles.searchBarCard}>
-              <Search size={16} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search by title, locality or address..."
-                placeholderTextColor="#94A3B8"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoFocus
-                underlineColorAndroid="transparent"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery("")} activeOpacity={0.7}>
-                  <X size={16} color={COLORS.textSecondary} />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        )}
-
         {/* Screen Title */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 10 }}>
-          <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A", letterSpacing: -0.4 }}>
-            My Properties
-          </Text>
-          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-            Manage and track your active property listings
-          </Text>
+        {/* Screen title with search + add actions (no brand header here) */}
+        <View style={{ paddingTop: 12, paddingBottom: 10, flexDirection: "row", alignItems: "center" }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A", letterSpacing: -0.4 }}>
+              My Properties
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <TouchableOpacity
+                style={styles.addPropertyCircleBtn}
+                onPress={() => navigation.navigate("Add", freshAddParams())}
+                activeOpacity={0.8}
+              >
+                <Plus size={18} color="#FFFFFF" strokeWidth={2.4} />
+              </TouchableOpacity>
+            </View>
+        </View>
+
+        {/* Search: title, locality or address */}
+        <View style={styles.searchBarWrapper}>
+          <View style={styles.searchBarCard}>
+            <Search size={16} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by title, locality or address..."
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+              underlineColorAndroid="transparent"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")} activeOpacity={0.7}>
+                <X size={16} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Honest load failure: the owner is told instead of being shown a
@@ -552,20 +546,16 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
           >
             {/* Main Filter Icon Button */}
             <TouchableOpacity
-              style={[styles.filterIconPill, showSearch && styles.filterIconPillActive]}
+              style={[styles.filterIconPill, showFilterSheet && styles.filterIconPillActive]}
               activeOpacity={0.8}
-              onPress={() => setShowSearch(!showSearch)}
+              onPress={() => setShowFilterSheet(true)}
+              accessibilityLabel="Open property filters"
             >
-              <SlidersHorizontal size={15} color={showSearch ? COLORS.primary : "#334155"} />
+              <SlidersHorizontal size={15} color={showFilterSheet ? COLORS.primary : "#334155"} />
             </TouchableOpacity>
 
             {STATUS_TABS.map((tab) => {
-              const count =
-                tab === "All"
-                  ? properties.length
-                  : tab === "Draft"
-                    ? draftCards.length
-                    : properties.filter((p) => p.status.toLowerCase() === tab.toLowerCase()).length;
+              const count = countForTab(tab);
               const isActive = activeTab === tab;
 
               return (
@@ -656,6 +646,54 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
           handleEditProperty(prop);
         }}
       />
+      {/* ================= ALL FILTERS POP-UP ================= */}
+      <Modal
+        visible={showFilterSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFilterSheet(false)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setShowFilterSheet(false)}>
+          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetTitle}>Filter Properties</Text>
+                <Text style={styles.sheetSubtitle}>Show your listings by status</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowFilterSheet(false)}
+                activeOpacity={0.7}
+                style={styles.sheetCloseBtn}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sheetLabel}>STATUS</Text>
+            {STATUS_TABS.map((tab) => {
+              const isActive = activeTab === tab;
+              return (
+                <TouchableOpacity
+                  key={tab}
+                  style={[styles.sheetRow, isActive && styles.sheetRowActive]}
+                  onPress={() => {
+                    setActiveTab(tab);
+                    setShowFilterSheet(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.sheetRowText, isActive && styles.sheetRowTextActive]}>{tab}</Text>
+                  <View style={styles.sheetRowRight}>
+                    <Text style={styles.sheetCount}>{countForTab(tab)}</Text>
+                    {isActive ? <Check size={16} color={COLORS.primary} /> : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -707,20 +745,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  headerCircleBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-  },
-  headerCircleBtnActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: "#EFF6FF",
-  },
   addPropertyCircleBtn: {
     width: 40,
     height: 40,
@@ -729,18 +753,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  // scrollContent already pads 20px; no extra side padding here.
   searchBarWrapper: {
-    paddingHorizontal: 20,
     paddingBottom: 10,
-    backgroundColor: "#FFFFFF",
   },
   searchBarCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#EEF2F6",
+    borderColor: "#E2E8F0",
     paddingHorizontal: 14,
     height: 44,
   },
@@ -764,6 +787,103 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    justifyContent: "flex-end",
+  },
+
+  sheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+  },
+
+  sheetHandle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+    marginTop: 10,
+    marginBottom: 14,
+  },
+
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+
+  sheetSubtitle: {
+    fontSize: 13,
+    color: "#64748B",
+    marginTop: 2,
+  },
+
+  sheetCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  sheetLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94A3B8",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+
+  sheetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginBottom: 6,
+    backgroundColor: "#F8FAFC",
+  },
+
+  sheetRowActive: {
+    backgroundColor: "#EFF6FF",
+  },
+
+  sheetRowText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#334155",
+  },
+
+  sheetRowTextActive: {
+    color: COLORS.primary,
+    fontWeight: "700",
+  },
+
+  sheetRowRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  sheetCount: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+
   filterIconPill: {
     width: 36,
     height: 34,
