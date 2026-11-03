@@ -36,7 +36,6 @@ import {
 import COLORS from "../../../shared/constants/colors.js";
 import { useAgent } from "../context/AgentContext.js";
 import ConfirmationModal from "../../owner/components/ConfirmationModal.js";
-import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 
 export default function AgentProfileScreen({ navigation }) {
   const {
@@ -82,7 +81,6 @@ export default function AgentProfileScreen({ navigation }) {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* TOP BRAND HEADER */}
-      <AppBrandHeader currentRole="agent" />
 
       <ScrollView
         style={styles.container}

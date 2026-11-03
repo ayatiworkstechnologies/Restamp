@@ -63,20 +63,8 @@ export default function AgentPaymentSuccessScreen({ route, navigation }) {
     });
   };
 
-  useEffect(() => {
-    if (!agentPlan?.hasPurchased || agentPlan?.name !== planName) {
-      activatePlan(
-        {
-          name: planName,
-          validity: planValidity,
-          price: amountPaid,
-          amountPaid,
-          locationLimit: selectedLocalities?.length || 10,
-        },
-        selectedLocalities
-      );
-    }
-  }, []);
+  // The plan was saved on the server by the payment screen and applied to
+  // AgentContext there; nothing is activated locally here.
 
   useEffect(() => {
     Animated.spring(scaleAnim, {

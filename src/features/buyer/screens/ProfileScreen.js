@@ -221,7 +221,7 @@ export default function ProfileScreen({ navigation }) {
     if (switchingOwner) return;
     setSwitchingOwner(true);
     try {
-      await enterOwnerFlow(nav, authForOwnerEntry, "Dashboard");
+      await enterOwnerFlow(nav, authForOwnerEntry, "Profile");
     } finally {
       setSwitchingOwner(false);
     }
@@ -310,7 +310,6 @@ export default function ProfileScreen({ navigation }) {
               activeOpacity={0.7}
             >
               <Text style={styles.ownerName}>{userProfile.name}</Text>
-              <Pencil size={15} color="#475569" style={styles.pencilIcon} />
             </TouchableOpacity>
 
             {userProfile.phone ? (
@@ -336,21 +335,31 @@ export default function ProfileScreen({ navigation }) {
         {/* Mode Switch Button (Switch to Post Property) */}
         <TouchableOpacity
           style={styles.modeSwitchBanner}
-          onPress={handleSwitchToOwner}
+          onPress={hasAgentPlan ? handleSwitchToAgent : handleSwitchToOwner}
           activeOpacity={0.88}
         >
           <View style={styles.modeSwitchLeft}>
             <View style={styles.modeSwitchIconWrap}>
-              <Building2 size={20} color={COLORS.primary} />
+              {hasAgentPlan ? (
+                <Briefcase size={22} color="#FFFFFF" />
+              ) : (
+                <Building2 size={22} color="#FFFFFF" />
+              )}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.modeSwitchTitle}>Switch to Post Property</Text>
+              <Text style={styles.modeSwitchTitle}>
+                {hasAgentPlan ? "Go to Agent Dashboard" : "Post your Property"}
+              </Text>
               <Text style={styles.modeSwitchSub}>
-                List flats, villas & commercial properties as an Owner
+                {hasAgentPlan
+                  ? "Browse owner properties in your subscribed localities"
+                  : "List flats, villas & commercial properties as an Owner"}
               </Text>
             </View>
           </View>
-          <ArrowRight size={18} color={COLORS.primary} />
+          <View style={styles.modeSwitchArrow}>
+            <ArrowRight size={16} color={COLORS.primary} />
+          </View>
         </TouchableOpacity>
 
         {/* 1. ACCOUNT */}
@@ -404,7 +413,8 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* 1b. LINKED ACCOUNTS */}
+        {/* 1b. LINKED ACCOUNTS — hidden from the buyer profile */}
+        {false && (
         <View style={styles.menuGroup}>
           <Text style={styles.groupHeading}>LINKED ACCOUNTS</Text>
 
@@ -455,6 +465,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
           ) : null}
         </View>
+        )}
 
         {/* 2. MY ACTIVITY */}
         <View style={styles.menuGroup}>
@@ -862,39 +873,51 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#EFF6FF",
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#BFDBFE",
-    padding: 14,
+    backgroundColor: COLORS.primary,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     marginBottom: 18,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   modeSwitchLeft: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
-    marginRight: 10,
+    marginRight: 12,
   },
   modeSwitchIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#DBEAFE",
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.18)",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
   modeSwitchTitle: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: COLORS.primary,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   modeSwitchSub: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    lineHeight: 15,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.85)",
+    marginTop: 3,
+    lineHeight: 16,
     fontWeight: "400",
+  },
+  modeSwitchArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
   },
   menuGroup: {
     backgroundColor: "#FFFFFF",

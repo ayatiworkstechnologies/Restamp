@@ -160,16 +160,18 @@ export default function OwnerProfileScreen({ navigation }) {
         >
           <View style={styles.modeSwitchLeft}>
             <View style={styles.modeSwitchIconWrap}>
-              <Search size={20} color={COLORS.primary} />
+              <Search size={22} color="#FFFFFF" />
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.modeSwitchTitle}>Switch to Find Property</Text>
               <Text style={styles.modeSwitchSub}>
                 Browse flats, villas & commercial properties as a Buyer
               </Text>
             </View>
           </View>
-          <ArrowRight size={18} color={COLORS.primary} />
+          <View style={styles.modeSwitchArrow}>
+            <ArrowRight size={16} color={COLORS.primary} />
+          </View>
         </TouchableOpacity>
 
         {/* 1. ACCOUNT */}
@@ -177,39 +179,13 @@ export default function OwnerProfileScreen({ navigation }) {
           <Text style={styles.groupHeading}>ACCOUNT</Text>
 
           <TouchableOpacity
-            style={styles.menuRow}
+            style={[styles.menuRow, { borderBottomWidth: 0 }]}
             onPress={() => Alert.alert("Personal Information", "View or update your contact details.")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
               <User size={18} color="#334155" style={styles.menuIcon} />
               <Text style={styles.menuLabel}>Personal Information</Text>
-            </View>
-            <ChevronRight size={16} color="#94A3B8" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => Alert.alert("KYC & Verification", "Identity verification is not available yet.")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <ShieldCheck size={18} color="#334155" style={styles.menuIcon} />
-              <Text style={styles.menuLabel}>KYC / Verification</Text>
-            </View>
-            <View style={styles.badgeRow}>
-              <ChevronRight size={16} color="#94A3B8" />
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.menuRow, { borderBottomWidth: 0 }]}
-            onPress={() => Alert.alert("Saved Addresses", "Registered residential address in Chennai.")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MapPin size={18} color="#334155" style={styles.menuIcon} />
-              <Text style={styles.menuLabel}>Saved Address</Text>
             </View>
             <ChevronRight size={16} color="#94A3B8" />
           </TouchableOpacity>
@@ -249,7 +225,7 @@ export default function OwnerProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 0 }]}
-            onPress={() => navigation.navigate("Visits")}
+            onPress={() => navigation.navigate("OwnerVisits")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -636,39 +612,51 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#EFF6FF",
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#BFDBFE",
-    padding: 14,
+    backgroundColor: COLORS.primary,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     marginBottom: 18,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   modeSwitchLeft: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
-    marginRight: 10,
+    marginRight: 12,
   },
   modeSwitchIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#DBEAFE",
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.18)",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
   modeSwitchTitle: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: COLORS.primary,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   modeSwitchSub: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    lineHeight: 15,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.85)",
+    marginTop: 3,
+    lineHeight: 16,
     fontWeight: "400",
+  },
+  modeSwitchArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
   },
   menuGroup: {
     backgroundColor: "#FFFFFF",

@@ -31,6 +31,7 @@ import OwnerPaymentFailedScreen from "../../features/owner/screens/OwnerPaymentF
 import OwnerPublishSuccessScreen from "../../features/owner/screens/OwnerPublishSuccessScreen.js";
 import OwnerLeadDetailScreen from "../../features/owner/screens/OwnerLeadDetailScreen.js";
 import OwnerPropertyLeadsScreen from "../../features/owner/screens/OwnerPropertyLeadsScreen.js";
+import OwnerVisitsScreen from "../../features/owner/screens/OwnerVisitsScreen.js";
 
 import AgentNavigator from "../../features/agent/navigation/AgentNavigator.js";
 import AgentLocationSelectScreen from "../../features/agent/screens/AgentLocationSelectScreen.js";
@@ -194,6 +195,7 @@ const GuardedOwnerPaymentFailed = guarded(OwnerPaymentFailedScreen);
 const GuardedOwnerPublishSuccess = guarded(OwnerPublishSuccessScreen);
 const GuardedOwnerLeadDetail = guarded(OwnerLeadDetailScreen);
 const GuardedOwnerPropertyLeads = guarded(OwnerPropertyLeadsScreen);
+const GuardedOwnerVisits = guarded(OwnerVisitsScreen);
 
 export default function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -272,6 +274,7 @@ export default function AppNavigator() {
         <Stack.Screen name="OwnerPublishSuccess" component={GuardedOwnerPublishSuccess} />
         <Stack.Screen name="OwnerLeadDetail" component={GuardedOwnerLeadDetail} />
         <Stack.Screen name="OwnerPropertyLeads" component={GuardedOwnerPropertyLeads} />
+        <Stack.Screen name="OwnerVisits" component={GuardedOwnerVisits} />
 
         {/* AGENT FLOW: gated off until a production broker/lead API exists. */}
         {AGENT_MODULE_ENABLED ? (

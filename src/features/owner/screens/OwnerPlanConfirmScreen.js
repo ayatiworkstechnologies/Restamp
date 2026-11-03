@@ -22,18 +22,19 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
+import { formatListingLimit } from "../data/ownerPlans.js";
 
 export default function OwnerPlanConfirmScreen({ route, navigation }) {
   const plan = route?.params?.plan || {
-    id: "owner-starter",
-    name: "RESTAMP STARTER",
-    price: "₹599",
-    priceNumeric: 599,
+    id: "owner-startup",
+    name: "Startup Plan",
+    price: "₹499",
+    priceNumeric: 499,
     validity: "30 Days",
     listingLimit: 1,
     features: [
       "Unlimited Leads",
-      "City-Wide Reach",
+      "City Limit Reach",
     ],
   };
 
@@ -41,7 +42,7 @@ export default function OwnerPlanConfirmScreen({ route, navigation }) {
   const [discount, setDiscount] = useState(0);
   const [couponApplied, setCouponApplied] = useState(false);
 
-  const basePrice = plan.priceNumeric || 599;
+  const basePrice = plan.priceNumeric || 499;
   const totalAmount = basePrice - discount;
 
   const handleApplyCoupon = () => {
@@ -91,7 +92,7 @@ export default function OwnerPlanConfirmScreen({ route, navigation }) {
           onPress={() =>
             Alert.alert(
               "Plan Information",
-              `${plan.name} gives you up to ${plan.listingLimit} active listings with 0% brokerage assurance.`
+              `${plan.name} gives you up to ${formatListingLimit(plan.listingLimit)} active listings with 0% brokerage assurance.`
             )
           }
           activeOpacity={0.7}
@@ -118,7 +119,7 @@ export default function OwnerPlanConfirmScreen({ route, navigation }) {
             <View style={styles.planInfo}>
               <Text style={styles.planTitle}>{plan.name}</Text>
               <Text style={styles.planSubtitle}>
-                {plan.validity} • Up to {plan.listingLimit} Listings
+                {plan.validity} • Up to {formatListingLimit(plan.listingLimit)} Listings
               </Text>
             </View>
 
@@ -200,7 +201,7 @@ export default function OwnerPlanConfirmScreen({ route, navigation }) {
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Listing Limit</Text>
-            <Text style={styles.summaryVal}>Up to {plan.listingLimit} Properties</Text>
+            <Text style={styles.summaryVal}>Up to {formatListingLimit(plan.listingLimit)} Properties</Text>
           </View>
 
           <View style={styles.summaryRow}>

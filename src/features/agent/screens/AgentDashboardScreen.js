@@ -167,18 +167,34 @@ export default function AgentDashboardScreen({ navigation }) {
 
         {/* 2. WELCOME BACK HERO BANNER CARD (Section 1 Redesign with Fixed Height) */}
         <View style={styles.welcomeBanner}>
-          <View style={styles.welcomeBannerLeft}>
-            <Text style={styles.welcomeBannerTitle}>Welcome Back!</Text>
-            <Text style={styles.welcomeBannerEmoji}>👋</Text>
-            <Text style={styles.welcomeBannerSub}>
-              Everything looks good{"\n"}today.
-            </Text>
+          {/* Decorative depth circles (replace the low-res building image) */}
+          <View style={[styles.welcomeOrb, styles.welcomeOrbLarge]} />
+          <View style={[styles.welcomeOrb, styles.welcomeOrbSmall]} />
+
+          <Text style={styles.welcomeBannerTitle} numberOfLines={1}>
+            Welcome back 👋
+          </Text>
+          <Text style={styles.welcomeBannerSub}>
+            {availablePropertiesCount > 0
+              ? `${availablePropertiesCount} owner ${availablePropertiesCount === 1 ? "property" : "properties"} live in your localities`
+              : "Your localities are set — new owner listings will show up here"}
+          </Text>
+
+          <View style={styles.welcomeChipRow}>
+            <View style={styles.welcomeChip}>
+              <Crown size={12} color="#FFFFFF" style={{ marginRight: 5 }} />
+              <Text style={styles.welcomeChipText} numberOfLines={1}>
+                {agentPlan?.name || "No active plan"}
+              </Text>
+            </View>
+            <View style={styles.welcomeChip}>
+              <MapPin size={12} color="#FFFFFF" style={{ marginRight: 5 }} />
+              <Text style={styles.welcomeChipText}>
+                {selectedLocalities.length}
+                {agentPlan?.locationLimit ? `/${agentPlan.locationLimit}` : ""} localities
+              </Text>
+            </View>
           </View>
-          <Image
-            source={require("../../../../assets/agent-welcome-building.png")}
-            style={styles.welcomeBannerImage}
-            resizeMode="contain"
-          />
         </View>
 
         {/* 3. 2-COLUMN METRICS GRID: Real Estate Stats (OVERVIEW) */}
@@ -636,51 +652,71 @@ const styles = StyleSheet.create({
     lineHeight: 33,
   },
 
-  // Welcome Back Hero Banner Card (Vibrant Blue Card with 3D isometric building - fixed height)
+  // Welcome banner: solid brand card, text-first, decorative orbs for depth
   welcomeBanner: {
-    backgroundColor: "#2563EB",
+    backgroundColor: COLORS.primary,
     borderRadius: 20,
-    height: 112, // Fixed height per design requirement (compact & responsive)
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingLeft: 20,
-    paddingRight: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     marginBottom: 16,
     overflow: "hidden",
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 10,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
     elevation: 4,
   },
-  welcomeBannerLeft: {
-    flex: 1,
-    paddingRight: 10,
-    justifyContent: "center",
+  welcomeOrb: {
+    position: "absolute",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+  welcomeOrbLarge: {
+    width: 160,
+    height: 160,
+    top: -60,
+    right: -40,
+  },
+  welcomeOrbSmall: {
+    width: 90,
+    height: 90,
+    bottom: -40,
+    right: 70,
+    backgroundColor: "rgba(255,255,255,0.07)",
   },
   welcomeBannerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "800",
     color: "#FFFFFF",
     letterSpacing: -0.3,
-    lineHeight: 22,
-  },
-  welcomeBannerEmoji: {
-    fontSize: 16,
-    marginVertical: 2,
-    lineHeight: 20,
   },
   welcomeBannerSub: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: "400",
-    color: "rgba(255, 255, 255, 0.92)",
-    letterSpacing: -0.1,
-    lineHeight: 16,
+    color: "rgba(255,255,255,0.88)",
+    lineHeight: 18,
+    marginTop: 4,
+    maxWidth: "88%",
   },
-  welcomeBannerImage: {
-    width: 108,
-    height: 98,
+  welcomeChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 14,
+  },
+  welcomeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    maxWidth: "100%",
+  },
+  welcomeChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 
   expiredBanner: {

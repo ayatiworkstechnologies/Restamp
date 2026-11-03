@@ -34,6 +34,7 @@ import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import { useOwner } from "../../owner/context/OwnerContext.js";
 import { useAgent } from "../../agent/context/AgentContext.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
+import { OWNER_PLANS_LIST } from "../../owner/data/ownerPlans.js";
 
 const VERTICAL_TABS = [
   { id: "owner", label: "Owner Plan", icon: Crown },
@@ -153,136 +154,11 @@ const COMMERCIAL_TYPES = [
   },
 ];
 
-/* 4 Official Owner Plans */
+/* Seller (Owner) plans — shared with the Owner Plans screen. The same 7
+   tiers apply to residential and commercial properties. */
 const OWNER_PLANS = {
-  residential: [
-    {
-      id: "owner-starter",
-      name: "RESTAMP STARTER",
-      titleColor: "#0F172A",
-      price: "₹599",
-      originalPrice: "₹1,198",
-      priceNumeric: 599,
-      validity: "30 Days",
-      listingLimit: 1,
-      priceSub1: "One-time payment · 30 Days",
-      priceSub2: "1 property listing",
-      isPopular: false,
-      buttonText: "Choose Plan",
-      features: [
-        "Unlimited Leads",
-        "City-Wide Reach",
-      ],
-    },
-    {
-      id: "owner-plus",
-      name: "RESTAMP PLUS",
-      titleColor: "#0F172A",
-      price: "₹999",
-      originalPrice: "₹1,998",
-      priceNumeric: 999,
-      validity: "30 Days",
-      listingLimit: 2,
-      priceSub1: "One-time payment · 30 Days",
-      priceSub2: "2 property listings",
-      isPopular: false,
-      buttonText: "Choose Plan",
-      features: [
-        "Unlimited Leads",
-        "City-Wide Reach",
-      ],
-    },
-    {
-      id: "owner-gold",
-      name: "RESTAMP GOLD",
-      titleColor: "#0F172A",
-      price: "₹1,999",
-      originalPrice: "₹3,998",
-      priceNumeric: 1999,
-      validity: "60 Days",
-      listingLimit: 5,
-      priceSub1: "One-time payment · 60 Days",
-      priceSub2: "5 property listings",
-      isPopular: true,
-      buttonText: "Choose Plan",
-      features: [
-        "Unlimited Leads",
-        "City-Wide Reach",
-        "Relationship Manager Assistance",
-      ],
-    },
-    {
-      id: "owner-premium",
-      name: "RESTAMP PREMIUM",
-      titleColor: "#0F172A",
-      price: "₹4,999",
-      originalPrice: "₹9,998",
-      priceNumeric: 4999,
-      validity: "90 Days",
-      listingLimit: 10,
-      priceSub1: "One-time payment · 90 Days",
-      priceSub2: "10 property listings",
-      isPopular: false,
-      buttonText: "Choose Plan",
-      features: [
-        "Unlimited Leads",
-        "City-Wide Reach",
-        "Relationship Manager Assistance",
-        "Social Media Promotion Assistance",
-      ],
-    },
-  ],
-  commercial: [
-    {
-      id: "owner-comm-basic",
-      name: "Commercial Free",
-      titleColor: "#0F172A",
-      price: "₹0",
-      priceSub1: "free forever",
-      priceSub2: "office & retail category",
-      isPopular: false,
-      buttonText: "Get started",
-      features: [
-        "30 Days commercial visibility",
-        "Direct in-app corporate leads",
-        "Zero brokerage assurance",
-      ],
-    },
-    {
-      id: "owner-comm-pro",
-      name: "Corporate Boost",
-      titlePrefix: "Corporate ",
-      titlePrefixColor: "#2563EB",
-      titleColor: "#0F172A",
-      price: "₹3,499",
-      priceSub1: "for 90 days validity",
-      priceSub2: "+ GST • full tax credit",
-      isPopular: true,
-      buttonText: "Get started",
-      features: [
-        "90 Days prime corporate visibility",
-        "Verified Commercial Unit badge",
-        "Targeted outreach to GCCs & startups",
-      ],
-    },
-    {
-      id: "owner-comm-vip",
-      name: "Enterprise Managed",
-      titlePrefix: "Enterprise ",
-      titlePrefixColor: "#2563EB",
-      titleColor: "#0F172A",
-      price: "₹8,999",
-      priceSub1: "until leased / sold",
-      priceSub2: "corporate advisory mandate",
-      isPopular: false,
-      buttonText: "Get started",
-      features: [
-        "Dedicated commercial account manager",
-        "Tenant KYC & due diligence",
-        "Commercial lease drafting & drone tour",
-      ],
-    },
-  ],
+  residential: OWNER_PLANS_LIST,
+  commercial: OWNER_PLANS_LIST,
 };
 
 // "for 90 days validity" -> "90 Days"; "until deal closed" -> "Until Deal Closed".
@@ -371,7 +247,7 @@ export default function MenuScreen({ navigation, route }) {
         originalPrice: plan.originalPrice,
         priceNumeric,
         validity: plan.validity || planValidityLabel(plan.priceSub1),
-        listingLimit: plan.listingLimit || 1,
+        listingLimit: plan.listingLimit ?? 1,
         features: plan.features,
       };
 

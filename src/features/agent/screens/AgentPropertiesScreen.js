@@ -30,8 +30,10 @@ import {
 import COLORS from "../../../shared/constants/colors.js";
 import { useAgent } from "../context/AgentContext.js";
 import PropertyDetailModal from "../../buyer/components/PropertyDetailModal.js";
-import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 import EmptyState from "../../owner/components/EmptyState.js";
+import { revealContactPhone } from "../../../shared/api/contact.js";
+import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
+import { getAuthTokenSync } from "../../../shared/api/client.js";
 
 const DEAL_TYPES = ["All", "Buy", "Rent", "Lease"];
 const PROPERTY_TYPES = ["All Types", "Apartment", "Villa", "House", "Commercial", "Plot"];
@@ -151,25 +153,68 @@ export default function AgentPropertiesScreen({ navigation }) {
     searchQuery,
   ]);
 
-  const handleContactOwner = (item, type = "whatsapp") => {
-    const cleanPhone = String(item.ownerPhone || "").replace(/[^0-9]/g, "");
-    if (!cleanPhone) {
-      Alert.alert("Contact Number Unavailable", "No phone number is available for this owner.");
+  // Contact Owner: the owner's number comes only from the authorized reveal
+  // (POST /buyer/listings/{id}/contact). Then the agent picks Call or WhatsApp.
+  const [contactLoadingId, setContactLoadingId] = useState(null);
+  const openCall = (digits) =>
+    Linking.openURL(`tel:${digits}`).catch(() => {
+      Alert.alert("Call Unavailable", "Could not place this call.");
+    });
+  const openWhatsApp = (digits, item) => {
+    const wa = digits.length === 10 ? `91${digits}` : digits;
+    const text = encodeURIComponent(
+      `Hello! I am a RESTAMP Agent contacting you regarding your property "${item.title}" in ${item.location}. I have interested clients and would like to arrange a site visit.`
+    );
+    Linking.openURL(`https://wa.me/${wa}?text=${text}`).catch(() => {
+      Alert.alert("WhatsApp Unavailable", "Could not launch WhatsApp.");
+    });
+  };
+  const handleContactOwner = (item) => {
+    const listingId =
+      typeof item?.backendId === "number" ? item.backendId : typeof item?.id === "number" ? item.id : null;
+    if (listingId == null) {
+      Alert.alert("Contact Unavailable", "This listing has no live record to contact.");
       return;
     }
-
-    if (type === "whatsapp") {
-      const text = encodeURIComponent(
-        `Hello! I am a RESTAMP Agent contacting you regarding your property "${item.title}" in ${item.location}. I have interested clients and would like to arrange a site visit.`
-      );
-      Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`).catch(() => {
-        Alert.alert("WhatsApp Unavailable", "Could not launch WhatsApp.");
-      });
-    } else {
-      Linking.openURL(`tel:${cleanPhone}`).catch(() => {
-        Alert.alert("Call Unavailable", "Could not place this call.");
-      });
+    if (!getAuthTokenSync()) {
+      Alert.alert("Log In Required", "Log in to contact the owner of this property.");
+      return;
     }
+    if (contactLoadingId != null) return;
+    setContactLoadingId(listingId);
+    revealContactPhone(listingId)
+      .then(
+        (phone) => {
+          const digits = String(phone || "").replace(/[^0-9]/g, "");
+          if (!digits) {
+            Alert.alert("Contact Number Unavailable", "The owner hasn't shared a number for this property.");
+            return;
+          }
+          const ownerLabel = item.ownerName || "the owner";
+          Alert.alert(`Contact ${ownerLabel}`, phone, [
+            { text: "Call", onPress: () => openCall(digits) },
+            { text: "WhatsApp", onPress: () => openWhatsApp(digits, item) },
+            { text: "Cancel", style: "cancel" },
+          ]);
+        },
+        (e) => {
+          if (isBuyerPlanRequired(e)) {
+            setActivePropertyModal(null);
+            navigation.navigate(BUYER_PLANS_ROUTE, { reason: "quota" });
+            return;
+          }
+          if (e && e.status === 404) {
+            Alert.alert("Contact Number Unavailable", "The owner hasn't shared a number for this property.");
+            return;
+          }
+          if (e && (e.status === 401 || e.kind === "login")) {
+            Alert.alert("Session Expired", "Please log in again to contact the owner.");
+            return;
+          }
+          Alert.alert("Couldn't fetch number", "Please check your connection and try again.");
+        }
+      )
+      .finally(() => setContactLoadingId(null));
   };
 
   const handleOpenMatchSheet = (property) => {
@@ -192,14 +237,10 @@ export default function AgentPropertiesScreen({ navigation }) {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* TOP BRAND HEADER */}
-      <AppBrandHeader currentRole="agent" />
 
       {/* SCREEN TITLE & SUBTITLE */}
       <View style={styles.screenHeader}>
         <Text style={styles.headerTitle}>Properties</Text>
-        <Text style={styles.headerSubtitle}>
-          Properties available in your subscribed locations
-        </Text>
       </View>
 
       {/* SEARCH AND FILTERS */}
@@ -374,7 +415,7 @@ export default function AgentPropertiesScreen({ navigation }) {
               selectedLocalityFilter !== "All Locations" ||
               selectedType !== "All Types"
                 ? "Reset Filters"
-                : undefined
+                : null
             }
             onButtonPress={() => {
               setSelectedDealType("All");
@@ -511,6 +552,25 @@ export default function AgentPropertiesScreen({ navigation }) {
 
             <Text style={styles.sheetSelectLeadLabel}>Select an Active Customer Lead:</Text>
 
+            {leads.length === 0 ? (
+              <View style={styles.matchEmptyBox}>
+                <Users size={28} color="#94A3B8" />
+                <Text style={styles.matchEmptyTitle}>No leads to match yet</Text>
+                <Text style={styles.matchEmptyText}>
+                  When buyers enquire in your localities they'll appear in Leads, and you can assign this property to them here.
+                </Text>
+                <TouchableOpacity
+                  style={styles.matchEmptyBtn}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setMatchingProperty(null);
+                    navigation.navigate("Leads");
+                  }}
+                >
+                  <Text style={styles.matchEmptyBtnText}>Go to Leads</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
             <ScrollView style={styles.leadsSheetScroll} showsVerticalScrollIndicator={false}>
               {leads.map((lead) => (
                 <TouchableOpacity
@@ -519,7 +579,15 @@ export default function AgentPropertiesScreen({ navigation }) {
                   onPress={() => handleConfirmMatch(lead)}
                   activeOpacity={0.8}
                 >
-                  <Image source={{ uri: lead.avatar }} style={styles.sheetLeadAvatar} />
+                  {lead.avatar ? (
+                    <Image source={{ uri: lead.avatar }} style={styles.sheetLeadAvatar} />
+                  ) : (
+                    <View style={[styles.sheetLeadAvatar, styles.sheetLeadAvatarFallback]}>
+                      <Text style={styles.sheetLeadAvatarText}>
+                        {(lead.customerName || "?").trim().charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.sheetLeadInfo}>
                     <Text style={styles.sheetLeadName}>{lead.customerName}</Text>
                     <Text style={styles.sheetLeadReq} numberOfLines={1}>
@@ -548,7 +616,7 @@ export default function AgentPropertiesScreen({ navigation }) {
           handleOpenMatchSheet(prop);
         }}
         onContactOwner={(prop) => {
-          handleContactOwner(prop, "whatsapp");
+          handleContactOwner(prop);
         }}
       />
     </SafeAreaView>
@@ -862,6 +930,46 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
+  },
+  matchEmptyBox: {
+    alignItems: "center",
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
+  matchEmptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginTop: 10,
+  },
+  matchEmptyText: {
+    fontSize: 13,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 19,
+    marginTop: 6,
+  },
+  matchEmptyBtn: {
+    marginTop: 16,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+  },
+  matchEmptyBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  sheetLeadAvatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.primary,
+  },
+  sheetLeadAvatarText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   sheetSelectLeadLabel: {
     fontSize: 12.5,

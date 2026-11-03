@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -24,9 +25,10 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useAgent } from "../context/AgentContext.js";
+import { subscribeAgentPlan } from "../../../shared/api/agentPlans.js";
 
 export default function AgentPaymentScreen({ route, navigation }) {
-  const { activatePlan } = useAgent();
+  const { applyServerPlan } = useAgent();
 
   const plan = route?.params?.plan || {
     id: "agent-pro",
@@ -85,26 +87,47 @@ export default function AgentPaymentScreen({ route, navigation }) {
     },
   ]);
 
+  // The purchase is saved on the server (POST /broker/plans/{id}/subscribe):
+  // it grants the chosen localities and makes this account an agent, so the
+  // plan is still there after a reload or the next login. PAYMENT IS
+  // SIMULATED server-side — no money is charged.
   const handlePay = (shouldSucceed = true) => {
+    if (isProcessing) return;
+    if (!shouldSucceed) {
+      navigation.goBack();
+      return;
+    }
     setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      if (shouldSucceed) {
-        // Activate plan in AgentContext
-        activatePlan(plan, selectedLocalities);
-
+    subscribeAgentPlan(plan.id, selectedLocalities)
+      .then((server) => {
+        applyServerPlan(server);
+        const unmatched = Array.isArray(server?.unmatched_localities) ? server.unmatched_localities : [];
         navigation.navigate("AgentPaymentSuccess", {
-          planName: plan.name,
-          locationLimit: `${selectedLocalities.length} Localities (${plan.locationLimit || 10} Limit)`,
-          selectedLocalities,
+          planName: server?.plan_name || plan.name,
+          locationLimit: `${(server?.localities || selectedLocalities).length} Localities (${server?.locality_limit || plan.locationLimit || 10} Limit)`,
+          selectedLocalities: server?.localities || selectedLocalities,
           planValidity: plan.validity || "30 Days",
           amountPaid: formattedAmount,
         });
-      } else {
-        // Fallback or retry
-        navigation.goBack();
-      }
-    }, 1200);
+        if (unmatched.length > 0) {
+          Alert.alert(
+            "Some localities aren't served yet",
+            `${unmatched.join(", ")} ${unmatched.length === 1 ? "isn't" : "aren't"} available yet, so ${unmatched.length === 1 ? "it was" : "they were"} not added to your plan.`
+          );
+        }
+      })
+      .catch((e) => {
+        const status = e?.status;
+        const detail = typeof e?.detail === "string" ? e.detail : null;
+        if (status === 401 || e?.kind === "login") {
+          Alert.alert("Log In Required", "Please log in again to complete your purchase.");
+        } else if (status === 422 && detail) {
+          Alert.alert("Couldn't activate plan", detail);
+        } else {
+          Alert.alert("Payment Failed", "We couldn't activate your plan. Please check your connection and try again.");
+        }
+      })
+      .finally(() => setIsProcessing(false));
   };
 
   const handleAddNewMethod = () => {

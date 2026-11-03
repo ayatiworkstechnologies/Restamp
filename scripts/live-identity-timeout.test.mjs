@@ -57,7 +57,9 @@ check(
     !ownerProfileSrc.includes("Aadhaar") &&
     !ownerDashboardSrc.includes('"Arunavo"') &&
     !ownerHeaderSrc.includes('"Raj"') &&
-    (ownerProfileSrc.includes("Not provided") || ownerProfileSrc.includes("not available"))
+    (ownerProfileSrc.includes("Not provided") ||
+      ownerProfileSrc.includes("not provided") ||
+      ownerProfileSrc.includes("not available"))
 );
 
 // --- 2. Bounded timeout behavior (stubbed fetch) ---

@@ -215,7 +215,8 @@ function futureParts(daysAhead = 7) {
   const modalSrc = src("src/features/buyer/components/PropertyDetailModal.js");
   check(
     "V18 detail shows real owner name, secure call flow (guest login-resume, no auto-dial)",
-    modalSrc.includes("property.ownerName") &&
+    // Real owner name: the loaded detail first, then the listing card.
+    modalSrc.includes("liveDetail?.ownerName || property?.ownerName") &&
       modalSrc.includes("handleCallOwner") &&
       modalSrc.includes("revealContactPhone") &&
       modalSrc.includes("tel:${phone}") &&
@@ -244,8 +245,10 @@ function futureParts(daysAhead = 7) {
     ownerVisitsSrc.includes("fetchOwnerVisits") &&
       ownerVisitsSrc.includes("updateOwnerVisit") &&
       ownerVisitsSrc.includes("toUiVisit") &&
-      ownerNavSrc.includes("OwnerVisitsScreen") &&
-      ownerNavSrc.includes('name="Visits"') &&
+      // Reached from Owner Profile → Site Visits (and the dashboard card),
+      // registered as the OwnerVisits stack page.
+      src("src/shared/navigation/AppNavigator.js").includes('name="OwnerVisits" component={GuardedOwnerVisits}') &&
+      src("src/features/owner/screens/OwnerProfileScreen.js").includes('navigation.navigate("OwnerVisits")') &&
       !ownerContextSrc.includes("visit_scheduled") &&
       !ownerContextSrc.includes("visitData: visitDetails")
   );

@@ -36,6 +36,7 @@ import { fetchAllOwnerListings, toOwnerProperty, freshAddParams, sumOwnerMetrics
 import { fetchOwnerVisits } from "../../../shared/api/visits.js";
 import RestampLogo from "../../../shared/components/RestampLogo.js";
 import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
+import { formatListingLimit } from "../data/ownerPlans.js";
 
 export default function OwnerDashboardScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -163,10 +164,6 @@ export default function OwnerDashboardScreen({ navigation }) {
 
   const handleViewLeads = () => {
     navigation.navigate("Leads");
-  };
-
-  const handleViewVisits = () => {
-    navigation.navigate("Visits");
   };
 
   const handleManagePlan = () => {
@@ -314,7 +311,7 @@ export default function OwnerDashboardScreen({ navigation }) {
           {/* Card 5: Site Visits Booked */}
           <TouchableOpacity
             style={styles.metricCard}
-            onPress={handleViewVisits}
+            onPress={() => navigation.navigate("OwnerVisits")}
             activeOpacity={0.85}
           >
             <View style={styles.metricCardTop}>
@@ -485,7 +482,7 @@ export default function OwnerDashboardScreen({ navigation }) {
             <View style={styles.planRowItem}>
               <Text style={styles.planKey}>Listing Quota</Text>
               <Text style={styles.planVal}>
-                {activeCount} of {subscription?.listingLimit || 5} used
+                {activeCount} of {formatListingLimit(subscription?.listingLimit ?? 5)} used
               </Text>
             </View>
 

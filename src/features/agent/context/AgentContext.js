@@ -1,5 +1,12 @@
-import React, { createContext, useContext, useState, useMemo } from "react";
+import React, { createContext, useContext, useState, useMemo, useEffect } from "react";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
+import { apiGet } from "../../../shared/api/client.js";
+import { toUiProperty } from "../../../shared/api/mappers.js";
+import { fetchAgentPlan, toUiAgentPlan } from "../../../shared/api/agentPlans.js";
+import { useAuth } from "../../auth/context/AuthContext.js";
+
+// Backend transaction type -> the deal key the agent screens filter on.
+const BADGE_BY_TRANSACTION = { BUY: "sale", RESALE: "resale", RENT: "rent", LEASE: "lease" };
 
 const AgentContext = createContext();
 
@@ -68,6 +75,42 @@ export function AgentProvider({ children }) {
       setSelectedLocalities(localities);
     }
   };
+
+  // Apply a server-saved agent plan (GET /broker/plan or a purchase result).
+  const applyServerPlan = (server) => {
+    if (!AGENT_MODULE_ENABLED || !server || !server.has_plan) return;
+    const ui = toUiAgentPlan(server);
+    const end = server.valid_until ? new Date(server.valid_until) : null;
+    const daysRemaining = end
+      ? Math.max(0, Math.ceil((end.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+      : 30;
+    setHasActivePlan(true);
+    setIsPlanExpired(false);
+    setAgentPlan({ ...ui, status: "active", daysRemaining });
+    setSelectedLocalities(Array.isArray(server.localities) ? server.localities : []);
+  };
+
+  // The plan lives on the server: load it whenever a user logs in, and clear
+  // it on logout, so a purchased plan survives reloads and new logins.
+  const { user: authUser } = useAuth();
+  const authUserId = authUser?.id ?? null;
+  useEffect(() => {
+    if (!AGENT_MODULE_ENABLED) return undefined;
+    if (authUserId == null) {
+      setHasActivePlan(false);
+      setAgentPlan(null);
+      setSelectedLocalities([]);
+      return undefined;
+    }
+    let cancelled = false;
+    fetchAgentPlan().then((server) => {
+      if (!cancelled && server) applyServerPlan(server);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUserId]);
 
   // Renew Plan handler
   const renewPlan = () => {
@@ -190,8 +233,40 @@ export function AgentProvider({ children }) {
     }
   };
 
-  // No local catalog is a valid source for agent inventory.
-  const localityProperties = useMemo(() => [], []);
+  // Agent inventory = live owner listings in the localities the agent paid
+  // for (public GET /buyer/listings?locality=…). Agents never add listings.
+  const [localityProperties, setLocalityProperties] = useState([]);
+  const localitiesKey = selectedLocalities.join("|");
+  useEffect(() => {
+    if (!AGENT_MODULE_ENABLED || selectedLocalities.length === 0) {
+      setLocalityProperties([]);
+      return undefined;
+    }
+    let cancelled = false;
+    Promise.all(
+      selectedLocalities.map((locality) =>
+        apiGet("/buyer/listings", { locality, page: 1, page_size: 100 })
+          .then((data) => data?.items || [])
+          .catch(() => [])
+      )
+    ).then((pages) => {
+      if (cancelled) return;
+      const seen = new Set();
+      const merged = [];
+      pages.flat().forEach((card) => {
+        if (!card || seen.has(card.listing_id)) return;
+        seen.add(card.listing_id);
+        const ui = toUiProperty(card);
+        ui.badgeType = BADGE_BY_TRANSACTION[ui.transactionType] || "sale";
+        merged.push(ui);
+      });
+      setLocalityProperties(merged);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localitiesKey]);
 
   const contextValue = useMemo(() => ({
     hasActivePlan,
@@ -205,6 +280,7 @@ export function AgentProvider({ children }) {
     isPlanExpired,
     localityProperties,
     activatePlan,
+    applyServerPlan,
     renewPlan,
     updateLocalities,
     updateLeadStatus,

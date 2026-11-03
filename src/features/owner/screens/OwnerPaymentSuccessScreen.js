@@ -25,10 +25,10 @@ import { ensureOwnerRole } from "../../../shared/api/users.js";
 
 export default function OwnerPaymentSuccessScreen({ route, navigation }) {
   const auth = useAuth();
-  const planName = route?.params?.planName || "RESTAMP STARTER";
+  const planName = route?.params?.planName || "Startup Plan";
   const planValidity = route?.params?.planValidity || "30 Days";
   const listingLimit = route?.params?.listingLimit || "Up to 1 Active Listing";
-  const amountPaid = route?.params?.amountPaid || "₹599";
+  const amountPaid = route?.params?.amountPaid || "₹499";
   const txnId = route?.params?.txnId || "—";
 
   const scaleAnim = useRef(new Animated.Value(0.4)).current;

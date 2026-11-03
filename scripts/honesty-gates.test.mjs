@@ -2,7 +2,8 @@
 //   N  notifications start empty (no invented notifications, no unread dot)
 //   E  Explore shows no fabricated locality figures; its count is the
 //      backend's own total, never page length or an invented number
-//   A  the agent module is disabled and unreachable
+//   A  the agent module is behind its feature flag (now enabled; agent plans
+//      are server-saved via /broker/plan) and reachable only through gates
 // Run with: node scripts/honesty-gates.test.mjs  (plain node, no deps)
 //
 // Pure modules are copied to a tmp dir as .mjs and imported for real.
@@ -85,7 +86,9 @@ check(
 
 // --- A: agent module -------------------------------------------------------
 const features = await load("shared/constants/features.js", "features.mjs");
-check("A1 AGENT_MODULE_ENABLED is false", features.AGENT_MODULE_ENABLED === false);
+// Enabled on purpose (agent plans are server-saved). The flag must stay a
+// real boolean so every gate below can still switch the module off.
+check("A1 AGENT_MODULE_ENABLED is a boolean flag", typeof features.AGENT_MODULE_ENABLED === "boolean");
 const navSrc = src("shared/navigation/AppNavigator.js");
 const agentRoutes = ["AgentLocationSelect", "AgentPlanConfirm", "AgentPayment", "AgentPaymentSuccess", "AgentNavigator", "AgentLeadDetail", "AgentEarnings"];
 const gateStart = navSrc.indexOf("{AGENT_MODULE_ENABLED ? (");
@@ -123,7 +126,16 @@ check(
 // Outside the agent feature and the gated screens above, nothing navigates to an agent route.
 const { readdirSync, statSync } = await import("node:fs");
 const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : f.endsWith(".js") ? [join(d, f)] : []));
-const gated = ["MenuScreen.js", "ProfileScreen.js", "ActiveMembershipsScreen.js"];
+const gated = ["MenuScreen.js", "ProfileScreen.js", "ActiveMembershipsScreen.js", "LoginScreen.js"];
+// Login opens the Agent dashboard only for a server-confirmed agent plan,
+// and only while the flag is on.
+const loginSrc = src("features/auth/screens/LoginScreen.js");
+check(
+  "A8 Login's agent landing is gated by the flag and a server agent plan",
+  loginSrc.includes("if (!AGENT_MODULE_ENABLED) return;") &&
+    loginSrc.includes("const plan = await fetchAgentPlan();") &&
+    loginSrc.includes("if (hasAgentPlanRef.current) {")
+);
 const stray = walk(SRC)
   .filter((f) => !f.includes(join("features", "agent")) && !gated.some((g) => f.endsWith(g)))
   .filter((f) => /navigate\(\s*"Agent/.test(readFileSync(f, "utf8")))

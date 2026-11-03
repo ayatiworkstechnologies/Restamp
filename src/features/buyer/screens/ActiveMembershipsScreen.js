@@ -198,7 +198,7 @@ export default function ActiveMembershipsScreen({ navigation }) {
                 <Text style={styles.ticketDetailValue}>
                   {hasAgentPlan
                     ? (agentPlan?.name || "Agent Pro Plan")
-                    : (subscription?.planName || "RESTAMP STARTER")}
+                    : (subscription?.planName || "Startup Plan")}
                 </Text>
               </View>
               <View style={styles.ticketDetailRow}>

@@ -65,6 +65,7 @@ import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buye
 import { useNavigation } from "@react-navigation/native";
 import { recordViewed } from "../api/viewed.js";
 import { recordCallTap } from "../api/calls.js";
+import ViewNumberButton from "./ViewNumberButton.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -149,6 +150,8 @@ function PropertyDetailModal({
   const [enquirySent, setEnquirySent] = useState(false);
   // Guards duplicate taps while an enquiry request is in flight.
   const [enquirySending, setEnquirySending] = useState(false);
+  // Call popup: holds the revealed owner number until the buyer confirms.
+  const [callSheet, setCallSheet] = useState(null);
   const [customAddress, setCustomAddress] = useState(null);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [customInputAddress, setCustomInputAddress] = useState("");
@@ -165,6 +168,8 @@ function PropertyDetailModal({
   const [liveDetail, setLiveDetail] = useState(null);
   const furnishingLabel = getFurnishingLabel(liveDetail?.furnishing || property?.furnishing);
   const facingLabel = liveDetail?.facing || property?.facing || null;
+  const ownerDisplayName =
+    liveDetail?.ownerName || property?.ownerName || property?.agent?.name || "";
   const floorLabel =
     getFloorLabel(liveDetail?.floorOn, liveDetail?.totalFloors) || property?.floor || null;
 
@@ -232,7 +237,15 @@ function PropertyDetailModal({
   useEffect(() => {
     setLiveSimilar(undefined);
     setLiveGallery(undefined);
-    const backendId = property && property.backendId;
+    // Some entry points (saved, recently viewed, notifications) carry only
+    // the numeric listing `id`; use it so the detail (owner name, gallery)
+    // still loads.
+    const backendId =
+      property && typeof property.backendId === "number"
+        ? property.backendId
+        : property && typeof property.id === "number"
+        ? property.id
+        : null;
     if (typeof backendId !== "number") return;
     let cancelled = false;
     fetchSimilar(backendId, 5).then(
@@ -258,7 +271,7 @@ function PropertyDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [property && property.backendId]);
+  }, [property && (property.backendId ?? property.id)]);
 
   const mainScrollViewRef = useRef(null);
   const sectionYMap = useRef({});
@@ -584,6 +597,16 @@ function PropertyDetailModal({
   // is fetched through the authorized reveal endpoint and handed to the
   // device dialler. The dialler opens only on user tap with a server-issued
   // number — never automatically, never from mock data.
+  // "Call now" in the call popup. "Call button tapped" (CONTRACT §B) is
+  // recorded right before the dialler opens, best effort — it never blocks
+  // or fails the call.
+  const dialOwner = (backendId, phone) => {
+    recordCallTap(backendId);
+    Linking.openURL(`tel:${phone}`).catch(() => {
+      Alert.alert("Call Unavailable", "Could not place this call.");
+    });
+  };
+
   const handleCallOwner = () => {
     const backendId = property && property.backendId;
     if (typeof backendId !== "number" || !getAuthTokenSync()) {
@@ -602,12 +625,8 @@ function PropertyDetailModal({
           );
           return;
         }
-        // "Call button tapped" (CONTRACT §B): recorded right before the
-        // dialler opens, best effort — it never blocks or fails the call.
-        recordCallTap(backendId);
-        Linking.openURL(`tel:${phone}`).catch(() => {
-          Alert.alert("Call Unavailable", "Could not place this call.");
-        });
+        // Show the call popup; the dialler opens only on "Call now".
+        setCallSheet({ phone, backendId });
       },
       (e) => {
         if (isBuyerPlanRequired(e)) {
@@ -934,13 +953,9 @@ function PropertyDetailModal({
                 </View>
               ) : null}
 
-              {/* Line 4: Locality Address & Status Badge (Interactive Manual Location Changer) */}
+              {/* Line 4: Locality Address & Status Badge (read-only; only owners edit location, via Edit Property) */}
               <View style={styles.locationStatusRow}>
-                <TouchableOpacity
-                  style={styles.locationBoxInteractive}
-                  activeOpacity={0.7}
-                  onPress={() => setIsLocationModalOpen(true)}
-                >
+                <View style={styles.locationBoxInteractive}>
                   <MapPin
                     size={14}
                     color={COLORS.primary}
@@ -949,10 +964,7 @@ function PropertyDetailModal({
                   <Text style={styles.locationText} numberOfLines={1}>
                     {displayAddress}
                   </Text>
-                  <View style={styles.changeLocationPill}>
-                    <Text style={styles.changeLocationPillText}>Change</Text>
-                  </View>
-                </TouchableOpacity>
+                </View>
                 {statusText ? (
                   <View style={styles.statusPill}>
                     <Text style={styles.statusPillText}>{statusText}</Text>
@@ -1141,37 +1153,45 @@ function PropertyDetailModal({
           <View style={styles.sectionContainer}>
             <Text style={styles.subSectionTitle}>Listed By</Text>
             <View style={styles.ownerCard}>
-              {property.agent?.avatar ? (
-                <Image
-                  source={{ uri: property.agent.avatar }}
-                  style={styles.ownerAvatar}
-                />
-              ) : (
-                <View
-                  style={[
-                    styles.ownerAvatar,
-                    { alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" },
-                  ]}
-                >
-                  <Users size={20} color="#64748B" />
-                </View>
-              )}
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.ownerName}>
-                  {property.ownerName || property.agent?.name || "Property Owner"}
-                </Text>
-                {property.agent?.agency ? (
-                  <Text style={styles.ownerRole}>
-                    {property.agent.agency}
+              <View style={styles.ownerTopRow}>
+                {property.agent?.avatar ? (
+                  <Image
+                    source={{ uri: property.agent.avatar }}
+                    style={styles.ownerAvatar}
+                  />
+                ) : ownerDisplayName ? (
+                  <View style={[styles.ownerAvatar, styles.ownerInitialAvatar]}>
+                    <Text style={styles.ownerInitialText}>
+                      {ownerDisplayName.trim().charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.ownerAvatar, styles.ownerIconAvatar]}>
+                    <Users size={20} color="#64748B" />
+                  </View>
+                )}
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.ownerName} numberOfLines={1}>
+                    {ownerDisplayName || "Property Owner"}
                   </Text>
-                ) : null}
+                  <Text style={styles.ownerRole} numberOfLines={1}>
+                    {property.agent?.agency || "Owner"}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.ownerCallBtn}
+                  onPress={() => handleCallOwner()}
+                  accessibilityLabel="Call owner"
+                >
+                  <Phone size={18} color="#FFFFFF" />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.ownerCallBtn}
-                onPress={() => handleCallOwner()}
-              >
-                <Phone size={18} color="#FFFFFF" />
-              </TouchableOpacity>
+              <ViewNumberButton
+                property={property}
+                navigation={navigation}
+                onLoginRequired={(resume) => onLoginRequired && onLoginRequired(resume)}
+                style={{ marginTop: 12 }}
+              />
             </View>
           </View>
 
@@ -1418,6 +1438,61 @@ function PropertyDetailModal({
             </>
           )}
         </View>
+
+        {/* ================= CALL OWNER POPUP ================= */}
+        <Modal
+          visible={!!callSheet}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setCallSheet(null)}
+        >
+          <TouchableOpacity
+            style={styles.callPopupOverlay}
+            activeOpacity={1}
+            onPress={() => setCallSheet(null)}
+          >
+            <TouchableOpacity
+              style={styles.callPopupCard}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={[styles.ownerAvatar, styles.ownerInitialAvatar, styles.callPopupAvatar]}>
+                {ownerDisplayName ? (
+                  <Text style={styles.ownerInitialText}>
+                    {ownerDisplayName.trim().charAt(0).toUpperCase()}
+                  </Text>
+                ) : (
+                  <Users size={22} color="#FFFFFF" />
+                )}
+              </View>
+              <Text style={styles.callPopupName} numberOfLines={1}>
+                {ownerDisplayName || "Property Owner"}
+              </Text>
+              <Text style={styles.callPopupLabel}>Owner</Text>
+              <Text style={styles.callPopupPhone}>{callSheet?.phone}</Text>
+
+              <TouchableOpacity
+                style={styles.callPopupCallBtn}
+                activeOpacity={0.85}
+                onPress={() => {
+                  const sheet = callSheet;
+                  setCallSheet(null);
+                  if (sheet) dialOwner(sheet.backendId, sheet.phone);
+                }}
+              >
+                <Phone size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.callPopupCallText}>Call now</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.callPopupCancelBtn}
+                activeOpacity={0.7}
+                onPress={() => setCallSheet(null)}
+              >
+                <Text style={styles.callPopupCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
 
         {/* ================= MANUAL LOCATION PICKER MODAL ================= */}
         <Modal
@@ -1926,13 +2001,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
-    marginRight: 8,
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    marginRight: 12,
   },
   locationText: {
     fontSize: 14,
@@ -1955,12 +2024,13 @@ const styles = StyleSheet.create({
   },
   statusPill: {
     backgroundColor: "#F1F5F9",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    flexShrink: 0,
   },
   statusPillText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "500",
     color: "#475569",
   },
@@ -2280,8 +2350,6 @@ const styles = StyleSheet.create({
 
   /* OWNER CARD */
   ownerCard: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: "#F8FAFC",
     padding: 14,
     borderRadius: 14,
@@ -2302,6 +2370,89 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginTop: 2,
     fontWeight: "400",
+  },
+  ownerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  ownerInitialAvatar: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.primary,
+  },
+  ownerIconAvatar: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+  ownerInitialText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  callPopupOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  callPopupCard: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+  },
+  callPopupAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginBottom: 12,
+  },
+  callPopupName: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  callPopupLabel: {
+    fontSize: 13,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  callPopupPhone: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: 0.5,
+    marginTop: 14,
+    marginBottom: 20,
+  },
+  callPopupCallBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    backgroundColor: "#16A34A",
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  callPopupCallText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  callPopupCancelBtn: {
+    width: "100%",
+    alignItems: "center",
+    paddingVertical: 12,
+    marginTop: 6,
+  },
+  callPopupCancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#64748B",
   },
   ownerCallBtn: {
     width: 40,

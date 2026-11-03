@@ -501,14 +501,6 @@ export default function OwnerLeadsScreen({ navigation, route }) {
         {/* ================= PROPERTY SELECTOR ================= */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionLabel}>SELECTED PROPERTY</Text>
-          <TouchableOpacity
-            onPress={() => setShowPropertyPicker(true)}
-            activeOpacity={0.7}
-            style={styles.switchPropertyLink}
-          >
-            <Text style={styles.switchPropertyLinkText}>Switch Property</Text>
-            <ChevronDown size={14} color="#2563EB" />
-          </TouchableOpacity>
         </View>
 
         {selectedProperty ? (
@@ -720,14 +712,6 @@ export default function OwnerLeadsScreen({ navigation, route }) {
                         <Phone size={13.5} color="#16A34A" />
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={[styles.headerCircleBtn, { backgroundColor: "#EFF6FF", borderColor: "#DBEAFE" }]}
-                        onPress={() => handleMessage(lead)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        activeOpacity={0.7}
-                      >
-                        <MessageCircle size={14} color="#2563EB" />
-                      </TouchableOpacity>
 
                       <StatusBadge
                         status={lead.status}
@@ -735,14 +719,6 @@ export default function OwnerLeadsScreen({ navigation, route }) {
                         textStyle={styles.leadStatusBadgeText}
                       />
 
-                      <TouchableOpacity
-                        style={styles.moreOptionsBtn}
-                        onPress={() => handleMoreOptions(lead)}
-                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                        activeOpacity={0.7}
-                      >
-                        <MoreVertical size={16} color="#94A3B8" />
-                      </TouchableOpacity>
                     </View>
                   </View>
 

@@ -32,13 +32,13 @@ export default function OwnerPaymentScreen({ route, navigation }) {
   const auth = useAuth();
   const { activateSubscription } = useOwner();
   const plan = route?.params?.plan || {
-    id: "owner-starter",
-    name: "RESTAMP STARTER",
-    price: "₹599",
+    id: "owner-startup",
+    name: "Startup Plan",
+    price: "₹499",
     validity: "30 Days",
     listingLimit: 1,
   };
-  const totalAmount = route?.params?.totalAmount || 599;
+  const totalAmount = route?.params?.totalAmount || 499;
   const formattedAmount = route?.params?.formattedAmount || `₹${totalAmount.toLocaleString("en-IN")}`;
   // Order summary from the confirmed plan (price before coupon, coupon discount).
   const orderAmount = route?.params?.basePrice ?? plan.priceNumeric ?? totalAmount;

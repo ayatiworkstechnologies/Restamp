@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import {
+  ArrowLeft,
   Calendar,
   CheckCircle2,
   Clock,
@@ -53,7 +54,7 @@ function matchesFilter(visit, filter) {
   return true;
 }
 
-export default function OwnerVisitsScreen() {
+export default function OwnerVisitsScreen({ navigation }) {
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -247,6 +248,17 @@ export default function OwnerVisitsScreen() {
         }
       >
         <View style={styles.pageHeader}>
+          {navigation?.canGoBack?.() ? (
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="Back"
+            >
+              <ArrowLeft size={20} color={COLORS.textDark} />
+            </TouchableOpacity>
+          ) : null}
           <Text style={styles.pageTitle}>Site Visits</Text>
           <Text style={styles.pageSubtitle}>
             Confirm buyer requests, propose times, and close completed visits.
@@ -378,6 +390,15 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
   content: { paddingBottom: 32 },
   pageHeader: { paddingHorizontal: 20, paddingTop: 18 },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
   pageTitle: { fontSize: 24, fontWeight: "700", color: COLORS.textDark },
   pageSubtitle: {
     marginTop: 4,

@@ -14,7 +14,6 @@ import OwnerDashboardScreen from "../screens/OwnerDashboardScreen.js";
 import OwnerPropertiesScreen from "../screens/OwnerPropertiesScreen.js";
 import OwnerAddPropertyScreen from "../screens/OwnerAddPropertyScreen.js";
 import OwnerLeadsScreen from "../screens/OwnerLeadsScreen.js";
-import OwnerVisitsScreen from "../screens/OwnerVisitsScreen.js";
 import OwnerProfileScreen from "../screens/OwnerProfileScreen.js";
 
 const Tab = createBottomTabNavigator();
@@ -117,7 +116,6 @@ export default function OwnerNavigator() {
         }}
       />
       <Tab.Screen name="Leads" component={OwnerLeadsScreen} />
-      <Tab.Screen name="Visits" component={OwnerVisitsScreen} />
       <Tab.Screen name="Profile" component={OwnerProfileScreen} />
     </Tab.Navigator>
   );

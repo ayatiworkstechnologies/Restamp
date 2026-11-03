@@ -675,6 +675,11 @@ export default function SavedScreen({ navigation, route }) {
             <Text style={styles.profilePhone} numberOfLines={1}>
               {profileSub}
             </Text>
+            {isAuthenticated && authUser?.email ? (
+              <Text style={styles.profilePhone} numberOfLines={1}>
+                {authUser.email}
+              </Text>
+            ) : null}
           </View>
 
           <TouchableOpacity
@@ -744,22 +749,6 @@ export default function SavedScreen({ navigation, route }) {
               {activeTab === "messages" && <View style={styles.activeTabIndicator} />}
             </TouchableOpacity>
 
-            {/* Site Visits Tab */}
-            <TouchableOpacity
-              style={[styles.tabButton, activeTab === "visits" && styles.tabButtonActive]}
-              activeOpacity={0.75}
-              onPress={() => setActiveTab("visits")}
-            >
-              <Text style={[styles.tabButtonText, activeTab === "visits" && styles.tabButtonTextActive]}>
-                Site Visits
-              </Text>
-              <View style={[styles.tabCountBadge, activeTab === "visits" && styles.tabCountBadgeActive]}>
-                <Text style={[styles.tabCountText, activeTab === "visits" && styles.tabCountTextActive]}>
-                  {siteVisits.length}
-                </Text>
-              </View>
-              {activeTab === "visits" && <View style={styles.activeTabIndicator} />}
-            </TouchableOpacity>
 
             {/* Agents Tab (Agent Page Detail Tab) */}
             <TouchableOpacity

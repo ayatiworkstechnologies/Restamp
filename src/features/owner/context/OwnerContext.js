@@ -98,12 +98,12 @@ export function OwnerProvider({ children }) {
     const expiryObj = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
     const formattedStart = now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
     const formattedExpiry = expiryObj.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-    const formattedAmount = plan?.amountPaid || plan?.price || "₹599";
+    const formattedAmount = plan?.amountPaid || plan?.price || "₹499";
 
     const newSub = {
-      id: plan?.id || "owner-starter",
-      name: plan?.name || "RESTAMP STARTER",
-      planName: plan?.name || "RESTAMP STARTER",
+      id: plan?.id || "owner-startup",
+      name: plan?.name || "Startup Plan",
+      planName: plan?.name || "Startup Plan",
       validity: validityStr,
       daysRemaining: days,
       listingLimit: plan?.listingLimit ?? 1,

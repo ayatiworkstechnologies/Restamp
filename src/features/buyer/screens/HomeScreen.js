@@ -821,16 +821,6 @@ export default function HomeScreen({ navigation }) {
                 </View>
 
                 <View style={styles.cardBody}>
-                  <View style={styles.priceRow}>
-                    <Text style={styles.priceText}>{property.price}{property.pricePeriod}</Text>
-                    {property.rating ? (
-                      <View style={styles.ratingBadge}>
-                        <Star size={13} color={COLORS.star} fill={COLORS.star} />
-                        <Text style={styles.ratingText}>{property.rating}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-
                   <Text style={styles.propertyTitle} numberOfLines={1}>
                     {property.title}
                   </Text>
@@ -839,6 +829,16 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.locationAddress} numberOfLines={1}>
                       {property.location}
                     </Text>
+                  </View>
+
+                  <View style={[styles.priceRow, { marginTop: 8 }]}>
+                    <Text style={styles.priceText}>{property.price}{property.pricePeriod}</Text>
+                    {property.rating ? (
+                      <View style={styles.ratingBadge}>
+                        <Star size={13} color={COLORS.star} fill={COLORS.star} />
+                        <Text style={styles.ratingText}>{property.rating}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   <ViewNumberButton
                     property={property}
@@ -926,6 +926,12 @@ export default function HomeScreen({ navigation }) {
                       </>
                     ) : null}
                   </View>
+                  <ViewNumberButton
+                    property={property}
+                    navigation={navigation}
+                    onLoginRequired={(resume) => requireAuth(resume)}
+                    style={{ marginTop: 12 }}
+                  />
                 </View>
               </TouchableOpacity>
             );

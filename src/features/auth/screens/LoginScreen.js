@@ -43,6 +43,8 @@ import {
   maxPhoneDigits,
 } from "../phone.js";
 import { planLoginResume } from "../requireAuth.js";
+import { fetchAgentPlan } from "../../../shared/api/agentPlans.js";
+import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 import RestampLogo from "../../../shared/components/RestampLogo.js";
 
 // Internal-testing OTP code chip (only appears when the backend's test display
@@ -227,6 +229,15 @@ export default function LoginScreen({ navigation }) {
   // was last used in owner mode (e.g. after the owner plan flow), so it lands
   // on the Owner dashboard instead of buyer Home.
   const loginRoleRef = useRef(null);
+  // True when the account has an active, server-saved agent plan: it then
+  // lands on the Agent dashboard (checked after every successful login).
+  const hasAgentPlanRef = useRef(false);
+  const loadAgentPlanFlag = async () => {
+    hasAgentPlanRef.current = false;
+    if (!AGENT_MODULE_ENABLED) return;
+    const plan = await fetchAgentPlan();
+    hasAgentPlanRef.current = !!plan;
+  };
 
   const enterAfterLogin = () => {
     loginSucceededRef.current = true;
@@ -253,6 +264,18 @@ export default function LoginScreen({ navigation }) {
         navigation?.navigate("MainTabs");
       }
       plan.action();
+      return;
+    }
+    if (hasAgentPlanRef.current) {
+      // Buyer tabs stay underneath so leaving agent mode still works.
+      if (navigation?.reset) {
+        navigation.reset({
+          index: 1,
+          routes: [{ name: "MainTabs" }, { name: "AgentNavigator", params: { screen: "Dashboard" } }],
+        });
+      } else {
+        navigation?.navigate("AgentNavigator", { screen: "Dashboard" });
+      }
       return;
     }
     if (loginRoleRef.current === "OWNER") {
@@ -363,6 +386,7 @@ export default function LoginScreen({ navigation }) {
         countryCode: selectedCountry.code,
       });
       loginRoleRef.current = userObj?.role ?? null;
+      await loadAgentPlanFlag();
       if (userObj && userObj.isProfileComplete) {
         enterAfterLogin();
       } else {
@@ -524,6 +548,7 @@ export default function LoginScreen({ navigation }) {
       const tokenResp = await googleSignIn(idToken);
       const userObj = await loginWithToken(tokenResp.access_token);
       loginRoleRef.current = userObj?.role ?? null;
+      await loadAgentPlanFlag();
       if (userObj && userObj.isProfileComplete) {
         enterAfterLogin();
       } else {

@@ -6,4 +6,4 @@
 // contract is connected yet. While false, the agent routes are not
 // registered (AppNavigator), the Agent Plan tab and membership entry points
 // are hidden, and AgentContext actions are no-ops.
-export const AGENT_MODULE_ENABLED = false;
+export const AGENT_MODULE_ENABLED = true;

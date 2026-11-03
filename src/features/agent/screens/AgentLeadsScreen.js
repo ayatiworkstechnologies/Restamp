@@ -29,7 +29,6 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useAgent } from "../context/AgentContext.js";
-import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 import StatusBadge from "../../owner/components/StatusBadge.js";
 import EmptyState from "../../owner/components/EmptyState.js";
 
@@ -146,7 +145,6 @@ export default function AgentLeadsScreen({ navigation }) {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* TOP BRAND HEADER */}
-      <AppBrandHeader currentRole="agent" />
 
       {/* SCREEN TITLE & SUBTITLE */}
       <View style={styles.screenHeader}>

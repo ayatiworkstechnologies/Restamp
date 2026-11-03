@@ -199,7 +199,9 @@ const card = {
   check("W9 fetchMyEnquiries called with (page, pageSize), not an object", savedSrc.includes("fetchMyEnquiries(1, 50)") && !savedSrc.includes("fetchMyEnquiries({"));
   check("W10 ActivityIndicator comes from react-native, not HugeIcon", /ActivityIndicator,\n\} from "react-native";/.test(savedSrc));
 
-  const modalCall = modalSrc.slice(modalSrc.indexOf("const handleCallOwner"), modalSrc.indexOf("const handleCallOwner") + 2000);
+  // The phone icon reveals the number into a call popup; its "Call now"
+  // dials through dialOwner, which records the tap right before tel:.
+  const modalCall = modalSrc.slice(modalSrc.indexOf("const dialOwner"), modalSrc.indexOf("const dialOwner") + 2000);
   check("W11 detail modal records the tap right before tel:", modalCall.indexOf("recordCallTap(backendId)") > -1 && modalCall.indexOf("recordCallTap(backendId)") < modalCall.indexOf("tel:"));
   check("W12 search Call records the tap before tel:", searchSrc.indexOf("recordCallTap(property?.backendId)") > -1 && searchSrc.indexOf("recordCallTap(property?.backendId)") < searchSrc.indexOf("tel:+${digits}"));
   check("W13 fabricated visit note removed", !modalSrc.includes("Requested via Property Details page."));

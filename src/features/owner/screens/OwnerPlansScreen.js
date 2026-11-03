@@ -15,80 +15,9 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import { useOwner } from "../context/OwnerContext.js";
 
-/* 4 Official Owner Plans */
-export const OWNER_PLANS_LIST = [
-  {
-    id: "owner-starter",
-    name: "RESTAMP STARTER",
-    price: "₹599",
-    originalPrice: "₹1,198",
-    priceNumeric: 599,
-    originalPriceNumeric: 1198,
-    paymentType: "One-time payment",
-    validity: "30 Days",
-    billingText: "One-time payment · 30 Days",
-    listingLimit: 1,
-    features: [
-      "Unlimited Leads",
-      "City-Wide Reach",
-    ],
-    buttonText: "Choose Plan",
-  },
-  {
-    id: "owner-plus",
-    name: "RESTAMP PLUS",
-    price: "₹999",
-    originalPrice: "₹1,998",
-    priceNumeric: 999,
-    originalPriceNumeric: 1998,
-    paymentType: "One-time payment",
-    validity: "30 Days",
-    billingText: "One-time payment · 30 Days",
-    listingLimit: 2,
-    features: [
-      "Unlimited Leads",
-      "City-Wide Reach",
-    ],
-    buttonText: "Choose Plan",
-  },
-  {
-    id: "owner-gold",
-    name: "RESTAMP GOLD",
-    price: "₹1,999",
-    originalPrice: "₹3,998",
-    priceNumeric: 1999,
-    originalPriceNumeric: 3998,
-    paymentType: "One-time payment",
-    validity: "60 Days",
-    billingText: "One-time payment · 60 Days",
-    listingLimit: 5,
-    features: [
-      "Unlimited Leads",
-      "City-Wide Reach",
-      "Relationship Manager Assistance",
-    ],
-    buttonText: "Choose Plan",
-  },
-  {
-    id: "owner-premium",
-    name: "RESTAMP PREMIUM",
-    price: "₹4,999",
-    originalPrice: "₹9,998",
-    priceNumeric: 4999,
-    originalPriceNumeric: 9998,
-    paymentType: "One-time payment",
-    validity: "90 Days",
-    billingText: "One-time payment · 90 Days",
-    listingLimit: 10,
-    features: [
-      "Unlimited Leads",
-      "City-Wide Reach",
-      "Relationship Manager Assistance",
-      "Social Media Promotion Assistance",
-    ],
-    buttonText: "Choose Plan",
-  },
-];
+import { OWNER_PLANS_LIST } from "../data/ownerPlans.js";
+
+export { OWNER_PLANS_LIST };
 
 // Backward-compatible structure supporting OWNER_PLANS.residential / commercial
 const OWNER_PLANS = {
@@ -159,10 +88,10 @@ export default function OwnerPlansScreen({ navigation }) {
 
         {/* Section Header */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.paneSectionHeader}>CHOOSE A PLAN • 4 TIERS</Text>
+          <Text style={styles.paneSectionHeader}>CHOOSE A PLAN • 7 TIERS</Text>
         </View>
 
-        {/* ================= 4 OFFICIAL OWNER PRICING CARDS ================= */}
+        {/* ================= 7 SELLER PLAN PRICING CARDS ================= */}
         {currentPlans.map((plan) => (
           <View key={plan.id} style={styles.planCard}>
             {/* 1. Header: Plan Name */}
@@ -184,8 +113,8 @@ export default function OwnerPlansScreen({ navigation }) {
 
             {/* 5. Property Listings Count Row */}
             <View style={styles.listingsRow}>
-              <Text style={styles.listingsLabel}>Property Listings</Text>
-              <Text style={styles.listingsValue}>{plan.listingLimit}</Text>
+              <Text style={styles.listingsLabel}>Post Count</Text>
+              <Text style={styles.listingsValue}>{plan.listingLimitLabel}</Text>
             </View>
 
             {/* 6. Feature List with Green Check Circles */}

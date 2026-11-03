@@ -580,25 +580,9 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
                         <Phone size={13.5} color="#16A34A" />
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={[styles.headerCircleBtn, { backgroundColor: "#EFF6FF", borderColor: "#DBEAFE" }]}
-                        onPress={() => handleChat(lead)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        activeOpacity={0.7}
-                      >
-                        <MessageCircle size={14} color="#2563EB" />
-                      </TouchableOpacity>
 
                       <StatusBadge status={lead.status} />
 
-                      <TouchableOpacity
-                        style={styles.moreOptionsBtn}
-                        onPress={() => handleMoreOptions(lead)}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <MoreVertical size={16} color="#94A3B8" />
-                      </TouchableOpacity>
                     </View>
                   </View>
 
