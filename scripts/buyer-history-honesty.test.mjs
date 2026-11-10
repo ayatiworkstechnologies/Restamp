@@ -87,11 +87,11 @@ check(
     !wishlistSrc.includes("data/properties")
 );
 check(
-  "W3 real saved sync preserved (BUYER + backendId gates, refresh path)",
+  "W3 real saved sync preserved (buyer-or-agent + backendId gates, refresh path)",
   wishlistSrc.includes("fetchSavedWishlist") &&
     wishlistSrc.includes("saveListingRemote") &&
     wishlistSrc.includes("unsaveListingRemote") &&
-    wishlistSrc.includes('user?.role === "BUYER"') &&
+    wishlistSrc.includes("const isBuyer = isBuyerCapableRole(user?.role);") &&
     wishlistSrc.includes("getAuthTokenSync()") &&
     wishlistSrc.includes("backendIdOf(property)") &&
     wishlistSrc.includes("setWishlist(items)")

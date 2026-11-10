@@ -19,7 +19,6 @@ import { useFocusEffect } from "@react-navigation/native";
 import {
   Heart,
   Star,
-  MapPin,
   Phone,
   MessageCircle,
   MessageSquare,
@@ -39,7 +38,6 @@ import {
   User,
   RotateCcw,
   XCircle,
-  ShieldCheck,
   Award,
   Briefcase,
   AlertCircle,
@@ -47,6 +45,7 @@ import {
   ChevronUp,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
 import { useWishlist } from "../context/WishlistContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
@@ -60,7 +59,12 @@ import {
   toScheduleModalInitial,
   updateBuyerVisit,
 } from "../../../shared/api/visits.js";
-import { getVisitDisplay } from "../../../shared/utils/visitStatus.js";
+import {
+  buyerLeadClosedCopy,
+  getVisitDisplay,
+  getVisitOriginLabel,
+  isVisitLeadClosedError,
+} from "../../../shared/utils/visitStatus.js";
 import {
   fetchMyEnquiries,
   fetchEnquiryDetail,
@@ -95,11 +99,12 @@ function cleanPhoneOrNull(raw) {
 }
 
 
-// No backend agent directory exists: the Agents tab starts empty and
-// shows the honest empty state below. Fabricated agent entries were removed.
-const INITIAL_AGENTS = [];
+// The My Activity tabs (Agents was removed: buyers connect with owners).
+const ACTIVITY_TABS = ["wishlist", "call", "messages", "visits", "viewed"];
 
-export default function SavedScreen({ navigation, route }) {
+// Shared by the buyer Activity tab and the agent Activity tab (agent
+// navigation passes browseRoute="Properties", its own listings tab).
+export default function SavedScreen({ navigation, route, browseRoute = "Home" }) {
   const { wishlist, removeFromWishlist, isWishlisted, toggleWishlist, refreshWishlist } = useWishlist();
   // Protected modal actions resume here after a guest logs in (Change 2).
   const requireAuth = useRequireAuth(navigation);
@@ -114,14 +119,15 @@ export default function SavedScreen({ navigation, route }) {
     }, [refreshWishlist])
   );
 
-  // Active tab state: "wishlist" | "call" | "messages" | "visits" | "agents" | "viewed"
-  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || "wishlist");
+  // Active tab state: "wishlist" | "call" | "messages" | "visits" | "viewed"
+  const requestedTab = ACTIVITY_TABS.includes(route?.params?.initialTab) ? route.params.initialTab : null;
+  const [activeTab, setActiveTab] = useState(requestedTab || "wishlist");
 
   useEffect(() => {
-    if (route?.params?.initialTab) {
-      setActiveTab(route?.params?.initialTab);
+    if (requestedTab) {
+      setActiveTab(requestedTab);
     }
-  }, [route?.params?.initialTab]);
+  }, [requestedTab]);
 
   // Selected property modal
   const [selectedProperty, setSelectedProperty] = useState(null);
@@ -307,31 +313,6 @@ export default function SavedScreen({ navigation, route }) {
     }, [refreshWishlist, loadServerVisits, loadEnquiries, loadViewedProperties, loadCallEvents])
   );
 
-  // Agents state (Agent Page Detail Tab)
-  const [agents, setAgents] = useState(INITIAL_AGENTS);
-  const [selectedAgentForModal, setSelectedAgentForModal] = useState(null);
-
-  const handleCallAgent = (agent) => {
-    handleCall(agent?.phone, agent?.name || "Agent");
-  };
-
-  const handleWhatsAppAgent = (agent) => {
-    const clean = cleanPhoneOrNull(agent?.phone);
-    if (!clean) {
-      Alert.alert(
-        "Phone Number Unavailable",
-        "The contact number for this agent is not available."
-      );
-      return;
-    }
-    const text = encodeURIComponent(
-      `Hello ${agent?.name}! I found your profile on RESTAMP. I am looking for property assistance in ${agent?.localities ? agent.localities.join(", ") : "Chennai"}.`
-    );
-    Linking.openURL(`https://wa.me/${clean}?text=${text}`).catch(() => {
-      Alert.alert("WhatsApp Agent", `Chat with ${agent?.name} at ${agent?.phone}`);
-    });
-  };
-
   // Real authenticated identity only (GET /auth/me via AuthContext).
   // Never sample data: no mock name, phone, email, or avatar. The backend
   // exposes display_name/role/providers only, so phone shows only when known
@@ -344,7 +325,6 @@ export default function SavedScreen({ navigation, route }) {
   const profileSub = profilePhone
     || (isAuthenticated ? (authUser?.verified ? "Verified Buyer" : "Buyer Account") : "Log in to sync your wishlist");
   const profileAvatar = authUser?.avatar || null;
-  const profileInitial = ((profileName || "?").trim().charAt(0) || "?").toUpperCase();
 
   // Edit Profile Modal State (name only — persisted via PATCH /users/me).
   // Phone numbers are OTP-bound identities with no update endpoint, so the
@@ -525,6 +505,14 @@ export default function SavedScreen({ navigation, route }) {
           requireAuth(() => handleCancelVisit(visit));
           return;
         }
+        if (isVisitLeadClosedError(e)) {
+          const copy = buyerLeadClosedCopy();
+          setIsRescheduling(false);
+          setSelectedVisitForDetails(null);
+          refreshVisitsQuietly();
+          Alert.alert(copy.title, copy.message);
+          return;
+        }
         Alert.alert(
           "Couldn't cancel visit",
           "Please check your connection and try again."
@@ -549,6 +537,14 @@ export default function SavedScreen({ navigation, route }) {
       (e) => {
         if (e && (e.status === 401 || e.kind === "login")) {
           requireAuth(() => submitBuyerVisitStatus(visit, status));
+          return;
+        }
+        if (isVisitLeadClosedError(e)) {
+          const copy = buyerLeadClosedCopy();
+          setIsRescheduling(false);
+          setSelectedVisitForDetails(null);
+          refreshVisitsQuietly();
+          Alert.alert(copy.title, copy.message);
           return;
         }
         if (e && (e.status === 403 || e.kind === "denied")) {
@@ -623,6 +619,14 @@ export default function SavedScreen({ navigation, route }) {
           requireAuth(() => handleConfirmReschedule(visit, reschedData));
           return;
         }
+        if (isVisitLeadClosedError(e)) {
+          const copy = buyerLeadClosedCopy();
+          setIsRescheduling(false);
+          setSelectedVisitForDetails(null);
+          refreshVisitsQuietly();
+          Alert.alert(copy.title, copy.message);
+          return;
+        }
         if (e && (e.status === 403 || e.kind === "denied")) {
           Alert.alert(
             "Buyer Mode Required",
@@ -658,13 +662,15 @@ export default function SavedScreen({ navigation, route }) {
         {/* ================= 1. USER PROFILE SECTION WITH EDIT ICON ================= */}
         <View style={styles.profileCard}>
           <View style={styles.avatarWrap}>
-            {profileAvatar ? (
-              <Image source={{ uri: profileAvatar }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarInitial}>{profileInitial}</Text>
-              </View>
-            )}
+            <InitialsAvatar
+              name={isAuthenticated ? authUser?.name : ""}
+              uri={profileAvatar}
+              style={[styles.avatar, styles.avatarFallback]}
+              textStyle={styles.avatarInitial}
+              backgroundColor="#0F172A"
+              color="#FFFFFF"
+              iconSize={24}
+            />
             <View style={styles.onlineBadge} />
           </View>
 
@@ -749,22 +755,22 @@ export default function SavedScreen({ navigation, route }) {
               {activeTab === "messages" && <View style={styles.activeTabIndicator} />}
             </TouchableOpacity>
 
-
-            {/* Agents Tab (Agent Page Detail Tab) */}
+            {/* Site Visits Tab (GET /buyer/visits): the buyer's own requests
+                and owner-proposed times, with confirm/decline/reschedule. */}
             <TouchableOpacity
-              style={[styles.tabButton, activeTab === "agents" && styles.tabButtonActive]}
+              style={[styles.tabButton, activeTab === "visits" && styles.tabButtonActive]}
               activeOpacity={0.75}
-              onPress={() => setActiveTab("agents")}
+              onPress={() => setActiveTab("visits")}
             >
-              <Text style={[styles.tabButtonText, activeTab === "agents" && styles.tabButtonTextActive]}>
-                Agents
+              <Text style={[styles.tabButtonText, activeTab === "visits" && styles.tabButtonTextActive]}>
+                Visits
               </Text>
-              <View style={[styles.tabCountBadge, activeTab === "agents" && styles.tabCountBadgeActive]}>
-                <Text style={[styles.tabCountText, activeTab === "agents" && styles.tabCountTextActive]}>
-                  {agents.length}
+              <View style={[styles.tabCountBadge, activeTab === "visits" && styles.tabCountBadgeActive]}>
+                <Text style={[styles.tabCountText, activeTab === "visits" && styles.tabCountTextActive]}>
+                  {siteVisits.length}
                 </Text>
               </View>
-              {activeTab === "agents" && <View style={styles.activeTabIndicator} />}
+              {activeTab === "visits" && <View style={styles.activeTabIndicator} />}
             </TouchableOpacity>
 
             {/* Viewed Tab */}
@@ -803,7 +809,7 @@ export default function SavedScreen({ navigation, route }) {
                 <TouchableOpacity
                   style={styles.exploreBtn}
                   activeOpacity={0.85}
-                  onPress={() => navigation.navigate("Home")}
+                  onPress={() => navigation.navigate(browseRoute)}
                 >
                   <Text style={styles.exploreBtnText}>Explore Properties</Text>
                   <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
@@ -934,7 +940,7 @@ export default function SavedScreen({ navigation, route }) {
                 <TouchableOpacity
                   style={styles.exploreBtn}
                   activeOpacity={0.85}
-                  onPress={() => navigation.navigate("Home")}
+                  onPress={() => navigation.navigate(browseRoute)}
                 >
                   <Text style={styles.exploreBtnText}>Browse Properties</Text>
                   <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
@@ -1102,7 +1108,7 @@ export default function SavedScreen({ navigation, route }) {
                 <TouchableOpacity
                   style={styles.exploreBtn}
                   activeOpacity={0.85}
-                  onPress={() => navigation.navigate("Home")}
+                  onPress={() => navigation.navigate(browseRoute)}
                 >
                   <Text style={styles.exploreBtnText}>Find Properties to Call</Text>
                   <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
@@ -1229,7 +1235,7 @@ export default function SavedScreen({ navigation, route }) {
                 <TouchableOpacity
                   style={styles.exploreBtn}
                   activeOpacity={0.85}
-                  onPress={() => navigation.navigate("Home")}
+                  onPress={() => navigation.navigate(browseRoute)}
                 >
                   <Text style={styles.exploreBtnText}>Find Properties to Enquire</Text>
                   <ArrowRight size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
@@ -1472,6 +1478,12 @@ export default function SavedScreen({ navigation, route }) {
                             </Text>
                           </View>
                         ) : null}
+                        {getVisitOriginLabel(item, "buyer") ? (
+                          <View style={styles.bodyField}>
+                            <Text style={styles.fieldLabel}>Visit:</Text>
+                            <Text style={styles.fieldValue}>{getVisitOriginLabel(item, "buyer")}</Text>
+                          </View>
+                        ) : null}
                         {item.note ? (
                           <View style={styles.bodyField}>
                             <Text style={styles.fieldLabel}>Note:</Text>
@@ -1531,29 +1543,6 @@ export default function SavedScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* TAB 6: AGENTS (Agent Page Detail Tab) */}
-        {activeTab === "agents" && (
-          <View style={styles.tabContentArea}>
-            <View style={styles.visitScreenHeader}>
-              <Text style={styles.visitHeaderTitle}>Verified Local Agents ({agents.length})</Text>
-              <Text style={styles.visitHeaderSubtitle}>
-                Dedicated RESTAMP partner brokers to guide your site visits, property inspections & deal closing
-              </Text>
-            </View>
-
-            {/* No backend agent directory exists: show the honest empty
-                state instead of fabricated agent profiles. */}
-            <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconCircle}>
-                <User size={32} color="#CBD5E1" strokeWidth={1.5} />
-              </View>
-              <Text style={styles.emptyTitle}>No agents yet</Text>
-              <Text style={styles.emptyText}>
-                Verified partner profiles will appear here once the agent directory is available.
-              </Text>
-            </View>
-          </View>
-        )}
       </ScrollView>
 
       {/* ================= EDIT PROFILE MODAL ================= */}
@@ -1934,115 +1923,6 @@ export default function SavedScreen({ navigation, route }) {
         }}
       />
 
-      {/* ================= AGENT PAGE DETAIL MODAL ================= */}
-      <Modal
-        visible={!!selectedAgentForModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSelectedAgentForModal(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.agentDetailModalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Agent Profile & Details</Text>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setSelectedAgentForModal(null)}
-              >
-                <X size={18} color="#0F172A" />
-              </TouchableOpacity>
-            </View>
-
-            {selectedAgentForModal && (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-                {/* Agent Header */}
-                <View style={styles.modalAgentProfileHeader}>
-                  <Image
-                    source={{ uri: selectedAgentForModal.avatar }}
-                    style={styles.modalAgentBigAvatar}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.modalAgentBigName}>{selectedAgentForModal.name}</Text>
-                    <Text style={styles.modalAgentBigAgency}>{selectedAgentForModal.agency}</Text>
-                    <View style={styles.modalReraPill}>
-                      <ShieldCheck size={11} color="#16A34A" style={{ marginRight: 4 }} />
-                      <Text style={styles.modalReraPillText}>{selectedAgentForModal.reraNumber}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Rating & Stats */}
-                <View style={styles.modalAgentStatsBox}>
-                  <View style={styles.modalStatCol}>
-                    <Text style={styles.modalStatVal}>⭐ {selectedAgentForModal.rating}</Text>
-                    <Text style={styles.modalStatSub}>{selectedAgentForModal.reviewsCount} Reviews</Text>
-                  </View>
-                  <View style={[styles.modalStatCol, styles.modalStatColBorder]}>
-                    <Text style={styles.modalStatVal}>{selectedAgentForModal.dealsClosed}+</Text>
-                    <Text style={styles.modalStatSub}>Closed Deals</Text>
-                  </View>
-                  <View style={styles.modalStatCol}>
-                    <Text style={styles.modalStatVal}>{selectedAgentForModal.experience}</Text>
-                    <Text style={styles.modalStatSub}>Experience</Text>
-                  </View>
-                </View>
-
-                {/* Bio / About */}
-                <View style={styles.modalSectionBox}>
-                  <Text style={styles.modalSectionTitle}>About Agent</Text>
-                  <Text style={styles.modalSectionBody}>{selectedAgentForModal.bio}</Text>
-                </View>
-
-                {/* Contact Information */}
-                <View style={styles.modalSectionBox}>
-                  <Text style={styles.modalSectionTitle}>Direct Contact</Text>
-                  <View style={styles.modalContactItem}>
-                    <Phone size={14} color="#2563EB" style={{ marginRight: 8 }} />
-                    <Text style={styles.modalContactText}>{selectedAgentForModal.phone}</Text>
-                  </View>
-                  <View style={styles.modalContactItem}>
-                    <MapPin size={14} color="#2563EB" style={{ marginRight: 8 }} />
-                    <Text style={styles.modalContactText}>{selectedAgentForModal.officeAddress}</Text>
-                  </View>
-                </View>
-
-                {/* Specialties & Localities */}
-                <View style={styles.modalSectionBox}>
-                  <Text style={styles.modalSectionTitle}>Localities & Focus</Text>
-                  <View style={styles.modalLocChipsWrap}>
-                    {selectedAgentForModal.localities.map((loc, idx) => (
-                      <View key={idx} style={styles.agentLocChip}>
-                        <Text style={styles.agentLocChipText}>{loc}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Fixed CTA Buttons inside Modal */}
-                <View style={styles.modalAgentCtaRow}>
-                  <TouchableOpacity
-                    style={styles.modalAgentCallCta}
-                    onPress={() => handleCallAgent(selectedAgentForModal)}
-                    activeOpacity={0.85}
-                  >
-                    <Phone size={14} color="#0F172A" style={{ marginRight: 6 }} />
-                    <Text style={styles.modalAgentCallCtaText}>Call Agent</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.modalAgentMsgCta}
-                    onPress={() => handleWhatsAppAgent(selectedAgentForModal)}
-                    activeOpacity={0.85}
-                  >
-                    <MessageCircle size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                    <Text style={styles.modalAgentMsgCtaText}>WhatsApp</Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -3337,208 +3217,6 @@ const styles = StyleSheet.create({
   },
 
   /* TAB 6: AGENTS LIST STYLES */
-  agentsList: {
-    gap: 16,
-    paddingBottom: 24,
-  },
-  agentCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    padding: 16,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  agentCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  agentAvatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    marginRight: 14,
-    backgroundColor: "#E2E8F0",
-  },
-  agentHeaderInfo: {
-    flex: 1,
-  },
-  agentNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 3,
-  },
-  agentNameText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  agentVerifiedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F0FDF4",
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#DCFCE7",
-  },
-  agentVerifiedText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#16A34A",
-  },
-  agentAgencyText: {
-    fontSize: 12.5,
-    fontWeight: "600",
-    color: "#2563EB",
-    marginBottom: 2,
-  },
-  agentRoleText: {
-    fontSize: 11.5,
-    color: "#64748B",
-    marginBottom: 4,
-  },
-  agentRatingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  agentRatingText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#0F172A",
-    marginRight: 4,
-  },
-  agentReviewsText: {
-    fontSize: 11.5,
-    color: "#64748B",
-  },
-  agentStatsGrid: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-  },
-  agentStatItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  agentStatItemBorder: {
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  agentStatNumber: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#0F172A",
-    marginBottom: 2,
-  },
-  agentStatLabel: {
-    fontSize: 10.5,
-    fontWeight: "500",
-    color: "#64748B",
-  },
-  agentLocalitiesRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-    flexWrap: "wrap",
-    gap: 4,
-  },
-  agentLocalitiesLabel: {
-    fontSize: 11.5,
-    fontWeight: "600",
-    color: "#475569",
-    marginRight: 4,
-  },
-  agentLocalitiesChips: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 4,
-  },
-  agentLocChip: {
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
-  },
-  agentLocChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#2563EB",
-  },
-  agentSpecialtyText: {
-    fontSize: 12,
-    color: "#475569",
-    lineHeight: 17,
-    marginBottom: 12,
-  },
-  agentCardActionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  agentCallBtn: {
-    flex: 1,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: "#F1F5F9",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  agentCallBtnText: {
-    fontSize: 12.5,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  agentMsgBtn: {
-    flex: 1,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  agentMsgBtnText: {
-    fontSize: 12.5,
-    fontWeight: "700",
-    color: "#16A34A",
-  },
-  agentDetailBtn: {
-    flex: 1.2,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: "#2563EB",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  agentDetailBtnText: {
-    fontSize: 12.5,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
 
   /* ASSIGNED AGENT BOX INSIDE VISIT DETAILS MODAL */
   modalAgentBox: {
@@ -3610,60 +3288,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#16A34A",
   },
-  modalAgentProfileBtn: {
-    flex: 1.1,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalAgentProfileBtnText: {
-    fontSize: 11.5,
-    fontWeight: "700",
-    color: "#2563EB",
-  },
 
   /* AGENT DETAIL MODAL */
-  agentDetailModalCard: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    maxHeight: "88%",
-  },
-  modalAgentProfileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    marginBottom: 14,
-  },
-  modalAgentBigAvatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    marginRight: 14,
-    backgroundColor: "#E2E8F0",
-  },
-  modalAgentBigName: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#0F172A",
-    marginBottom: 3,
-  },
-  modalAgentBigAgency: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#2563EB",
-    marginBottom: 6,
-  },
   modalReraPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -3679,16 +3305,6 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: "700",
     color: "#16A34A",
-  },
-  modalAgentStatsBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    marginBottom: 14,
   },
   modalStatCol: {
     flex: 1,
@@ -3743,40 +3359,5 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 6,
     marginTop: 4,
-  },
-  modalAgentCtaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  modalAgentCallCta: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#0F172A",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalAgentCallCtaText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  modalAgentMsgCta: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#16A34A",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalAgentMsgCtaText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFFFFF",
   },
 });

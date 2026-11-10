@@ -19,7 +19,9 @@ const SRC = join(ROOT, "..", "src");
 const tmp = mkdtempSync(join(tmpdir(), "search-card-test-"));
 copyFileSync(join(SRC, "features", "buyer", "utils", "searchCardSpecs.js"), join(tmp, "searchCardSpecs.mjs"));
 const { searchCardSpecs } = await import(pathToFileURL(join(tmp, "searchCardSpecs.mjs")).href);
-const searchSrc = readFileSync(join(SRC, "features", "buyer", "screens", "SearchScreen.js"), "utf8");
+// The search card + View Number sheet live in the shared PropertySearchCard (also used by agents).
+const searchSrc = readFileSync(join(SRC, "features", "buyer", "screens", "SearchScreen.js"), "utf8") +
+  readFileSync(join(SRC, "features", "buyer", "components", "PropertySearchCard.js"), "utf8");
 const mapperSrc = readFileSync(join(SRC, "shared", "api", "mappers.js"), "utf8");
 
 let failures = 0;

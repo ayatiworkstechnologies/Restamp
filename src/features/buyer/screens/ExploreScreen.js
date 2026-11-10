@@ -8,10 +8,8 @@ import {
   TouchableOpacity,
   TextInput,
   StatusBar,
-  Modal,
   Platform,
   Linking,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -21,17 +19,13 @@ import {
   Heart,
   Star,
   Phone,
-  MessageCircle,
   Clock,
   ArrowRight,
   TrendingUp,
-  Building,
   CheckCircle2,
   SlidersHorizontal,
   ChevronRight,
   Compass,
-  X,
-  Copy,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import TYPOGRAPHY from "../../../shared/constants/typography.js";
@@ -40,6 +34,7 @@ import { toUiProperty } from "../../../shared/api/mappers.js";
 import { useWishlist } from "../context/WishlistContext.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import PropertyDetailModal from "../components/PropertyDetailModal.js";
+import { useViewNumber, ViewNumberSheet } from "../components/PropertySearchCard.js";
 import SafeImage from "../../../shared/components/SafeImage.js";
 import { localityCountLabel } from "../utils/exploreLocality.js";
 
@@ -139,7 +134,9 @@ export default function ExploreScreen({ navigation }) {
   const [selectedLocality, setSelectedLocality] = useState(LOCALITY_DATA[0]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProperty, setSelectedProperty] = useState(null);
-  const [contactProperty, setContactProperty] = useState(null);
+  // Contact: the shared View Number flow (authorized reveal, the owner's real
+  // name, Call / WhatsApp with that same number, call taps recorded).
+  const viewNumber = useViewNumber({ navigation, requireAuth });
   const [localityProperties, setLocalityProperties] = useState([]);
   const [propertiesLoading, setPropertiesLoading] = useState(false);
   const [propertiesFailed, setPropertiesFailed] = useState(false);
@@ -190,23 +187,6 @@ export default function ExploreScreen({ navigation }) {
       cancelled = true;
     };
   }, [selectedLocality?.name]);
-
-  // Honest contact: Explore rows are sample catalog entries with no backend
-  // record, so their numbers never came from an authorized reveal and must
-  // not be dialed, messaged, or copied. Real contact flows live on Search.
-  const handleCall = (phone, name) => {
-    Alert.alert(
-      "Contact Number Unavailable",
-      "Contact details are shared only through the authorized View Number flow on a live property listing."
-    );
-  };
-
-  const handleWhatsApp = (property) => {
-    Alert.alert(
-      "Contact Number Unavailable",
-      "Contact details are shared only through the authorized View Number flow on a live property listing."
-    );
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -483,7 +463,7 @@ export default function ExploreScreen({ navigation }) {
                       activeOpacity={0.8}
                       onPress={(e) => {
                         e.stopPropagation();
-                        setContactProperty(property);
+                        viewNumber.handleViewNumber(property);
                       }}
                     >
                       <Phone size={12} color="#0F172A" style={{ marginRight: 4 }} />
@@ -507,106 +487,8 @@ export default function ExploreScreen({ navigation }) {
         onLoginRequired={(resume) => requireAuth(resume)}
       />
 
-      {/* ================= CONTACT BOTTOM SHEET ================= */}
-      <Modal
-        visible={!!contactProperty}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setContactProperty(null)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setContactProperty(null)}
-        >
-          <TouchableOpacity
-            style={styles.bottomSheet}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.sheetHandle} />
-
-            <View style={styles.sheetHeader}>
-              <View>
-                <Text style={styles.sheetTitle}>
-                  {contactProperty?.agent?.name || "Seller"}
-                </Text>
-                {contactProperty?.agent?.agency ? (
-                  <Text style={styles.sheetSub}>
-                    {contactProperty.agent.agency}
-                  </Text>
-                ) : null}
-              </View>
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={() => setContactProperty(null)}
-              >
-                <X size={17} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Context */}
-            <View style={styles.sheetContextBar}>
-              <Building size={13} color="#64748B" style={{ marginRight: 6 }} />
-              <Text style={styles.sheetContextText} numberOfLines={1}>
-                {contactProperty?.title} ({contactProperty?.price})
-              </Text>
-            </View>
-
-            {/* Phone Display: sample rows have no authorized number */}
-            <TouchableOpacity
-              style={styles.phoneBox}
-              activeOpacity={0.7}
-              onPress={() => {
-                Alert.alert(
-                  "Contact Number Unavailable",
-                  "Contact details are shared only through the authorized View Number flow on a live property listing."
-                );
-              }}
-            >
-              <View style={styles.phoneIconCircle}>
-                <Phone size={14} color="#0F172A" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.phoneLabel}>PHONE NUMBER</Text>
-                <Text style={styles.phoneNumber}>
-                  Not available
-                </Text>
-              </View>
-              <View style={styles.copyPill}>
-                <Copy size={11} color="#0F172A" style={{ marginRight: 4 }} />
-                <Text style={styles.copyText}>Copy</Text>
-              </View>
-            </TouchableOpacity>
-
-            <View style={styles.sheetActionsRow}>
-              <TouchableOpacity
-                style={styles.sheetCallBtn}
-                activeOpacity={0.85}
-                onPress={() => {
-                  handleCall(contactProperty?.agent?.phone, contactProperty?.agent?.name);
-                  setContactProperty(null);
-                }}
-              >
-                <Phone size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.sheetCallText}>Call Now</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.sheetWhatsappBtn}
-                activeOpacity={0.85}
-                onPress={() => {
-                  handleWhatsApp(contactProperty);
-                  setContactProperty(null);
-                }}
-              >
-                <MessageCircle size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.sheetWhatsappText}>WhatsApp</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      {/* ================= CONTACT BOTTOM SHEET (shared) ================= */}
+      <ViewNumberSheet state={viewNumber} />
     </SafeAreaView>
   );
 }

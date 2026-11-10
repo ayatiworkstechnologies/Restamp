@@ -47,6 +47,7 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import COLORS from "../../../shared/constants/colors.js";
+import { getInitials } from "../../../shared/utils/initials.js";
 import TYPOGRAPHY from "../../../shared/constants/typography.js";
 import { fetchListingDetail, fetchSimilar } from "../api/listings.js";
 import {
@@ -60,13 +61,17 @@ import SafeImage from "../../../shared/components/SafeImage.js";
 import PropertyGalleryModal from "./PropertyGalleryModal.js";
 import ScheduleVisitModal from "./ScheduleVisitModal.js";
 import { createEnquiry } from "../api/enquiries.js";
-import { revealContactPhone } from "../../../shared/api/contact.js";
+import { getRevealedContact, revealContact } from "../../../shared/api/contact.js";
+import { ownerDialUrl, ownerNameFor, visitErrorCopy } from "../utils/ownerContact.js";
 import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
+import { isAgentAreaRequired } from "../../../shared/api/agentPlans.js";
+import { promptAgentUpgrade } from "../../agent/utils/agentUpgrade.js";
 import { useNavigation } from "@react-navigation/native";
 import { recordViewed } from "../api/viewed.js";
 import { recordCallTap } from "../api/calls.js";
 import ViewNumberButton from "./ViewNumberButton.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
+import { buyerLeadClosedCopy, isVisitLeadClosedError } from "../../../shared/utils/visitStatus.js";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const REC_CARD_WIDTH = 220;
@@ -130,9 +135,9 @@ function PropertyDetailModal({
   isWishlisted,
   onToggleWishlist,
   detailLoading,
-  isAgentView = false,
-  onMatchToLead,
-  onContactOwner,
+  // "agent": load the detail and similar properties from the agent's own,
+  // area-restricted endpoints (agent browsing). Default: public buyer data.
+  listingScope,
   // Optional: called when an action needs authentication (e.g. logged-out
   // enquiry). Callers wire this to the existing Login route; auth logic
   // itself is never changed here.
@@ -158,6 +163,7 @@ function PropertyDetailModal({
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [scheduledVisit, setScheduledVisit] = useState(null);
   const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState(false);
+  const visitSubmitting = useRef(false);
   const [isEnquiryModalOpen, setIsEnquiryModalOpen] = useState(false);
   const [enquiryTopic, setEnquiryTopic] = useState("Interested in buying");
   const [enquiryMessage, setEnquiryMessage] = useState(
@@ -168,8 +174,16 @@ function PropertyDetailModal({
   const [liveDetail, setLiveDetail] = useState(null);
   const furnishingLabel = getFurnishingLabel(liveDetail?.furnishing || property?.furnishing);
   const facingLabel = liveDetail?.facing || property?.facing || null;
+  // The real owner of THIS listing: the live detail's public-safe
+  // owner_name, else the card's, else the name from this listing's contact
+  // reveal (same rule server-side; never a phone number, never the viewer).
   const ownerDisplayName =
-    liveDetail?.ownerName || property?.ownerName || property?.agent?.name || "";
+    ownerNameFor(liveDetail, null) ||
+    ownerNameFor(
+      property,
+      typeof property?.backendId === "number" ? getRevealedContact(property.backendId) : null
+    ) ||
+    "";
   const floorLabel =
     getFloorLabel(liveDetail?.floorOn, liveDetail?.totalFloors) || property?.floor || null;
 
@@ -248,7 +262,7 @@ function PropertyDetailModal({
         : null;
     if (typeof backendId !== "number") return;
     let cancelled = false;
-    fetchSimilar(backendId, 5).then(
+    fetchSimilar(backendId, 5, { scope: listingScope }).then(
       (cards) => {
         if (!cancelled) setLiveSimilar(cards);
       },
@@ -258,14 +272,21 @@ function PropertyDetailModal({
     );
     const needsGallery = !property.gallery || property.gallery.length === 0;
     setLiveDetail(null);
-    fetchListingDetail(backendId).then(
+    fetchListingDetail(backendId, { scope: listingScope }).then(
       (detail) => {
         if (cancelled) return;
         setLiveDetail(detail);
         if (needsGallery) setLiveGallery(detail.gallery || []);
       },
-      () => {
-        if (!cancelled && needsGallery) setLiveGallery(null);
+      (e) => {
+        if (cancelled) return;
+        if (isAgentAreaRequired(e)) {
+          // A property outside the agent's areas never opens (backend 402).
+          if (onClose) onClose();
+          promptAgentUpgrade(navigation, e);
+          return;
+        }
+        if (needsGallery) setLiveGallery(null);
       }
     );
     return () => {
@@ -375,6 +396,12 @@ function PropertyDetailModal({
         );
       },
       (e) => {
+        if (isAgentAreaRequired(e)) {
+          // Agent outside its plan's areas: offer the AGENT upgrade (never buyer plans).
+          if (onClose) onClose();
+          promptAgentUpgrade(navigation, e);
+          return;
+        }
         if (e && e.status === 404) {
           Alert.alert(
             "No Longer Available",
@@ -412,12 +439,24 @@ function PropertyDetailModal({
 
   const handleRequestSiteVisit = () => {
     if (scheduledVisit) {
-      const visitState =
-        scheduledVisit.status === "CONFIRMED"
-          ? "confirmed"
-          : scheduledVisit.status === "PROPOSED"
-            ? "proposed"
-            : "requested";
+      // serverStatus is the backend state; `status` is only the UI bucket
+      // ("upcoming"), which never equals CONFIRMED/PROPOSED.
+      const serverStatus = scheduledVisit.serverStatus;
+      if (serverStatus === "PROPOSED") {
+        // The owner set this time: the buyer answers it (the backend lets
+        // only the owner move a proposed time).
+        Alert.alert(
+          "Site Visit",
+          `The owner proposed ${scheduledVisit.date} at ${scheduledVisit.time} for "${property.title}".\n\nWould you like to confirm this time?`,
+          [
+            { text: "Decline", style: "destructive", onPress: () => respondToProposedVisit("DECLINED") },
+            { text: "Confirm", onPress: () => respondToProposedVisit("CONFIRMED") },
+            { text: "Not Now", style: "cancel" },
+          ]
+        );
+        return;
+      }
+      const visitState = serverStatus === "CONFIRMED" ? "confirmed" : "requested";
       Alert.alert(
         "Site Visit",
         `Your site visit for "${property.title}" is ${visitState} for ${scheduledVisit.date} at ${scheduledVisit.time}.\n\nWould you like to reschedule or cancel?`,
@@ -457,6 +496,46 @@ function PropertyDetailModal({
     setIsScheduleVisitOpen(true);
   };
 
+  // Confirm or decline an owner-proposed time. The button and alert follow
+  // the server's answer only; nothing is shown as confirmed before it.
+  const respondToProposedVisit = (status) => {
+    const visitId = scheduledVisit && scheduledVisit.id;
+    if (typeof visitId !== "number") return;
+    updateBuyerVisit(visitId, { status }).then(
+      (row) => {
+        const ui = toUiVisit(row);
+        setScheduledVisit(ui.serverStatus === "CONFIRMED" ? ui : null);
+        Alert.alert(
+          ui.serverStatus === "CONFIRMED" ? "Visit Confirmed" : "Visit Declined",
+          ui.serverStatus === "CONFIRMED"
+            ? `Your site visit is confirmed for ${ui.date} at ${ui.time}.`
+            : "You declined the owner's proposed time."
+        );
+      },
+      (e) => {
+        if (e && (e.status === 401 || e.kind === "login")) {
+          handleLoginRequired(
+            "Your session has expired. Log in again to manage your visit.",
+            () => respondToProposedVisit(status)
+          );
+          return;
+        }
+        if (isVisitLeadClosedError(e)) {
+          const copy = buyerLeadClosedCopy("change");
+          setScheduledVisit(null);
+          Alert.alert(copy.title, copy.message);
+          return;
+        }
+        Alert.alert(
+          "Couldn't update visit",
+          e && e.status === 422 && e.detail
+            ? e.detail
+            : "Please check your connection and try again."
+        );
+      }
+    );
+  };
+
   const cancelScheduledVisit = () => {
     const visitId = scheduledVisit && scheduledVisit.id;
     if (typeof visitId !== "number") {
@@ -474,6 +553,12 @@ function PropertyDetailModal({
             "Your session has expired. Log in again to manage your visit.",
             () => cancelScheduledVisit()
           );
+          return;
+        }
+        if (isVisitLeadClosedError(e)) {
+          const copy = buyerLeadClosedCopy("change");
+          setScheduledVisit(null);
+          Alert.alert(copy.title, copy.message);
           return;
         }
         Alert.alert(
@@ -512,6 +597,9 @@ function PropertyDetailModal({
       Alert.alert("Invalid Date/Time", e?.message || "Please choose a future date and time.");
       return;
     }
+    // One request at a time: repeated taps never send a second visit.
+    if (visitSubmitting.current) return;
+    visitSubmitting.current = true;
     const existingId = scheduledVisit && scheduledVisit.id;
     const request =
       typeof existingId === "number"
@@ -521,6 +609,9 @@ function PropertyDetailModal({
             scheduledAtISO: payload.scheduled_at,
             note: payload.note,
           });
+    request.finally(() => {
+      visitSubmitting.current = false;
+    }).catch(() => {});
     request.then(
       (row) => {
         setIsScheduleVisitOpen(false);
@@ -535,14 +626,20 @@ function PropertyDetailModal({
               ? "Visit Proposal Sent"
               : "Site Visit Requested",
           confirmed
-            ? `Your site visit for "${property.title}" is confirmed for ${ui.date} at ${ui.time}. You can manage it under Saved > Visits.`
+            ? `Your site visit for "${property.title}" is confirmed for ${ui.date} at ${ui.time}. You can manage it under Activity > Visits.`
             : proposed
-              ? `The owner proposed ${ui.date} at ${ui.time} for "${property.title}". Review and confirm it under Saved > Visits.`
-              : `Your visit request for "${property.title}" is recorded for ${ui.date} at ${ui.time}. The owner can confirm it or propose another time under Saved > Visits.`,
+              ? `The owner proposed ${ui.date} at ${ui.time} for "${property.title}". Review and confirm it under Activity > Visits.`
+              : `Your visit request for "${property.title}" is recorded for ${ui.date} at ${ui.time}. The owner can confirm it or propose another time; track it under Activity > Visits.`,
           [{ text: "OK" }]
         );
       },
       (e) => {
+        if (isAgentAreaRequired(e)) {
+          // Agent outside its plan's areas: offer the AGENT upgrade (never buyer plans).
+          if (onClose) onClose();
+          promptAgentUpgrade(navigation, e);
+          return;
+        }
         if (e && e.status === 404) {
           setIsScheduleVisitOpen(false);
           setScheduledVisit(null);
@@ -560,6 +657,13 @@ function PropertyDetailModal({
           );
           return;
         }
+        if (isVisitLeadClosedError(e)) {
+          const copy = buyerLeadClosedCopy(typeof existingId === "number" ? "change" : "request");
+          setIsScheduleVisitOpen(false);
+          setScheduledVisit(null);
+          Alert.alert(copy.title, copy.message);
+          return;
+        }
         if (e && (e.status === 403 || e.kind === "denied")) {
           // The request already tried to put the account in Buyer mode
           // (src/api/buyerMode.js) and the server still refused it, so no
@@ -572,10 +676,25 @@ function PropertyDetailModal({
           );
           return;
         }
-        Alert.alert(
-          "Couldn't schedule visit",
-          "Please check your connection and try again."
-        );
+        // The server's real reason (own listing, a visit already open, an
+        // invalid time, ...); "check your connection" only for a genuine
+        // network failure.
+        const copy = visitErrorCopy(e);
+        setIsScheduleVisitOpen(false);
+        if (copy.kind === "duplicate") {
+          // Show the visit that is already open on this property.
+          fetchBuyerVisits({ page: 1, pageSize: 50 }).then(
+            (resp) => {
+              const open = (resp?.items || [])
+                .map(toUiVisit)
+                .find((v) => v.property_listing_id === backendId &&
+                  ["REQUESTED", "PROPOSED", "CONFIRMED"].includes(v.serverStatus));
+              if (open) setScheduledVisit(open);
+            },
+            () => {}
+          );
+        }
+        Alert.alert(copy.title, copy.message, [{ text: "OK" }]);
       }
     );
   };
@@ -600,9 +719,15 @@ function PropertyDetailModal({
   // "Call now" in the call popup. "Call button tapped" (CONTRACT §B) is
   // recorded right before the dialler opens, best effort — it never blocks
   // or fails the call.
-  const dialOwner = (backendId, phone) => {
-    recordCallTap(backendId);
-    Linking.openURL(`tel:${phone}`).catch(() => {
+  const dialOwner = (backendId, phone, ownListing) => {
+    const url = ownerDialUrl(phone);
+    if (!url) {
+      Alert.alert("Contact Number Unavailable", "This owner's number can't be dialled.");
+      return;
+    }
+    // Fire-and-forget (initiated, never "answered"); not on your own listing.
+    if (!ownListing) recordCallTap(backendId);
+    Linking.openURL(url).catch(() => {
       Alert.alert("Call Unavailable", "Could not place this call.");
     });
   };
@@ -616,8 +741,12 @@ function PropertyDetailModal({
       );
       return;
     }
-    revealContactPhone(backendId).then(
-      (phone) => {
+    // A number already revealed for this listing this session is reused
+    // (no second reveal request); otherwise the authorized reveal runs.
+    const cached = getRevealedContact(backendId);
+    (cached ? Promise.resolve(cached) : revealContact(backendId)).then(
+      (contact) => {
+        const phone = contact && contact.phone;
         if (!phone) {
           Alert.alert(
             "Contact Number Unavailable",
@@ -626,9 +755,15 @@ function PropertyDetailModal({
           return;
         }
         // Show the call popup; the dialler opens only on "Call now".
-        setCallSheet({ phone, backendId });
+        setCallSheet({ phone, backendId, ownListing: contact.ownListing });
       },
       (e) => {
+        if (isAgentAreaRequired(e)) {
+          // Agent outside its plan's areas: offer the AGENT upgrade (never buyer plans).
+          if (onClose) onClose();
+          promptAgentUpgrade(navigation, e);
+          return;
+        }
         if (isBuyerPlanRequired(e)) {
           // Free leads used up: close the sheet and open the buyer plans.
           if (onClose) onClose();
@@ -713,6 +848,12 @@ function PropertyDetailModal({
         );
       })
       .catch((e) => {
+        if (isAgentAreaRequired(e)) {
+          // Agent outside its plan's areas: offer the AGENT upgrade (never buyer plans).
+          if (onClose) onClose();
+          promptAgentUpgrade(navigation, e);
+          return;
+        }
         if (e && e.status === 404) {
           Alert.alert("No Longer Available", "This property is no longer active.");
           return;
@@ -1159,10 +1300,10 @@ function PropertyDetailModal({
                     source={{ uri: property.agent.avatar }}
                     style={styles.ownerAvatar}
                   />
-                ) : ownerDisplayName ? (
+                ) : getInitials(ownerDisplayName) ? (
                   <View style={[styles.ownerAvatar, styles.ownerInitialAvatar]}>
                     <Text style={styles.ownerInitialText}>
-                      {ownerDisplayName.trim().charAt(0).toUpperCase()}
+                      {getInitials(ownerDisplayName)}
                     </Text>
                   </View>
                 ) : (
@@ -1325,35 +1466,6 @@ function PropertyDetailModal({
             },
           ]}
         >
-          {isAgentView ? (
-            <>
-              <TouchableOpacity
-                style={styles.siteVisitBtn}
-                activeOpacity={0.85}
-                onPress={() => onMatchToLead?.(property)}
-              >
-                <Users
-                  size={18}
-                  color={COLORS.primary}
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={styles.siteVisitBtnText}>Match to Lead</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.sendEnquiryBtn}
-                activeOpacity={0.85}
-                onPress={() => onContactOwner?.(property)}
-              >
-                <Phone
-                  size={18}
-                  color="#FFFFFF"
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={styles.sendEnquiryBtnText}>Contact Owner</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
             <>
               <TouchableOpacity
                 style={[
@@ -1436,7 +1548,6 @@ function PropertyDetailModal({
                 <Phone size={20} color="#FFFFFF" fill="#FFFFFF" />
               </TouchableOpacity>
             </>
-          )}
         </View>
 
         {/* ================= CALL OWNER POPUP ================= */}
@@ -1457,9 +1568,9 @@ function PropertyDetailModal({
               onPress={(e) => e.stopPropagation()}
             >
               <View style={[styles.ownerAvatar, styles.ownerInitialAvatar, styles.callPopupAvatar]}>
-                {ownerDisplayName ? (
+                {getInitials(ownerDisplayName) ? (
                   <Text style={styles.ownerInitialText}>
-                    {ownerDisplayName.trim().charAt(0).toUpperCase()}
+                    {getInitials(ownerDisplayName)}
                   </Text>
                 ) : (
                   <Users size={22} color="#FFFFFF" />
@@ -1477,7 +1588,7 @@ function PropertyDetailModal({
                 onPress={() => {
                   const sheet = callSheet;
                   setCallSheet(null);
-                  if (sheet) dialOwner(sheet.backendId, sheet.phone);
+                  if (sheet) dialOwner(sheet.backendId, sheet.phone, sheet.ownListing);
                 }}
               >
                 <Phone size={18} color="#FFFFFF" style={{ marginRight: 8 }} />

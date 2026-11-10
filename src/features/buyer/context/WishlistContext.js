@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState, useMemo } from "react";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 import { fetchSavedWishlist, saveListingRemote, unsaveListingRemote } from "../api/saved.js";
+import { isBuyerCapableRole } from "../api/buyerModeCore.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { goLogin } from "../../../shared/navigation/navRef.js";
 import { planProtectedAction } from "../../auth/requireAuth.js";
@@ -29,11 +30,12 @@ export function WishlistProvider({ children }) {
   // authenticated BUYER accounts replace this with the server wishlist via
   // refreshWishlist(). Never seed with sample catalog records.
   const [wishlist, setWishlist] = useState([]);
-  // Buyer endpoints 403 for non-BUYER roles (single active role per
-  // account), so remote sync only runs for live BUYER accounts. Everyone
-  // else keeps the existing local behavior — no request is ever sent.
+  // The saved endpoints accept BUYER and agent (BROKER) accounts (backend
+  // require_buyer_or_agent), so remote sync runs for both — an agent's
+  // wishlist lives on the agent's own account. Other roles (e.g. OWNER)
+  // keep the existing local behavior — no request is ever sent.
   const { user, isAuthenticated, setPendingAction } = useAuth();
-  const isBuyer = user?.role === "BUYER";
+  const isBuyer = isBuyerCapableRole(user?.role);
   // Live mirrors (Change 2): the stored post-login continuation may invoke
   // toggleWishlist from a pre-login render closure, so the guard and the
   // body read these refs (always current) instead of render-scope values.

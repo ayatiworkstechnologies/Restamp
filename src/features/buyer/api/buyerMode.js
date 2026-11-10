@@ -21,6 +21,7 @@ import {
   createBuyerModeGuard,
   isRoleGateError,
   isBuyerRole,
+  isBuyerCapableRole,
 } from "./buyerModeCore.js";
 
 const guard = createBuyerModeGuard({
@@ -77,4 +78,4 @@ export async function withBuyerMode(request) {
   }
 }
 
-export { isBuyerRole, isRoleGateError };
+export { isBuyerRole, isBuyerCapableRole, isRoleGateError };

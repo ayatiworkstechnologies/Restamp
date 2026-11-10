@@ -181,6 +181,10 @@ export function toUiProperty(card) {
     rawPrice: Math.round(card.price_paise / 100),
     rating: undefined, // no backend rating exists; the detail sheet hides the badge
     location: card.location_label,
+    // Structured location (agent locality filter / search match on these).
+    locality: card.locality || undefined,
+    city: card.city || undefined,
+    pincode: card.pincode || undefined,
     address: card.address_line || card.location_label,
     beds: card.bedrooms ?? undefined,
     baths: card.bathrooms ?? undefined,

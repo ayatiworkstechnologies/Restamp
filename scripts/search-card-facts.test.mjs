@@ -20,7 +20,9 @@ copyFileSync(join(SRC, "features", "buyer", "utils", "searchCardSpecs.js"), join
 const { displayRating, displayCount, validConstructionStatus, matchesStatusFilter } = await import(
   pathToFileURL(join(tmp, "searchCardSpecs.mjs")).href
 );
-const searchSrc = readFileSync(join(SRC, "features", "buyer", "screens", "SearchScreen.js"), "utf8");
+// The search card + View Number sheet live in the shared PropertySearchCard (also used by agents).
+const searchSrc = readFileSync(join(SRC, "features", "buyer", "screens", "SearchScreen.js"), "utf8") +
+  readFileSync(join(SRC, "features", "buyer", "components", "PropertySearchCard.js"), "utf8");
 
 let failures = 0;
 function check(name, cond, extra) {

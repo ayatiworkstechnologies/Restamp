@@ -38,6 +38,17 @@ export function isBuyerRole(role) {
   return normalizeRole(role) === BUYER_ROLE;
 }
 
+// Roles the backend accepts on the buyer activity endpoints (backend
+// app/deps.py: require_buyer_or_agent). An agent (BROKER) uses the same
+// wishlist / enquiries / visits / viewed / calls flow as a buyer, on its own
+// account, so it is never switched to BUYER (that would drop agent mode and
+// label its enquiries as buyer leads).
+export const BUYER_CAPABLE_ROLES = ["BUYER", "BROKER"];
+
+export function isBuyerCapableRole(role) {
+  return BUYER_CAPABLE_ROLES.includes(normalizeRole(role));
+}
+
 /**
  * True for the buyer-endpoint role gate: the backend answers 403 (mapped to
  * kind "denied" by the API client) when the account is authenticated but its
@@ -114,8 +125,8 @@ export function createBuyerModeGuard({
     );
     const role = normalizeRole(current && current.role);
     confirmedRole = role || null;
-    if (role === BUYER_ROLE) {
-      return { already: true, role: BUYER_ROLE };
+    if (isBuyerCapableRole(role)) {
+      return { already: true, role };
     }
     const switched = await withTimeout(
       Promise.resolve().then(() => setRole(BUYER_ROLE)),
@@ -136,8 +147,8 @@ export function createBuyerModeGuard({
     if (!getToken()) {
       return { already: true, role: null, skipped: true };
     }
-    if (!force && confirmedRole === BUYER_ROLE) {
-      return { already: true, role: BUYER_ROLE };
+    if (!force && isBuyerCapableRole(confirmedRole)) {
+      return { already: true, role: confirmedRole };
     }
     if (inFlight) {
       return inFlight;

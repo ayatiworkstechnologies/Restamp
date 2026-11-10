@@ -5,11 +5,16 @@
  * keeps neutral type-based placeholders only when the real record carries no
  * usable photos (a visual fallback, not a fabricated property).
  */
-import { apiGet } from "../../../shared/api/client.js";
+import { apiGet, apiGetAuth } from "../../../shared/api/client.js";
 import { toUiProperty } from "../../../shared/api/mappers.js";
 
-export async function fetchListingDetail(listingId) {
-  const data = await apiGet(`/buyer/listings/${listingId}`);
+// scope "agent": the agent's own endpoints (GET /broker/listings/{id}[/similar]),
+// which the backend restricts to the areas in the agent's plan (402
+// AGENT_AREA_NOT_IN_PLAN outside them). Default: the public buyer endpoints.
+export async function fetchListingDetail(listingId, { scope } = {}) {
+  const data = scope === "agent"
+    ? await apiGetAuth(`/broker/listings/${listingId}`)
+    : await apiGet(`/buyer/listings/${listingId}`);
   if (!data || typeof data !== "object") {
     throw new Error(`Property not found (${listingId}).`);
   }
@@ -38,9 +43,11 @@ export async function fetchListingDetail(listingId) {
  * numeric backend id (no fetch attempted). API failures reject so callers can
  * render an honest empty state instead of mock substitution.
  */
-export async function fetchSimilar(listingId, limit = 5) {
+export async function fetchSimilar(listingId, limit = 5, { scope } = {}) {
   if (typeof listingId !== "number") return null;
-  const data = await apiGet(`/buyer/listings/${listingId}/similar`, { limit });
+  const data = scope === "agent"
+    ? await apiGetAuth(`/broker/listings/${listingId}/similar`, { limit })
+    : await apiGet(`/buyer/listings/${listingId}/similar`, { limit });
   if (!Array.isArray(data)) return [];
   return data.map(toUiProperty);
 }

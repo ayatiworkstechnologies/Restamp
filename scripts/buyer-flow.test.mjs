@@ -51,7 +51,8 @@ function src(rel) {
   return readFileSync(join(ROOT, "..", rel), "utf8");
 }
 const homeSrc = src("src/features/buyer/screens/HomeScreen.js");
-const searchSrc = src("src/features/buyer/screens/SearchScreen.js");
+// The search card + View Number sheet live in the shared PropertySearchCard (also used by agents).
+const searchSrc = src("src/features/buyer/screens/SearchScreen.js") + src("src/features/buyer/components/PropertySearchCard.js");
 const detailSrc = src("src/features/buyer/components/PropertyDetailModal.js");
 const exploreSrc = src("src/features/buyer/screens/ExploreScreen.js");
 const modalSrc = src("src/features/buyer/components/SearchPropertyModal.js");
@@ -185,16 +186,23 @@ check(
 );
 check(
   "C3 call/WhatsApp use the revealed number only",
-  searchSrc.includes("disabled={revealState") &&
+  // The sheet reads the reveal state from the shared useViewNumber hook.
+  searchSrc.includes("disabled={state.revealState") &&
     searchSrc.includes("revealState !== ") &&
-    searchSrc.includes("phone: revealedPhone")
+    // Call Now / WhatsApp dial the contact this listing's reveal returned
+    // (remembered per listing by contact.js), never another number.
+    searchSrc.includes("state.handleCall(state.property)") &&
+    searchSrc.includes("getRevealedContact(id)")
 );
 check(
   "C4 Explore sample numbers never dialed, messaged, or copied",
   !exploreSrc.includes("whatsapp://send") &&
     !exploreSrc.includes("+919876543210") &&
     !exploreSrc.includes("+91 98401 22334") &&
-    exploreSrc.includes("Not available")
+    // Explore rows are live listings: contact goes through the shared,
+    // authorized View Number sheet ("Not available" until revealed).
+    exploreSrc.includes("<ViewNumberSheet state={viewNumber} />") &&
+    exploreSrc.includes("viewNumber.handleViewNumber(property)")
 );
 
 // --- 5. B2 enquiry honesty (source guards) ---

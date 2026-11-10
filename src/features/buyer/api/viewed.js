@@ -7,7 +7,7 @@
  * explicit UTC. Errors are thrown as ApiError (see client.js).
  */
 import { apiPost, apiGetAuth, getAuthTokenSync } from "../../../shared/api/client.js";
-import { withBuyerMode, getConfirmedBuyerRole, isBuyerRole } from "./buyerMode.js";
+import { withBuyerMode, getConfirmedBuyerRole, isBuyerCapableRole } from "./buyerMode.js";
 import { toUiProperty } from "../../../shared/api/mappers.js";
 import { parseApiDateTime } from "../../../shared/api/visits.js";
 
@@ -26,7 +26,7 @@ export async function recordViewed(listingId) {
   const id = typeof listingId === "number" ? listingId : parseInt(String(listingId ?? ""), 10);
   if (!Number.isFinite(id) || id <= 0 || !getAuthTokenSync()) return null;
   const role = getConfirmedBuyerRole();
-  if (role && !isBuyerRole(role)) return null;
+  if (role && !isBuyerCapableRole(role)) return null;
   try {
     return await apiPost(`/buyer/viewed/${id}`);
   } catch {

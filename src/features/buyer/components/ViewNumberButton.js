@@ -15,9 +15,13 @@ import React, { useRef, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, Linking, StyleSheet } from "react-native";
 import { Phone, RefreshCw } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
-import { revealContactPhone } from "../../../shared/api/contact.js";
+import { getRevealedContact, revealContact } from "../../../shared/api/contact.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
+import { isAgentAreaRequired } from "../../../shared/api/agentPlans.js";
+import { promptAgentUpgrade } from "../../agent/utils/agentUpgrade.js";
+import { recordCallTap } from "../api/calls.js";
+import { ownerDialUrl } from "../utils/ownerContact.js";
 
 function formatPhone(phone) {
   const d = String(phone).replace(/\D/g, "");
@@ -62,6 +66,7 @@ export default function ViewNumberButton({
   // idle | loading | revealed | locked | error
   const [state, setState] = useState("idle");
   const [phone, setPhone] = useState(null);
+  const [ownListing, setOwnListing] = useState(false);
   const [last4, setLast4] = useState(null);
   const [errorInfo, setErrorInfo] = useState(null);
   const req = useRef(0);
@@ -80,14 +85,23 @@ export default function ViewNumberButton({
       if (onLoginRequired) onLoginRequired(() => handleView());
       return;
     }
+    const cached = getRevealedContact(Number(backendId));
+    if (cached) {
+      // Already revealed this session: same number, no second request.
+      setPhone(cached.phone);
+      setOwnListing(cached.ownListing);
+      setState("revealed");
+      return;
+    }
     const mine = ++req.current;
     setState("loading");
     setErrorInfo(null);
-    revealContactPhone(Number(backendId)).then(
-      (p) => {
+    revealContact(Number(backendId)).then(
+      (contact) => {
         if (req.current !== mine) return;
-        if (p) {
-          setPhone(p);
+        if (contact && contact.phone) {
+          setPhone(contact.phone);
+          setOwnListing(contact.ownListing);
           setState("revealed");
         } else {
           setErrorInfo({ label: "Owner hasn't shared a number", retry: false });
@@ -96,6 +110,13 @@ export default function ViewNumberButton({
       },
       (err) => {
         if (req.current !== mine) return;
+        if (isAgentAreaRequired(err)) {
+          // Agent outside its plan's areas: agent upgrade, never buyer plans.
+          setState("idle");
+          if (onBeforeNavigate) onBeforeNavigate();
+          promptAgentUpgrade(navigation, err);
+          return;
+        }
         if (isBuyerPlanRequired(err)) {
           setLast4(err?.data?.phone_last4 || null);
           setState("locked");
@@ -126,9 +147,15 @@ export default function ViewNumberButton({
     navigation.navigate(BUYER_PLANS_ROUTE, { reason: "quota" });
   };
 
+  // Tapping the revealed number dials it. "Call button tapped" (CONTRACT §B)
+  // is recorded fire-and-forget right before dialling (initiated, never
+  // "answered"), so it never blocks the dialler; not on your own listing.
   const call = (e) => {
     stop(e);
-    if (phone) Linking.openURL(`tel:${phone}`).catch(() => {});
+    const url = ownerDialUrl(phone);
+    if (!url) return;
+    if (!ownListing) recordCallTap(Number(backendId));
+    Linking.openURL(url).catch(() => {});
   };
 
   // A card with no backend record has no owner number to reveal — say so

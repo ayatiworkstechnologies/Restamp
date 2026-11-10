@@ -33,6 +33,7 @@ import { enterOwnerFlow, ensureOwnerRole } from "../../../shared/api/users.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import { useOwner } from "../../owner/context/OwnerContext.js";
 import { useAgent } from "../../agent/context/AgentContext.js";
+import { planAllowance } from "../../agent/utils/agentCore.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 import { OWNER_PLANS_LIST } from "../../owner/data/ownerPlans.js";
 
@@ -191,7 +192,8 @@ export default function MenuScreen({ navigation, route }) {
     }
   };
 
-  const { hasActivePlan, agentPlan } = useAgent();
+  const { hasActivePlan, agentPlan, selectedLocalities: agentLocalities, isPlanExpired } = useAgent();
+  const agentAllowance = planAllowance(agentPlan, agentLocalities, { hasActivePlan, isPlanExpired });
 
   // Vertical tab: 'owner' | 'agent'. The agent dashboard links back here
   // with initialTab "agent" to upgrade or renew.
@@ -401,6 +403,27 @@ export default function MenuScreen({ navigation, route }) {
                 </View>
               </View>
 
+              {/* No agent plan yet: the free trial (ONE area, unlimited owner
+                  numbers). Picking the area starts it; more areas = a plan below. */}
+              {isAgentTab && !hasActivePlan && (
+                <View style={styles.ownerTestBanner}>
+                  <View style={styles.ownerTestLeft}>
+                    <Crown size={17} color="#2563EB" style={{ marginRight: 8 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ownerTestTitle}>Agent Free Trial</Text>
+                      <Text style={styles.ownerTestSub}>1 area · unlimited owner numbers</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.ownerTestBtn}
+                    onPress={() => navigation.navigate("AgentLocationSelect", { trial: true })}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.ownerTestBtnText}>Start</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Active agent plan: jump straight to the dashboard */}
               {isAgentTab && hasActivePlan && (
                 <View style={styles.ownerTestBanner}>
@@ -411,7 +434,10 @@ export default function MenuScreen({ navigation, route }) {
                         {agentPlan?.name || "Agent plan"} active
                       </Text>
                       <Text style={styles.ownerTestSub}>
-                        {agentPlan?.locationLimit || 0} localities
+                        {agentAllowance.used}/{agentPlan?.locationLimit || 0} localities
+                        {agentAllowance.remaining > 0
+                          ? ` · ${agentAllowance.remaining} more included`
+                          : ""}
                       </Text>
                     </View>
                   </View>
