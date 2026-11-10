@@ -68,7 +68,7 @@ function loadGisScript() {
   return scriptLoadPromise;
 }
 
-export default function GoogleSignInButton({ onCredential, onError, disabled, compact }) {
+export default function GoogleSignInButton({ onCredential, onError, compact, pill }) {
   const buttonRef = useRef(null);
   const callbackRef = useRef(onCredential);
   const errorRef = useRef(onError);
@@ -104,10 +104,14 @@ export default function GoogleSignInButton({ onCredential, onError, disabled, co
           }
           if (buttonRef.current) {
             buttonRef.current.innerHTML = "";
+            // `pill` matches the Login landing stack's rounded white
+            // buttons; GIS caps width at 400px.
             window.google.accounts.id.renderButton(buttonRef.current, {
               theme: "outline",
               size: "large",
-              width: 280,
+              width: pill ? 360 : 280,
+              shape: pill ? "pill" : "rectangular",
+              text: pill ? "continue_with" : "signin_with",
             });
           }
         } catch (e) {
@@ -132,12 +136,12 @@ export default function GoogleSignInButton({ onCredential, onError, disabled, co
         // ignore cleanup errors
       }
     };
-  }, [clientId]);
+  }, [clientId, pill]);
 
   if (!clientId) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, pill && styles.containerPill]}>
       {!compact ? (
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
@@ -163,6 +167,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 18,
     width: "100%",
+  },
+  containerPill: {
+    marginTop: 0,
   },
   dividerRow: {
     flexDirection: "row",

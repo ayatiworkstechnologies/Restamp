@@ -6,7 +6,6 @@ import {
   ScrollView,
   StatusBar,
   TouchableOpacity,
-  Image,
   Alert,
   Modal,
   TextInput,
@@ -38,6 +37,7 @@ import {
   Pencil,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useWishlist } from "../context/WishlistContext.js";
 import { useOwner } from "../../owner/context/OwnerContext.js";
@@ -48,7 +48,8 @@ import { enterOwnerFlow } from "../../../shared/api/users.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import { fetchMyEnquiries } from "../api/enquiries.js";
 import { linkGoogleAccount } from "../../auth/api/auth.js";
-import GoogleSignInButton from "../../auth/components/GoogleSignInButton.js";
+// No ".js" extension so Metro picks GoogleSignInButton.web.js on web.
+import GoogleSignInButton from "../../auth/components/GoogleSignInButton";
 import ConfirmationModal from "../../owner/components/ConfirmationModal.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 
@@ -296,7 +297,13 @@ export default function ProfileScreen({ navigation }) {
       >
         {/* Profile Header Card */}
         <View style={styles.profileHeaderCard}>
-          <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
+          {/* Real photo when present, else initials (never a blank image). */}
+          <InitialsAvatar
+            name={userProfile.name}
+            uri={userProfile.avatar}
+            style={styles.avatar}
+            iconSize={22}
+          />
 
           <View style={styles.profileInfo}>
             <TouchableOpacity
