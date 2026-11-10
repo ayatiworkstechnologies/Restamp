@@ -34,7 +34,9 @@ import {
   Wallet,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
 import { useAgent } from "../context/AgentContext.js";
+import { planAllowance } from "../utils/agentCore.js";
 import ConfirmationModal from "../../owner/components/ConfirmationModal.js";
 
 export default function AgentProfileScreen({ navigation }) {
@@ -44,7 +46,10 @@ export default function AgentProfileScreen({ navigation }) {
     selectedLocalities,
     localityProperties,
     leads,
+    hasActivePlan,
+    isPlanExpired,
   } = useAgent();
+  const allowance = planAllowance(agentPlan, selectedLocalities, { hasActivePlan, isPlanExpired });
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -89,23 +94,24 @@ export default function AgentProfileScreen({ navigation }) {
       >
         {/* HEADER: AGENT AVATAR, NAME, PHONE, EMAIL, VERIFICATION STATUS */}
         <View style={styles.profileHeaderCard}>
-          <Image
-            source={{
-              uri:
-                agentProfile?.avatar ||
-                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
-            }}
+          {/* Real photo or the agent's initials — never a stock person. */}
+          <InitialsAvatar
+            name={agentProfile?.name}
+            uri={agentProfile?.avatar}
             style={styles.avatar}
+            iconSize={24}
           />
 
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.agentName}>{agentProfile?.name || "Agent profile unavailable"}</Text>
+              <Text style={styles.agentName}>
+                {agentProfile ? agentProfile.name || "Add your name" : "Agent profile unavailable"}
+              </Text>
               <Pencil size={14} color="#475569" style={styles.pencilIcon} />
             </View>
 
             <Text style={styles.phoneText}>{agentProfile?.phone || "No phone on file"}</Text>
-            <Text style={styles.emailText}>{agentProfile?.email || "vikram.prabhu@restamp.com"}</Text>
+            {agentProfile?.email ? <Text style={styles.emailText}>{agentProfile.email}</Text> : null}
 
             <View style={styles.verifiedBadge}>
               <ShieldCheck size={12} color="#16A34A" style={{ marginRight: 4 }} />
@@ -145,7 +151,8 @@ export default function AgentProfileScreen({ navigation }) {
               <View style={styles.planTitleCol}>
                 <Text style={styles.planTitleText}>{agentPlan?.name || "Agent Plan"}</Text>
                 <Text style={styles.planLimitSub}>
-                  {agentPlan?.locationLimit || selectedLocalities.length} Locations
+                  {selectedLocalities.length}/{agentPlan?.locationLimit || selectedLocalities.length} Locations
+                  {allowance.remaining > 0 ? ` · ${allowance.remaining} remaining` : ""}
                 </Text>
               </View>
 
@@ -158,7 +165,7 @@ export default function AgentProfileScreen({ navigation }) {
 
             <View style={styles.planExpiryRow}>
               <Text style={styles.planExpiryLabel}>Expiry Date:</Text>
-              <Text style={styles.planExpiryVal}>20 Nov 2026</Text>
+              <Text style={styles.planExpiryVal}>{agentPlan?.expiryDate || "—"}</Text>
             </View>
 
             <TouchableOpacity
@@ -196,6 +203,15 @@ export default function AgentProfileScreen({ navigation }) {
               ))}
             </View>
 
+            {allowance.active ? (
+              <Text style={styles.locationsCoverageNotice}>
+                {allowance.used} of {allowance.limit} locations used
+                {allowance.remaining > 0
+                  ? ` · ${allowance.remaining} more included in your plan (no extra payment)`
+                  : " · plan limit reached"}
+              </Text>
+            ) : null}
+
             <TouchableOpacity
               style={styles.manageLocationsBtn}
               onPress={handleManageLocations}
@@ -222,7 +238,7 @@ export default function AgentProfileScreen({ navigation }) {
             </View>
             <View style={styles.badgeRow}>
               <View style={styles.countBadge}>
-                <Text style={styles.countText}>{localityProperties.length || 126}</Text>
+                <Text style={styles.countText}>{localityProperties.length}</Text>
               </View>
               <ChevronRight size={16} color="#94A3B8" />
             </View>
@@ -230,7 +246,7 @@ export default function AgentProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => navigation.navigate("Leads")}
+            onPress={() => navigation.navigate("Activity")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -239,7 +255,7 @@ export default function AgentProfileScreen({ navigation }) {
             </View>
             <View style={styles.badgeRow}>
               <View style={styles.countBadge}>
-                <Text style={styles.countText}>{leads.length || 18}</Text>
+                <Text style={styles.countText}>{leads.length}</Text>
               </View>
               <ChevronRight size={16} color="#94A3B8" />
             </View>

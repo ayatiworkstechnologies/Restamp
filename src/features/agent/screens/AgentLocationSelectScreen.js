@@ -21,6 +21,20 @@ import {
   Sparkles,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import { useAgent } from "../context/AgentContext.js";
+import {
+  addAgentPlanLocalities,
+  fetchAgentPlan,
+  startAgentTrial,
+  AGENT_TRIAL_PLAN_ID,
+} from "../../../shared/api/agentPlans.js";
+import { promptAgentUpgrade } from "../utils/agentUpgrade.js";
+import {
+  localityKey,
+  locationSelectMode,
+  newLocalitiesToAdd,
+  planAllowance,
+} from "../utils/agentCore.js";
 
 const ALL_LOCALITY_NAMES = [
   "Anna Nagar",
@@ -50,9 +64,29 @@ const ALL_LOCALITY_NAMES = [
   "Royapettah",
 ];
 
-export default function AgentLocationSelectScreen({ route, navigation }) {
-  // Plan passed from MenuScreen
-  const initialPlan = route?.params?.plan || {
+// The agent free trial: ONE area, no payment, unlimited owner numbers.
+const TRIAL_PLAN = { id: AGENT_TRIAL_PLAN_ID, name: "Agent Free Trial", locationLimit: 1, isTrial: true };
+
+// `onTrialStarted`: set when AgentNavigator shows this screen as the
+// first-time setup (no plan yet); otherwise the trial opens the agent tabs.
+export default function AgentLocationSelectScreen({ route, navigation, onTrialStarted }) {
+  const {
+    agentPlan: activePlan,
+    selectedLocalities: coveredLocalities,
+    hasActivePlan,
+    isPlanExpired,
+    applyServerPlan,
+  } = useAgent();
+  // Unused localities already paid for in the active plan can be added here
+  // without another purchase; the server enforces the plan limit too.
+  const allowance = planAllowance(activePlan, coveredLocalities, { hasActivePlan, isPlanExpired });
+
+  // Free-trial setup: the Menu's "Start free trial" or AgentNavigator's
+  // first-time gate (an agent with no plan yet).
+  const trialSetup = route?.params?.trial === true && !allowance.active;
+
+  // Plan passed from MenuScreen / the agent profile
+  const initialPlan = (trialSetup ? TRIAL_PLAN : null) || route?.params?.plan || (allowance.active ? activePlan : null) || {
     id: "agent-pro",
     name: "Agent Pro Plan",
     locationLimit: 10,
@@ -65,7 +99,7 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
   const locationLimit = currentPlan.locationLimit || 10;
 
   // Selected localities state
-  const initialSelected = route?.params?.selectedLocalities || [
+  const initialSelected = (trialSetup ? [] : null) || route?.params?.selectedLocalities || (allowance.active ? coveredLocalities : null) || [
     "Anna Nagar",
     "Kilpauk",
     "Mogappair",
@@ -78,10 +112,38 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
 
   const selectedCount = selectedLocalities.length;
   const isLimitReached = selectedCount >= locationLimit;
+  const [saving, setSaving] = useState(false);
+
+  // "add": same plan as the active one -> add under it, no payment.
+  // "purchase": no usable plan, or a different tier was picked.
+  const mode =
+    trialSetup && currentPlan.id === AGENT_TRIAL_PLAN_ID
+      ? "trial"
+      : locationSelectMode(allowance, activePlan, currentPlan);
+  const coveredKeys = useMemo(
+    () => new Set((mode === "add" ? coveredLocalities : []).map(localityKey)),
+    [mode, coveredLocalities]
+  );
+  const selectedKeys = useMemo(() => new Set(selectedLocalities.map(localityKey)), [selectedLocalities]);
+  const toAdd = mode === "add" ? newLocalitiesToAdd(selectedLocalities, coveredLocalities) : [];
+  const remainingAfter = Math.max(0, locationLimit - selectedCount);
+  const ctaDisabled = selectedCount === 0 || saving || (mode === "add" && toAdd.length === 0);
+  let ctaLabel = `Continue (${selectedCount}/${locationLimit})`;
+  if (mode === "trial") {
+    ctaLabel = saving ? "Starting…" : selectedCount ? "Start Free Trial (1 area)" : "Select Your Area";
+  } else if (mode === "add") {
+    const noun = toAdd.length === 1 ? "Location" : "Locations";
+    ctaLabel = saving
+      ? "Adding…"
+      : toAdd.length
+      ? `Add ${toAdd.length} ${noun} (${selectedCount}/${locationLimit})`
+      : `Select a New Location (${selectedCount}/${locationLimit})`;
+  }
 
   // Plan tiers for quick switching if user wants to upgrade/downgrade
   const PLAN_TIERS = [
     {
+      id: "agent-starter",
       limit: 5,
       label: "5 Locations",
       name: "Agent Starter Plan",
@@ -98,6 +160,7 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
       ],
     },
     {
+      id: "agent-pro",
       limit: 10,
       label: "10 Locations",
       name: "Agent Pro Plan",
@@ -114,6 +177,7 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
       ],
     },
     {
+      id: "agent-elite",
       limit: 15,
       label: "15 Locations",
       name: "Agent Elite Plan",
@@ -134,6 +198,8 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
   const handleSelectTier = (tier) => {
     setCurrentPlan((prev) => ({
       ...prev,
+      // The server plan id must follow the tier (subscribe buys this id).
+      id: tier.id,
       name: tier.name,
       locationLimit: tier.limit,
       price: tier.price,
@@ -145,21 +211,48 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
     }
   };
 
+  // Covered localities are listed even when spelled differently from the
+  // catalogue (e.g. "T Nagar" vs "T. Nagar"), so they never appear twice.
+  const localityOptions = useMemo(() => {
+    const listed = new Set(ALL_LOCALITY_NAMES.map(localityKey));
+    const extra = selectedLocalities.filter((loc) => !listed.has(localityKey(loc)));
+    return [...extra, ...ALL_LOCALITY_NAMES];
+  }, [selectedLocalities]);
+
   // Filter localities based on search
   const filteredLocalities = useMemo(() => {
-    if (!searchQuery.trim()) return ALL_LOCALITY_NAMES;
-    const q = searchQuery.toLowerCase().trim();
-    return ALL_LOCALITY_NAMES.filter((loc) => loc.toLowerCase().includes(q));
-  }, [searchQuery]);
+    if (!searchQuery.trim()) return localityOptions;
+    const q = localityKey(searchQuery);
+    return localityOptions.filter((loc) => localityKey(loc).includes(q));
+  }, [searchQuery, localityOptions]);
 
   const toggleLocality = (locName) => {
-    if (selectedLocalities.includes(locName)) {
-      setSelectedLocalities((prev) => prev.filter((item) => item !== locName));
+    const key = localityKey(locName);
+    if (selectedKeys.has(key)) {
+      if (coveredKeys.has(key)) {
+        Alert.alert(
+          "Already in Your Plan",
+          `${locName} is one of your covered locations and stays in your plan.`
+        );
+        return;
+      }
+      setSelectedLocalities((prev) => prev.filter((item) => localityKey(item) !== key));
     } else {
+      if (mode === "trial") {
+        // Exactly one area: picking another one replaces the choice.
+        setSelectedLocalities([locName]);
+        return;
+      }
+      if (isLimitReached && mode === "add" && activePlan?.isTrial) {
+        promptAgentUpgrade(navigation, null);
+        return;
+      }
       if (isLimitReached) {
         Alert.alert(
           "Limit Reached",
-          `You have reached your ${locationLimit}-location limit for this plan. You can upgrade to a higher tier or deselect an existing location.`
+          mode === "add"
+            ? `All ${locationLimit} locations in your plan are in use. Choose a higher tier above to cover more.`
+            : `You have reached your ${locationLimit}-location limit for this plan. You can upgrade to a higher tier or deselect an existing location.`
         );
         return;
       }
@@ -167,9 +260,85 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
     }
   };
 
+  const addUnderActivePlan = () => {
+    if (saving) return;
+    if (toAdd.length === 0) {
+      Alert.alert("No New Locations", "Select a location you don't cover yet to add it to your plan.");
+      return;
+    }
+    setSaving(true);
+    addAgentPlanLocalities(toAdd)
+      .then((server) => {
+        applyServerPlan(server);
+        const added = Array.isArray(server?.added_localities) ? server.added_localities : [];
+        const unmatched = Array.isArray(server?.unmatched_localities) ? server.unmatched_localities : [];
+        const left = typeof server?.localities_remaining === "number" ? server.localities_remaining : null;
+        const lines = [
+          added.length
+            ? `${added.join(", ")} added to your plan at no extra cost.`
+            : "These locations were already in your plan.",
+        ];
+        if (unmatched.length) lines.push(`Not served yet: ${unmatched.join(", ")}.`);
+        if (left != null) lines.push(`${left} location${left === 1 ? "" : "s"} remaining.`);
+        Alert.alert(added.length ? "Locations Added" : "No Change", lines.join("\n"));
+        navigation.goBack();
+      })
+      .catch((e) => {
+        if (e && e.status === 409) {
+          // The plan ended meanwhile: refresh it; the next Continue purchases.
+          fetchAgentPlan().then((server) => server && applyServerPlan(server));
+          Alert.alert("Plan Not Active", "Your agent plan is no longer active. Choose a plan to continue.");
+          return;
+        }
+        if (e && e.status === 422 && typeof e.detail === "string") {
+          Alert.alert("Couldn't Add Locations", e.detail);
+          return;
+        }
+        Alert.alert("Couldn't Add Locations", "Please check your connection and try again.");
+      })
+      .finally(() => setSaving(false));
+  };
+
+  const startTrial = () => {
+    if (saving || selectedLocalities.length !== 1) return;
+    setSaving(true);
+    startAgentTrial(selectedLocalities[0])
+      .then((server) => {
+        applyServerPlan(server);
+        if (onTrialStarted) {
+          onTrialStarted(server);
+        } else {
+          navigation.navigate("AgentNavigator");
+        }
+      })
+      .catch((e) => {
+        if (e && e.status === 409) {
+          Alert.alert(
+            "Free Trial Unavailable",
+            "This account already has an agent plan or has used its free trial. Choose a plan to add areas."
+          );
+          return;
+        }
+        if (e && e.status === 422 && typeof e.detail === "string") {
+          Alert.alert("Area Not Available", e.detail);
+          return;
+        }
+        Alert.alert("Couldn't Start Free Trial", "Please check your connection and try again.");
+      })
+      .finally(() => setSaving(false));
+  };
+
   const handleContinue = () => {
     if (selectedCount === 0) {
       Alert.alert("Selection Required", "Please select at least 1 locality to continue.");
+      return;
+    }
+    if (mode === "trial") {
+      startTrial();
+      return;
+    }
+    if (mode === "add") {
+      addUnderActivePlan();
       return;
     }
     navigation.navigate("AgentPlanConfirm", {
@@ -193,9 +362,12 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
         </TouchableOpacity>
 
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Choose Your Locations</Text>
+          <Text style={styles.headerTitle}>{mode === "trial" ? "Choose Your Area" : "Choose Your Locations"}</Text>
           <Text style={styles.headerSubtitle}>
-            {selectedCount} of {locationLimit} Localities Selected
+            {mode === "trial"
+              ? "Free trial · 1 area · unlimited owner numbers"
+              : `${selectedCount} of ${locationLimit} Localities Selected`}
+            {mode === "add" ? ` · ${remainingAfter} remaining` : ""}
           </Text>
         </View>
 
@@ -290,13 +462,15 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
                 <View key={loc} style={styles.selectedLocalityChip}>
                   <MapPin size={12} color={COLORS.primary} style={{ marginRight: 4 }} />
                   <Text style={styles.selectedLocalityChipText}>{loc}</Text>
-                  <TouchableOpacity
-                    onPress={() => toggleLocality(loc)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={styles.removeChipBtn}
-                  >
-                    <X size={12} color="#64748B" />
-                  </TouchableOpacity>
+                  {coveredKeys.has(localityKey(loc)) ? null : (
+                    <TouchableOpacity
+                      onPress={() => toggleLocality(loc)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={styles.removeChipBtn}
+                    >
+                      <X size={12} color="#64748B" />
+                    </TouchableOpacity>
+                  )}
                 </View>
               ))}
             </View>
@@ -327,7 +501,7 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
         {/* Localities List Card */}
         <View style={styles.localitiesCard}>
           {filteredLocalities.map((loc, index) => {
-            const isSelected = selectedLocalities.includes(loc);
+            const isSelected = selectedKeys.has(localityKey(loc));
             const isDisabled = isLimitReached && !isSelected;
             const isLast = index === filteredLocalities.length - 1;
 
@@ -381,13 +555,13 @@ export default function AgentLocationSelectScreen({ route, navigation }) {
       {/* BOTTOM FIXED CTA: Sleek Rounded Pill "Continue" */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={[styles.continueBtn, selectedCount === 0 && styles.continueBtnDisabled]}
+          style={[styles.continueBtn, ctaDisabled && styles.continueBtnDisabled]}
           onPress={handleContinue}
-          disabled={selectedCount === 0}
+          disabled={ctaDisabled}
           activeOpacity={0.88}
         >
-          <Text style={[styles.continueBtnText, selectedCount === 0 && styles.continueBtnTextDisabled]}>
-            Continue ({selectedCount}/{locationLimit})
+          <Text style={[styles.continueBtnText, ctaDisabled && styles.continueBtnTextDisabled]}>
+            {ctaLabel}
           </Text>
         </TouchableOpacity>
       </View>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,34 +6,27 @@ import {
   ScrollView,
   StatusBar,
   TouchableOpacity,
-  Image,
   TextInput,
   Modal,
-  Linking,
-  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Search,
   MapPin,
   CheckCircle2,
-  Phone,
-  MessageCircle,
   Building2,
-  Bed,
-  Maximize2,
   X,
-  Users,
-  Eye,
   SlidersHorizontal,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useAgent } from "../context/AgentContext.js";
+import { ALL_LOCATIONS, filterAgentProperties, locationFilterOptions } from "../utils/agentCore.js";
 import PropertyDetailModal from "../../buyer/components/PropertyDetailModal.js";
+import PropertySearchCard, { useViewNumber, ViewNumberSheet } from "../../buyer/components/PropertySearchCard.js";
 import EmptyState from "../../owner/components/EmptyState.js";
-import { revealContactPhone } from "../../../shared/api/contact.js";
-import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
-import { getAuthTokenSync } from "../../../shared/api/client.js";
+import { useWishlist } from "../../buyer/context/WishlistContext.js";
+import { useRequireAuth } from "../../auth/useRequireAuth.js";
 
 const DEAL_TYPES = ["All", "Buy", "Rent", "Lease"];
 const PROPERTY_TYPES = ["All Types", "Apartment", "Villa", "House", "Commercial", "Plot"];
@@ -51,13 +44,18 @@ export default function AgentPropertiesScreen({ navigation }) {
   const {
     selectedLocalities,
     localityProperties,
-    leads,
-    matchPropertyToLead,
+    inventoryStatus,
+    reloadInventory,
   } = useAgent();
+  const { isWishlisted, toggleWishlist } = useWishlist();
+  const requireAuth = useRequireAuth(navigation);
+  // View Number sheet + card Call/WhatsApp: the same hook the buyer Search
+  // screen uses; an agent outside its areas gets the agent upgrade prompt.
+  const viewNumber = useViewNumber({ navigation, requireAuth });
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDealType, setSelectedDealType] = useState("All");
-  const [selectedLocalityFilter, setSelectedLocalityFilter] = useState("All Locations");
+  const [selectedLocalityFilter, setSelectedLocalityFilter] = useState(ALL_LOCATIONS);
   const [selectedType, setSelectedType] = useState("All Types");
   const [selectedBhk, setSelectedBhk] = useState("All BHK");
   const [selectedBudget, setSelectedBudget] = useState("All Budgets");
@@ -65,172 +63,45 @@ export default function AgentPropertiesScreen({ navigation }) {
   // Selected property for detail view modal
   const [activePropertyModal, setActivePropertyModal] = useState(null);
 
-  // Match Lead sheet state
-  const [matchingProperty, setMatchingProperty] = useState(null);
 
-  // Filter properties logic
-  const filteredProperties = useMemo(() => {
-    return localityProperties.filter((item) => {
-      // Deal type
-      if (selectedDealType === "Rent" && item.badgeType !== "rent") return false;
-      if (
-        selectedDealType === "Buy" &&
-        item.badgeType !== "sale" &&
-        item.badgeType !== "resale"
-      )
-        return false;
-      if (selectedDealType === "Lease" && item.badgeType !== "lease") return false;
+  // Every filter and the smart search apply together (agentCore.js), so a
+  // locality, deal, type, BHK or budget choice never resets another.
+  const filteredProperties = useMemo(
+    () =>
+      filterAgentProperties(localityProperties, {
+        deal: selectedDealType,
+        locality: selectedLocalityFilter,
+        type: selectedType,
+        bhk: selectedBhk,
+        budget: selectedBudget,
+        query: searchQuery,
+      }),
+    [
+      localityProperties,
+      selectedDealType,
+      selectedLocalityFilter,
+      selectedType,
+      selectedBhk,
+      selectedBudget,
+      searchQuery,
+    ]
+  );
 
-      // Locality dropdown filter
-      if (selectedLocalityFilter !== "All Locations") {
-        const itemLoc = (item.location || "").toLowerCase();
-        if (!itemLoc.includes(selectedLocalityFilter.toLowerCase())) return false;
-      }
-
-      // Property type
-      if (selectedType !== "All Types") {
-        if ((item.type || "").toLowerCase() !== selectedType.toLowerCase()) return false;
-      }
-
-      // BHK
-      if (selectedBhk !== "All BHK") {
-        const num = parseInt(selectedBhk);
-        if (selectedBhk === "4+ BHK") {
-          if ((item.beds || 0) < 4) return false;
-        } else if ((item.beds || 0) !== num) {
-          return false;
-        }
-      }
-
-      // Budget filter
-      if (selectedBudget !== "All Budgets") {
-        const priceStr = item.price || "";
-        if (selectedBudget === "Under ₹25K") {
-          if (!priceStr.includes("/mo") && !priceStr.includes("/month")) return false;
-          const num = parseInt(priceStr.replace(/[^0-9]/g, "")) || 0;
-          if (num > 25000) return false;
-        } else if (selectedBudget === "₹25K – ₹50K") {
-          if (!priceStr.includes("/mo") && !priceStr.includes("/month")) return false;
-          const num = parseInt(priceStr.replace(/[^0-9]/g, "")) || 0;
-          if (num < 25000 || num > 50000) return false;
-        } else if (selectedBudget === "₹50K – ₹1L") {
-          if (!priceStr.includes("/mo") && !priceStr.includes("/month")) return false;
-          const num = parseInt(priceStr.replace(/[^0-9]/g, "")) || 0;
-          if (num < 50000) return false;
-        } else if (selectedBudget === "Under ₹1.5 Cr") {
-          if (priceStr.includes("/mo") || priceStr.includes("/month")) return false;
-          if (priceStr.includes("Cr")) {
-            const cr = parseFloat(priceStr.replace(/[^0-9.]/g, "")) || 0;
-            if (cr > 1.5) return false;
-          }
-        } else if (selectedBudget === "₹1.5 Cr – ₹3 Cr") {
-          if (priceStr.includes("/mo") || priceStr.includes("/month")) return false;
-          if (priceStr.includes("Cr")) {
-            const cr = parseFloat(priceStr.replace(/[^0-9.]/g, "")) || 0;
-            if (cr < 1.5 || cr > 3) return false;
-          }
-        }
-      }
-
-      // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const titleMatch = (item.title || "").toLowerCase().includes(q);
-        const locMatch = (item.location || "").toLowerCase().includes(q);
-        const addrMatch = (item.address || "").toLowerCase().includes(q);
-        if (!titleMatch && !locMatch && !addrMatch) return false;
-      }
-
-      return true;
-    });
-  }, [
-    localityProperties,
-    selectedDealType,
-    selectedLocalityFilter,
-    selectedType,
-    selectedBhk,
-    selectedBudget,
-    searchQuery,
-  ]);
-
-  // Contact Owner: the owner's number comes only from the authorized reveal
-  // (POST /buyer/listings/{id}/contact). Then the agent picks Call or WhatsApp.
-  const [contactLoadingId, setContactLoadingId] = useState(null);
-  const openCall = (digits) =>
-    Linking.openURL(`tel:${digits}`).catch(() => {
-      Alert.alert("Call Unavailable", "Could not place this call.");
-    });
-  const openWhatsApp = (digits, item) => {
-    const wa = digits.length === 10 ? `91${digits}` : digits;
-    const text = encodeURIComponent(
-      `Hello! I am a RESTAMP Agent contacting you regarding your property "${item.title}" in ${item.location}. I have interested clients and would like to arrange a site visit.`
-    );
-    Linking.openURL(`https://wa.me/${wa}?text=${text}`).catch(() => {
-      Alert.alert("WhatsApp Unavailable", "Could not launch WhatsApp.");
-    });
-  };
-  const handleContactOwner = (item) => {
-    const listingId =
-      typeof item?.backendId === "number" ? item.backendId : typeof item?.id === "number" ? item.id : null;
-    if (listingId == null) {
-      Alert.alert("Contact Unavailable", "This listing has no live record to contact.");
-      return;
-    }
-    if (!getAuthTokenSync()) {
-      Alert.alert("Log In Required", "Log in to contact the owner of this property.");
-      return;
-    }
-    if (contactLoadingId != null) return;
-    setContactLoadingId(listingId);
-    revealContactPhone(listingId)
-      .then(
-        (phone) => {
-          const digits = String(phone || "").replace(/[^0-9]/g, "");
-          if (!digits) {
-            Alert.alert("Contact Number Unavailable", "The owner hasn't shared a number for this property.");
-            return;
-          }
-          const ownerLabel = item.ownerName || "the owner";
-          Alert.alert(`Contact ${ownerLabel}`, phone, [
-            { text: "Call", onPress: () => openCall(digits) },
-            { text: "WhatsApp", onPress: () => openWhatsApp(digits, item) },
-            { text: "Cancel", style: "cancel" },
-          ]);
-        },
-        (e) => {
-          if (isBuyerPlanRequired(e)) {
-            setActivePropertyModal(null);
-            navigation.navigate(BUYER_PLANS_ROUTE, { reason: "quota" });
-            return;
-          }
-          if (e && e.status === 404) {
-            Alert.alert("Contact Number Unavailable", "The owner hasn't shared a number for this property.");
-            return;
-          }
-          if (e && (e.status === 401 || e.kind === "login")) {
-            Alert.alert("Session Expired", "Please log in again to contact the owner.");
-            return;
-          }
-          Alert.alert("Couldn't fetch number", "Please check your connection and try again.");
-        }
-      )
-      .finally(() => setContactLoadingId(null));
-  };
-
-  const handleOpenMatchSheet = (property) => {
-    setMatchingProperty(property);
-  };
-
-  const handleConfirmMatch = (lead) => {
-    if (!matchingProperty) return;
-    matchPropertyToLead(lead.id, matchingProperty);
-    const propTitle = matchingProperty.title;
-    setMatchingProperty(null);
-    Alert.alert(
-      "Lead Matched! 🎉",
-      `Successfully matched "${propTitle}" with ${lead.customerName}. You can now schedule a site visit or send property details.`
-    );
-  };
+  // Locality filter: a picker (All Locations + each plan locality). A choice
+  // stays selected; it used to advance to the next locality on every tap.
+  const [localityPickerOpen, setLocalityPickerOpen] = useState(false);
+  const localityOptions = useMemo(() => locationFilterOptions(selectedLocalities), [selectedLocalities]);
+  // A locality removed from the plan can't stay selected.
+  useEffect(() => {
+    if (!localityOptions.includes(selectedLocalityFilter)) setSelectedLocalityFilter(ALL_LOCATIONS);
+  }, [localityOptions, selectedLocalityFilter]);
+  const hasActiveFilters =
+    selectedDealType !== "All" ||
+    selectedLocalityFilter !== ALL_LOCATIONS ||
+    selectedType !== "All Types" ||
+    selectedBhk !== "All BHK" ||
+    selectedBudget !== "All Budgets" ||
+    searchQuery.trim() !== "";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -294,27 +165,22 @@ export default function AgentPropertiesScreen({ navigation }) {
           <TouchableOpacity
             style={[
               styles.filterChip,
-              selectedLocalityFilter !== "All Locations" && styles.filterChipActive,
+              selectedLocalityFilter !== ALL_LOCATIONS && styles.filterChipActive,
             ]}
-            onPress={() => {
-              const options = ["All Locations", ...selectedLocalities];
-              const curIdx = options.indexOf(selectedLocalityFilter);
-              const nextIdx = (curIdx + 1) % options.length;
-              setSelectedLocalityFilter(options[nextIdx]);
-            }}
+            onPress={() => setLocalityPickerOpen(true)}
             activeOpacity={0.8}
           >
             <MapPin
               size={12}
               color={
-                selectedLocalityFilter !== "All Locations" ? "#2563EB" : "#64748B"
+                selectedLocalityFilter !== ALL_LOCATIONS ? "#2563EB" : "#64748B"
               }
               style={{ marginRight: 4 }}
             />
             <Text
               style={[
                 styles.filterChipText,
-                selectedLocalityFilter !== "All Locations" &&
+                selectedLocalityFilter !== ALL_LOCATIONS &&
                   styles.filterChipTextActive,
               ]}
             >
@@ -390,7 +256,7 @@ export default function AgentPropertiesScreen({ navigation }) {
         </ScrollView>
       </View>
 
-      {/* PROPERTIES LIST (REUSING BUYER PROPERTY CARD STYLING) */}
+      {/* PROPERTIES LIST (the buyer search card) */}
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
@@ -405,21 +271,26 @@ export default function AgentPropertiesScreen({ navigation }) {
           </Text>
         </View>
 
-        {filteredProperties.length === 0 ? (
+        {inventoryStatus === "loading" ? (
+          <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />
+        ) : inventoryStatus === "error" ? (
+          // A failed load is never shown as "no properties".
+          <EmptyState
+            icon={Building2}
+            title="Could not load properties."
+            description="Check your connection and try again."
+            buttonTitle="Try Again"
+            onButtonPress={reloadInventory}
+          />
+        ) : filteredProperties.length === 0 ? (
           <EmptyState
             icon={Building2}
             title="No properties available in your selected locations."
             description="Try clearing your filters or select a different locality from your covered areas."
-            buttonTitle={
-              selectedDealType !== "All" ||
-              selectedLocalityFilter !== "All Locations" ||
-              selectedType !== "All Types"
-                ? "Reset Filters"
-                : null
-            }
+            buttonTitle={hasActiveFilters ? "Reset Filters" : null}
             onButtonPress={() => {
               setSelectedDealType("All");
-              setSelectedLocalityFilter("All Locations");
+              setSelectedLocalityFilter(ALL_LOCATIONS);
               setSelectedType("All Types");
               setSelectedBhk("All BHK");
               setSelectedBudget("All Budgets");
@@ -428,202 +299,108 @@ export default function AgentPropertiesScreen({ navigation }) {
           />
         ) : (
           <View style={styles.propertiesList}>
-            {filteredProperties.map((item) => {
-              const beds = item.beds || 2;
-              const sqft = item.sqft || 1200;
-              const furnishing = item.furnishing || "Semi Furnished";
-              const dealLabel =
-                item.badgeType === "rent"
-                  ? "Available for Rent"
-                  : item.badgeType === "lease"
-                  ? "Available for Lease"
-                  : "Available for Buy";
-
-              return (
-                <View key={item.id} style={styles.propertyCard}>
-                  {/* Property Image Container with Badges */}
-                  <TouchableOpacity
-                    style={styles.imageContainer}
-                    activeOpacity={0.9}
-                    onPress={() => setActivePropertyModal(item)}
-                  >
-                    <Image source={{ uri: item.image }} style={styles.propertyImage} />
-
-                    <View style={styles.badgeRowTop}>
-                      <View style={styles.verifiedBadge}>
-                        <CheckCircle2 size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
-                        <Text style={styles.verifiedBadgeText}>Owner Verified</Text>
-                      </View>
-
-                      <View style={styles.dealTypeBadge}>
-                        <Text style={styles.dealTypeBadgeText}>{dealLabel}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.pricePill}>
-                      <Text style={styles.pricePillText}>
-                        {item.price}
-                        {item.pricePeriod ? item.pricePeriod : ""}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Property Card Body */}
-                  <View style={styles.cardBody}>
-                    <Text style={styles.propertyTitle} numberOfLines={1}>
-                      {beds} BHK {item.type || "Apartment"}
-                    </Text>
-
-                    <View style={styles.locationRow}>
-                      <MapPin size={13} color="#64748B" style={{ marginRight: 4 }} />
-                      <Text style={styles.locationText} numberOfLines={1}>
-                        {item.location}
-                      </Text>
-                    </View>
-
-                    {/* Specs Row */}
-                    <View style={styles.specsRow}>
-                      <View style={styles.specItem}>
-                        <Bed size={13} color="#64748B" style={{ marginRight: 4 }} />
-                        <Text style={styles.specText}>{beds} BHK</Text>
-                      </View>
-                      <View style={styles.specDivider} />
-                      <View style={styles.specItem}>
-                        <Maximize2 size={13} color="#64748B" style={{ marginRight: 4 }} />
-                        <Text style={styles.specText}>{sqft} sq.ft</Text>
-                      </View>
-                      <View style={styles.specDivider} />
-                      <View style={styles.specItem}>
-                        <Text style={styles.specText}>{furnishing}</Text>
-                      </View>
-                    </View>
-
-                    {/* Actions: View Details and Match Lead */}
-                    <View style={styles.actionRow}>
-                      <TouchableOpacity
-                        style={styles.viewDetailsBtn}
-                        onPress={() => setActivePropertyModal(item)}
-                        activeOpacity={0.8}
-                      >
-                        <Eye size={14} color={COLORS.primary} style={{ marginRight: 5 }} />
-                        <Text style={styles.viewDetailsBtnText}>View Details</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.matchLeadBtn}
-                        onPress={() => handleOpenMatchSheet(item)}
-                        activeOpacity={0.8}
-                      >
-                        <Users size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
-                        <Text style={styles.matchLeadBtnText}>Match Lead</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
+            {/* The buyer search card (shared component): photo, wishlist heart,
+                price, specs, location, View Number / WhatsApp / Call. Tapping
+                it opens the shared property sheet. */}
+            {filteredProperties.map((item) => (
+              <PropertySearchCard
+                key={item.id}
+                property={item}
+                saved={isWishlisted(item.id)}
+                onPress={(prop) => setActivePropertyModal(prop)}
+                onToggleWishlist={toggleWishlist}
+                onViewNumber={viewNumber.handleViewNumber}
+                onWhatsApp={viewNumber.handleWhatsApp}
+                onCall={viewNumber.handleCall}
+              />
+            ))}
           </View>
         )}
       </ScrollView>
 
-      {/* MATCH LEAD BOTTOM SHEET MODAL */}
+      {/* LOCALITY FILTER PICKER */}
       <Modal
-        visible={!!matchingProperty}
+        visible={localityPickerOpen}
         transparent
         animationType="slide"
-        onRequestClose={() => setMatchingProperty(null)}
+        onRequestClose={() => setLocalityPickerOpen(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.matchSheetContainer}>
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={styles.sheetTitle}>Match Property with Lead</Text>
+                <Text style={styles.sheetTitle}>Filter by Location</Text>
                 <Text style={styles.sheetSubtitle} numberOfLines={1}>
-                  {matchingProperty?.title} • {matchingProperty?.location}
+                  Your plan covers {selectedLocalities.length} localit{selectedLocalities.length === 1 ? "y" : "ies"}
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.closeSheetBtn}
-                onPress={() => setMatchingProperty(null)}
-              >
+              <TouchableOpacity style={styles.closeSheetBtn} onPress={() => setLocalityPickerOpen(false)}>
                 <X size={18} color="#0F172A" />
               </TouchableOpacity>
             </View>
-
-            <Text style={styles.sheetSelectLeadLabel}>Select an Active Customer Lead:</Text>
-
-            {leads.length === 0 ? (
-              <View style={styles.matchEmptyBox}>
-                <Users size={28} color="#94A3B8" />
-                <Text style={styles.matchEmptyTitle}>No leads to match yet</Text>
-                <Text style={styles.matchEmptyText}>
-                  When buyers enquire in your localities they'll appear in Leads, and you can assign this property to them here.
-                </Text>
-                <TouchableOpacity
-                  style={styles.matchEmptyBtn}
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    setMatchingProperty(null);
-                    navigation.navigate("Leads");
-                  }}
-                >
-                  <Text style={styles.matchEmptyBtnText}>Go to Leads</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
             <ScrollView style={styles.leadsSheetScroll} showsVerticalScrollIndicator={false}>
-              {leads.map((lead) => (
-                <TouchableOpacity
-                  key={lead.id}
-                  style={styles.sheetLeadItem}
-                  onPress={() => handleConfirmMatch(lead)}
-                  activeOpacity={0.8}
-                >
-                  {lead.avatar ? (
-                    <Image source={{ uri: lead.avatar }} style={styles.sheetLeadAvatar} />
-                  ) : (
-                    <View style={[styles.sheetLeadAvatar, styles.sheetLeadAvatarFallback]}>
-                      <Text style={styles.sheetLeadAvatarText}>
-                        {(lead.customerName || "?").trim().charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={styles.sheetLeadInfo}>
-                    <Text style={styles.sheetLeadName}>{lead.customerName}</Text>
-                    <Text style={styles.sheetLeadReq} numberOfLines={1}>
-                      {lead.requirement} • {lead.preferredLocality}
+              {localityOptions.map((option) => {
+                const active = option === selectedLocalityFilter;
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    style={styles.localityOptionRow}
+                    onPress={() => {
+                      setSelectedLocalityFilter(option);
+                      setLocalityPickerOpen(false);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <MapPin size={14} color={active ? COLORS.primary : "#64748B"} style={{ marginRight: 8 }} />
+                    <Text style={[styles.localityOptionText, active && styles.localityOptionTextActive]}>
+                      {option === ALL_LOCATIONS ? "All Locations (your plan)" : option}
                     </Text>
-                    <Text style={styles.sheetLeadBudget}>Budget: {lead.budget}</Text>
-                  </View>
-                  <View style={styles.matchPill}>
-                    <Text style={styles.matchPillText}>Assign</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+                    {active ? <CheckCircle2 size={16} color={COLORS.primary} /> : null}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* REUSED BUYER PROPERTY DETAIL MODAL WITH AGENT ACTIONS */}
+      {/* The buyer property sheet exactly as the buyer screens use it:
+          Request Site Visit, Send Enquiry, Call, Got questions, wishlist
+          heart and similar properties. Every action runs on the agent's own
+          account (backend accepts BROKER on the buyer activity endpoints,
+          and the buyer-mode guard never switches an agent to BUYER). */}
       <PropertyDetailModal
-        property={activePropertyModal}
         visible={!!activePropertyModal}
+        property={activePropertyModal}
         onClose={() => setActivePropertyModal(null)}
-        isAgentView={true}
-        onMatchToLead={(prop) => {
-          setActivePropertyModal(null);
-          handleOpenMatchSheet(prop);
-        }}
-        onContactOwner={(prop) => {
-          handleContactOwner(prop);
-        }}
+        onSelectProperty={(prop) => setActivePropertyModal(prop)}
+        onLoginRequired={(resume) => requireAuth(resume)}
+        isWishlisted={isWishlisted}
+        onToggleWishlist={toggleWishlist}
+        listingScope="agent"
       />
+      <ViewNumberSheet state={viewNumber} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  localityOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  localityOptionText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#334155",
+  },
+  localityOptionTextActive: {
+    color: COLORS.primary,
+    fontWeight: "600",
+  },
   safeArea: {
     flex: 1,
     backgroundColor: "#FFFFFF",
@@ -638,11 +415,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0F172A",
     letterSpacing: -0.4,
-  },
-  headerSubtitle: {
-    fontSize: 12.5,
-    color: "#64748B",
-    marginTop: 2,
   },
   filterSection: {
     paddingHorizontal: 16,
@@ -741,160 +513,6 @@ const styles = StyleSheet.create({
   propertiesList: {
     gap: 16,
   },
-  propertyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    overflow: "hidden",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  imageContainer: {
-    width: "100%",
-    height: 180,
-    position: "relative",
-    backgroundColor: "#E2E8F0",
-  },
-  propertyImage: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
-  badgeRowTop: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    right: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  verifiedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#16A34A",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  verifiedBadgeText: {
-    fontSize: 10.5,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    textTransform: "uppercase",
-  },
-  dealTypeBadge: {
-    backgroundColor: "rgba(15, 23, 42, 0.75)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  dealTypeBadgeText: {
-    fontSize: 10.5,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  pricePill: {
-    position: "absolute",
-    bottom: 12,
-    left: 12,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  pricePillText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: COLORS.primary,
-  },
-  cardBody: {
-    padding: 14,
-  },
-  propertyTitle: {
-    fontSize: 15.5,
-    fontWeight: "700",
-    color: "#0F172A",
-    letterSpacing: -0.3,
-  },
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  locationText: {
-    fontSize: 12.5,
-    color: "#64748B",
-  },
-  specsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 12,
-  },
-  specItem: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  specText: {
-    fontSize: 11.5,
-    fontWeight: "600",
-    color: "#334155",
-  },
-  specDivider: {
-    width: 1,
-    height: 12,
-    backgroundColor: "#CBD5E1",
-    marginHorizontal: 10,
-  },
-  actionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  viewDetailsBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  viewDetailsBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
-  matchLeadBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  matchLeadBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.55)",
@@ -931,101 +549,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  matchEmptyBox: {
-    alignItems: "center",
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-  },
-  matchEmptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0F172A",
-    marginTop: 10,
-  },
-  matchEmptyText: {
-    fontSize: 13,
-    color: "#64748B",
-    textAlign: "center",
-    lineHeight: 19,
-    marginTop: 6,
-  },
-  matchEmptyBtn: {
-    marginTop: 16,
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 11,
-  },
-  matchEmptyBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  sheetLeadAvatarFallback: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.primary,
-  },
-  sheetLeadAvatarText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  sheetSelectLeadLabel: {
-    fontSize: 12.5,
-    fontWeight: "600",
-    color: "#475569",
-    marginVertical: 10,
-  },
   leadsSheetScroll: {
     maxHeight: 320,
-  },
-  sheetLeadItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    marginBottom: 8,
-  },
-  sheetLeadAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#E2E8F0",
-    marginRight: 10,
-  },
-  sheetLeadInfo: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  sheetLeadName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  sheetLeadReq: {
-    fontSize: 12,
-    color: "#64748B",
-    marginTop: 1,
-  },
-  sheetLeadBudget: {
-    fontSize: 11.5,
-    fontWeight: "600",
-    color: COLORS.primary,
-    marginTop: 2,
-  },
-  matchPill: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  matchPillText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#FFFFFF",
   },
 });

@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from "react";
+import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from "react";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
-import { apiGet } from "../../../shared/api/client.js";
+import { apiGetAuth } from "../../../shared/api/client.js";
 import { toUiProperty } from "../../../shared/api/mappers.js";
 import { fetchAgentPlan, toUiAgentPlan } from "../../../shared/api/agentPlans.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
+import { toAgentProfile } from "../utils/agentCore.js";
 
 // Backend transaction type -> the deal key the agent screens filter on.
 const BADGE_BY_TRANSACTION = { BUY: "sale", RESALE: "resale", RENT: "rent", LEASE: "lease" };
@@ -25,8 +26,9 @@ export function AgentProvider({ children }) {
   // Localities covered by the Agent
   const [selectedLocalities, setSelectedLocalities] = useState([]);
 
-  // Agent Profile details
-  const [agentProfile, setAgentProfile] = useState(null);
+  // Agent Profile details: identity comes from the logged-in account; only
+  // locally tracked extras (e.g. dealsClosedCount) are kept in state.
+  const [profileExtras, setAgentProfile] = useState({});
 
   // Leads and Visits
   const [leads, setLeads] = useState(INITIAL_AGENT_LEADS);
@@ -81,9 +83,10 @@ export function AgentProvider({ children }) {
     if (!AGENT_MODULE_ENABLED || !server || !server.has_plan) return;
     const ui = toUiAgentPlan(server);
     const end = server.valid_until ? new Date(server.valid_until) : null;
+    // The free trial has no end date: no day count is invented for it.
     const daysRemaining = end
       ? Math.max(0, Math.ceil((end.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
-      : 30;
+      : null;
     setHasActivePlan(true);
     setIsPlanExpired(false);
     setAgentPlan({ ...ui, status: "active", daysRemaining });
@@ -94,17 +97,29 @@ export function AgentProvider({ children }) {
   // it on logout, so a purchased plan survives reloads and new logins.
   const { user: authUser } = useAuth();
   const authUserId = authUser?.id ?? null;
+  const agentProfile = useMemo(() => {
+    const base = toAgentProfile(authUser);
+    return base ? { ...profileExtras, ...base } : null;
+  }, [authUser, profileExtras]);
+  // planLoaded: the server's answer for this account has arrived, so "no
+  // plan" is a fact (AgentNavigator then asks for the free-trial area).
+  const [planLoaded, setPlanLoaded] = useState(false);
   useEffect(() => {
     if (!AGENT_MODULE_ENABLED) return undefined;
+    setPlanLoaded(false);
     if (authUserId == null) {
       setHasActivePlan(false);
       setAgentPlan(null);
       setSelectedLocalities([]);
+      setAgentProfile({});
+      setPlanLoaded(true);
       return undefined;
     }
     let cancelled = false;
     fetchAgentPlan().then((server) => {
-      if (!cancelled && server) applyServerPlan(server);
+      if (cancelled) return;
+      if (server) applyServerPlan(server);
+      setPlanLoaded(true);
     });
     return () => {
       cancelled = true;
@@ -233,42 +248,60 @@ export function AgentProvider({ children }) {
     }
   };
 
-  // Agent inventory = live owner listings in the localities the agent paid
-  // for (public GET /buyer/listings?locality=…). Agents never add listings.
+  // Agent inventory = live owner listings inside the agent's plan areas, from
+  // GET /broker/listings: the SERVER restricts it to the agent's covered
+  // areas (free trial: one area), whatever filters are sent. Agents never
+  // add listings. inventoryStatus ("loading" | "ready" | "error") lets the
+  // Properties tab tell a failed load (e.g. the account is not in agent mode
+  // on the server yet) from a real "no properties"; reloadInventory retries
+  // (AgentNavigator calls it once the server role is BROKER).
   const [localityProperties, setLocalityProperties] = useState([]);
+  const [inventoryStatus, setInventoryStatus] = useState("loading");
+  const [inventoryVersion, setInventoryVersion] = useState(0);
+  const reloadInventory = useCallback(() => setInventoryVersion((v) => v + 1), []);
   const localitiesKey = selectedLocalities.join("|");
   useEffect(() => {
     if (!AGENT_MODULE_ENABLED || selectedLocalities.length === 0) {
       setLocalityProperties([]);
+      setInventoryStatus("ready");
       return undefined;
     }
     let cancelled = false;
-    Promise.all(
-      selectedLocalities.map((locality) =>
-        apiGet("/buyer/listings", { locality, page: 1, page_size: 100 })
-          .then((data) => data?.items || [])
-          .catch(() => [])
-      )
-    ).then((pages) => {
+    setInventoryStatus("loading");
+    (async () => {
+      const cards = [];
+      let failed = false;
+      try {
+        for (let page = 1; page <= 5; page++) {
+          const data = await apiGetAuth("/broker/listings", { page, page_size: 100 });
+          const items = (data && data.items) || [];
+          cards.push(...items);
+          if (items.length < 100 || cards.length >= ((data && data.total) || 0)) break;
+        }
+      } catch {
+        // Honest error state on failure; never a substitute list.
+        failed = true;
+      }
       if (cancelled) return;
-      const seen = new Set();
-      const merged = [];
-      pages.flat().forEach((card) => {
-        if (!card || seen.has(card.listing_id)) return;
-        seen.add(card.listing_id);
-        const ui = toUiProperty(card);
-        ui.badgeType = BADGE_BY_TRANSACTION[ui.transactionType] || "sale";
-        merged.push(ui);
-      });
-      setLocalityProperties(merged);
-    });
+      setLocalityProperties(
+        failed
+          ? []
+          : cards.map((card) => {
+              const ui = toUiProperty(card);
+              ui.badgeType = BADGE_BY_TRANSACTION[ui.transactionType] || "sale";
+              return ui;
+            })
+      );
+      setInventoryStatus(failed ? "error" : "ready");
+    })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localitiesKey]);
+  }, [localitiesKey, inventoryVersion]);
 
   const contextValue = useMemo(() => ({
+    planLoaded,
     hasActivePlan,
     agentPlan,
     selectedLocalities,
@@ -279,6 +312,8 @@ export function AgentProvider({ children }) {
     setEarningsTransactions,
     isPlanExpired,
     localityProperties,
+    inventoryStatus,
+    reloadInventory,
     activatePlan,
     applyServerPlan,
     renewPlan,
@@ -291,6 +326,7 @@ export function AgentProvider({ children }) {
     setIsPlanExpired,
     setAgentProfile,
   }), [
+    planLoaded,
     hasActivePlan,
     agentPlan,
     selectedLocalities,
@@ -300,6 +336,8 @@ export function AgentProvider({ children }) {
     earningsTransactions,
     isPlanExpired,
     localityProperties,
+    inventoryStatus,
+    reloadInventory,
   ]);
 
   return (

@@ -14,7 +14,11 @@ import { withBuyerMode } from "../../features/buyer/api/buyerMode.js";
 export const BUYER_PLANS_ROUTE = "BuyerPlans";
 
 export function isBuyerPlanRequired(e) {
-  return !!e && e.status === 402;
+  // An agent-area refusal is also a 402, but it needs an AGENT plan, never
+  // the buyer plans (shared/api/agentPlans.js: isAgentAreaRequired).
+  if (!e || e.status !== 402) return false;
+  const code = e.data && e.data.code;
+  return !code || code === "BUYER_PLAN_REQUIRED";
 }
 
 export async function fetchBuyerPlans() {

@@ -34,6 +34,7 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 
 import COLORS from "../../../shared/constants/colors.js";
+import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
 import { useAgent } from "../context/AgentContext.js";
 import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 import StatusBadge from "../../owner/components/StatusBadge.js";
@@ -221,7 +222,7 @@ export default function AgentDashboardScreen({ navigation }) {
           {/* Card 2: New Leads */}
           <TouchableOpacity
             style={styles.metricCard}
-            onPress={() => navigation.navigate("Leads")}
+            onPress={() => navigation.navigate("Activity")}
             activeOpacity={0.85}
           >
             <View style={styles.metricCardTop}>
@@ -324,7 +325,7 @@ export default function AgentDashboardScreen({ navigation }) {
         <View style={styles.quickActionPillsRow}>
           <TouchableOpacity
             style={styles.quickActionPillBtn}
-            onPress={() => navigation.navigate("Leads")}
+            onPress={() => navigation.navigate("Activity")}
             activeOpacity={0.82}
           >
             <Users size={14} color="#16A34A" style={{ marginRight: 6 }} />
@@ -342,7 +343,7 @@ export default function AgentDashboardScreen({ navigation }) {
               </Text>
             </View>
             <TouchableOpacity
-              onPress={() => navigation.navigate("Leads")}
+              onPress={() => navigation.navigate("Activity")}
               activeOpacity={0.7}
               style={styles.viewAllRow}
             >
@@ -360,14 +361,11 @@ export default function AgentDashboardScreen({ navigation }) {
                   onPress={() => handleLeadPress(lead)}
                   activeOpacity={0.8}
                 >
-                  <Image
-                    source={{
-                      uri:
-                        lead.avatar ||
-                        "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
-                    }}
+                  <InitialsAvatar
+                    name={lead.customerName}
+                    uri={lead.avatar}
                     style={styles.enquiryAvatar}
-                    resizeMode="cover"
+                    textStyle={{ fontSize: 16 }}
                   />
                 </TouchableOpacity>
 
@@ -427,7 +425,7 @@ export default function AgentDashboardScreen({ navigation }) {
           {/* View All Leads Button */}
           <TouchableOpacity
             style={styles.viewAllFullBtn}
-            onPress={() => navigation.navigate("Leads")}
+            onPress={() => navigation.navigate("Activity")}
             activeOpacity={0.85}
           >
             <Text style={styles.viewAllFullBtnText}>View All Leads</Text>
