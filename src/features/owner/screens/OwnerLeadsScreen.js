@@ -37,12 +37,23 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 
 import COLORS from "../../../shared/constants/colors.js";
+import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
+import LeadSourceBadge from "../components/LeadSourceBadge.js";
 import { useOwner, selectOwnerScopedProperties } from "../context/OwnerContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { fetchAllOwnerLeads, toOwnerLead, updateOwnerLeadStatus, fetchAllOwnerListings, toOwnerProperty, pickDefaultLeadProperty, groupOwnerLeads, leadPropertyLabel, leadDateLabel } from "../api/owner.js";
 import { fetchOwnerVisits, toUiVisit, toVisitPayload, updateOwnerVisit } from "../../../shared/api/visits.js";
 import { getVisitDisplay } from "../../../shared/utils/visitStatus.js";
-import { ownerVisitErrorMessage, proposeVisitForLead } from "../utils/ownerVisits.js";
+import {
+  isClosedLeadError,
+  isLeadClosed,
+  leadVisitBlockedReason,
+  ownerRescheduleLabel,
+  ownerRescheduleSuccess,
+  ownerVisitErrorMessage,
+  proposeVisitForLead,
+} from "../utils/ownerVisits.js";
+import { contactLeadBuyer } from "../utils/contactLeadBuyer.js";
 import StatusBadge from "../components/StatusBadge.js";
 import EmptyState from "../components/EmptyState.js";
 import OwnerSiteVisitModal from "./OwnerSiteVisitModal.js";
@@ -294,7 +305,8 @@ export default function OwnerLeadsScreen({ navigation, route }) {
     async (leadId, outcome) => {
       try {
         await updateOwnerLeadStatus(leadId, { status: "closed", closingReason: outcome });
-        await loadLeads();
+        // The server cancelled the lead's active visit in the same request.
+        await Promise.all([loadLeads(), loadOwnerVisits()]);
       } catch (error) {
         // Refetch first so any partially-applied state is replaced by real
         // server rows, then propagate: the modal shows the failure honestly.
@@ -302,7 +314,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
         throw error;
       }
     },
-    [loadLeads]
+    [loadLeads, loadOwnerVisits]
   );
 
   const activeVisitByBuyer = useMemo(() => {
@@ -323,7 +335,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
     const newCount = propertyLeads.filter((l) => l.status === "new").length;
     const contactedCount = propertyLeads.filter((l) => l.status === "contacted").length;
     const siteVisitsCount = propertyLeads.filter((l) =>
-      activeVisitByBuyer.has(Number(l.buyer_user_id))
+      !isLeadClosed(l) && activeVisitByBuyer.has(Number(l.buyer_user_id))
     ).length;
 
     return {
@@ -353,7 +365,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
       return propertyLeads.filter((l) => l.status === "contacted");
     }
     if (activeFilter === "Visit") {
-      return propertyLeads.filter((l) => activeVisitByBuyer.has(Number(l.buyer_user_id)));
+      return propertyLeads.filter((l) => !isLeadClosed(l) && activeVisitByBuyer.has(Number(l.buyer_user_id)));
     }
     if (activeFilter === "Negotiating") {
       return propertyLeads.filter((l) => l.status === "negotiating");
@@ -378,51 +390,20 @@ export default function OwnerLeadsScreen({ navigation, route }) {
 
   // Actions (P3 honesty: real leads carry no phone; contact actions show an
   // honest unavailable message instead of dialing a sample number.)
-  const handleCall = (lead) => {
-    if (!lead.phone) {
-      Alert.alert(
-        "Phone Number Unavailable",
-        "The buyer's contact number is not available."
-      );
-      return;
-    }
-    Alert.alert("Calling Buyer", `Dialing ${lead.customerName} (${lead.phone})...`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Call",
-        onPress: () => {
-          if (lead.status === "new") {
-            persistLeadStatus(lead.id, "contacted");
-          }
-        },
-      },
-    ]);
+  // Call / WhatsApp through the audited owner reveal (lead rows never carry
+  // the number); numbers are kept per lead for this screen only, so a second
+  // tap doesn't reveal again. A NEW lead is marked contacted only after the
+  // dialer or WhatsApp actually opened.
+  const revealedPhones = useRef(new Map());
+  const contactBuyer = async (lead, channel) => {
+    const result = await contactLeadBuyer(lead, channel, {
+      cachedPhone: revealedPhones.current.get(lead.id),
+    });
+    if (result.phone) revealedPhones.current.set(lead.id, result.phone);
+    if (result.ok && lead.status === "new") persistLeadStatus(lead.id, "contacted");
   };
-
-  const handleMessage = (lead) => {
-    if (!lead.phone) {
-      Alert.alert(
-        "Phone Number Unavailable",
-        "The buyer's contact number is not available."
-      );
-      return;
-    }
-    Alert.alert(
-      "WhatsApp & Message",
-      `Open chat conversation with ${lead.customerName} (${lead.phone}).`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Open Chat",
-          onPress: () => {
-            if (lead.status === "new") {
-              persistLeadStatus(lead.id, "contacted");
-            }
-          },
-        },
-      ]
-    );
-  };
+  const handleCall = (lead) => contactBuyer(lead, "call");
+  const handleMessage = (lead) => contactBuyer(lead, "whatsapp");
 
   const handleViewDetails = (lead) => {
     navigation.navigate("OwnerLeadDetail", { lead });
@@ -435,15 +416,20 @@ export default function OwnerLeadsScreen({ navigation, route }) {
       [
         { text: "Call Buyer", onPress: () => handleCall(lead) },
         { text: "Message on WhatsApp", onPress: () => handleMessage(lead) },
-        {
-          text: "Schedule Site Visit",
-          onPress: () => setSelectedLeadForVisit(lead),
-        },
-        {
-          text: "Close Lead",
-          onPress: () => setSelectedLeadForClose(lead),
-          style: "destructive",
-        },
+        // A closed lead is read-only: no visit and no second close.
+        ...(isLeadClosed(lead)
+          ? []
+          : [
+              {
+                text: "Schedule Site Visit",
+                onPress: () => setSelectedLeadForVisit(lead),
+              },
+              {
+                text: "Close Lead",
+                onPress: () => setSelectedLeadForClose(lead),
+                style: "destructive",
+              },
+            ]),
         { text: "Cancel", style: "cancel" },
       ]
     );
@@ -651,7 +637,8 @@ export default function OwnerLeadsScreen({ navigation, route }) {
         ) : (
           <View style={styles.leadsList}>
             {filteredLeads.map((lead) => {
-              const leadVisit = activeVisitByBuyer.get(Number(lead.buyer_user_id));
+              // A closed lead is read-only: no visit tag or visit button.
+              const leadVisit = isLeadClosed(lead) ? null : activeVisitByBuyer.get(Number(lead.buyer_user_id));
               // Status wording/colors come from visitStatus.js (§C), so an
               // open visit that was re-proposed shows "Rescheduled".
               const leadVisitDisplay = leadVisit
@@ -664,17 +651,16 @@ export default function OwnerLeadsScreen({ navigation, route }) {
                   activeOpacity={0.94}
                   onPress={() => handleViewDetails(lead)}
                 >
+                  {/* Corner tag: lead came from a Buyer or an Agent (backend source_role). */}
+                  <LeadSourceBadge sourceRole={lead.sourceRole} inset={16} />
                   {/* Card Header: Avatar + Name + Header Actions */}
                   <View style={styles.leadHeaderRow}>
-                    {lead.avatar ? (
-                      <Image source={{ uri: lead.avatar }} style={styles.leadAvatar} />
-                    ) : (
-                      <View style={styles.leadAvatarFallback}>
-                        <Text style={styles.avatarInitial}>
-                          {lead.customerName?.charAt(0) || "B"}
-                        </Text>
-                      </View>
-                    )}
+                    <InitialsAvatar
+                      name={lead.customerName}
+                      uri={lead.avatar}
+                      style={lead.avatar ? styles.leadAvatar : styles.leadAvatarFallback}
+                      textStyle={styles.avatarInitial}
+                    />
 
                     <View style={styles.leadInfoCol}>
                       <Text style={styles.leadCustomerName} numberOfLines={1}>
@@ -766,15 +752,28 @@ export default function OwnerLeadsScreen({ navigation, route }) {
                     </View>
                   ) : null}
 
-                  <TouchableOpacity
-                    style={styles.scheduleVisitBtn}
-                    onPress={() => setSelectedLeadForVisit(lead)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.scheduleVisitBtnText}>
-                      {leadVisit ? "Update Visit" : "Propose a Visit"}
+                  {/* A new proposal needs a live listing; leads on closed,
+                      removed or unverified listings say so instead of
+                      offering a button the server must refuse. */}
+                  {!leadVisit && leadVisitBlockedReason(selectedProperty, lead) ? (
+                    <Text style={styles.visitBlockedText}>
+                      {leadVisitBlockedReason(selectedProperty, lead)}
                     </Text>
-                  </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.scheduleVisitBtn}
+                      onPress={() => setSelectedLeadForVisit(lead)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.scheduleVisitBtnText}>
+                        {!leadVisit
+                          ? "Propose a Visit"
+                          : leadVisit.serverStatus === "REQUESTED"
+                            ? ownerRescheduleLabel("REQUESTED")
+                            : "Update Visit"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -979,6 +978,10 @@ export default function OwnerLeadsScreen({ navigation, route }) {
           onClose={() => setSelectedLeadForVisit(null)}
           onVisitScheduled={async (leadId, visitData) => {
             const lead = selectedLeadForVisit;
+            if (isLeadClosed(lead)) {
+              setSelectedLeadForVisit(null);
+              return;
+            }
             const existingVisit = lead
               ? activeVisitByBuyer.get(Number(lead.buyer_user_id))
               : null;
@@ -1002,7 +1005,8 @@ export default function OwnerLeadsScreen({ navigation, route }) {
                   scheduledAtISO,
                   ...(noteChanged ? { note: visitData?.note ?? "" } : {}),
                 });
-                Alert.alert("Visit Rescheduled", "The proposed time was updated.");
+                const done = ownerRescheduleSuccess(existingVisit.serverStatus);
+                Alert.alert(done.title, done.message);
               } else {
                 await proposeVisitForLead(lead, visitData);
                 Alert.alert("Visit Proposed", "The buyer can now confirm or decline the proposed time.");
@@ -1020,6 +1024,11 @@ export default function OwnerLeadsScreen({ navigation, route }) {
               }
               const copy = ownerVisitErrorMessage(error, existingVisit ? "reschedule" : "propose");
               Alert.alert(copy.title, copy.message);
+              if (isClosedLeadError(error)) {
+                setSelectedLeadForVisit(null);
+                loadLeads();
+                loadOwnerVisits();
+              }
             }
           }}
         />
@@ -1516,6 +1525,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#0F172A",
     letterSpacing: -0.1,
+  },
+  visitBlockedText: {
+    marginTop: 14,
+    fontSize: 12.5,
+    color: COLORS.muted,
+    textAlign: "center",
   },
 
   /* PROPERTY PICKER MODAL */

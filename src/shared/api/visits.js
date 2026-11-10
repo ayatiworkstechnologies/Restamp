@@ -114,6 +114,11 @@ export function toUiVisit(row) {
   const rescheduled = parseApiDateTime(row?.rescheduled_at);
   const buyerName = chosenName(row?.buyer_display_name);
   const ownerName = chosenName(row?.owner_display_name);
+  // Who requested the visit (backend requester_role): "agent" (BROKER),
+  // "buyer" (BUYER), or undefined when unknown (owner proposals, older
+  // visits) — the owner's Buyer/Agent badge, never a guess.
+  const requesterRole =
+    row?.requester_role === "BROKER" ? "agent" : row?.requester_role === "BUYER" ? "buyer" : undefined;
   return {
     id: row?.id,
     property_listing_id: row?.property_listing_id,
@@ -121,6 +126,7 @@ export function toUiVisit(row) {
     owner_user_id: row?.owner_user_id,
     serverStatus: status || null,
     initiator: row?.initiator || null,
+    requesterRole,
     status: uiStatus,
     propertyTitle: listing.title || "",
     propertyPrice: listing.price_paise ?? null,
@@ -132,7 +138,11 @@ export function toUiVisit(row) {
     // values are the honest fallbacks screens render.
     buyerName,
     ownerName,
-    buyerLabel: buyerName || (row?.buyer_user_id != null ? `Buyer #${row.buyer_user_id}` : "Buyer"),
+    buyerLabel:
+      buyerName ||
+      (row?.buyer_user_id != null
+        ? `${requesterRole === "agent" ? "Agent" : "Buyer"} #${row.buyer_user_id}`
+        : requesterRole === "agent" ? "Agent" : "Buyer"),
     ownerLabel: ownerName || "Owner",
     note: row?.note || "",
     date: valid ? `${pad(valid.getDate())} ${MONTH_NAMES[valid.getMonth()]} ${valid.getFullYear()}` : "",

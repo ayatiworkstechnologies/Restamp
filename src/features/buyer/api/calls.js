@@ -10,14 +10,14 @@
  * created_at is explicit UTC and is shown in the user's local time.
  */
 import { apiPost, apiGetAuth, getAuthTokenSync } from "../../../shared/api/client";
-import { withBuyerMode, getConfirmedBuyerRole, isBuyerRole } from "./buyerMode";
+import { withBuyerMode, getConfirmedBuyerRole, isBuyerCapableRole } from "./buyerMode";
 import { toUiProperty } from "../../../shared/api/mappers";
 
 /**
  * Best-effort record of a Call tap. Call it immediately before opening the
  * dialer — and only from an actual Call button, never on view, contact
  * reveal, sheet open or WhatsApp. It never blocks or fails the call: it
- * skips when signed out or when the server-confirmed role is not BUYER (it
+ * skips when signed out or when the server-confirmed role is not BUYER/BROKER (it
  * never switches the role), and every error resolves to null.
  * @param {number|string} listingId - persistent property_listings.id
  * @returns {Promise<object|null>} the CallEventOut, or null when skipped/failed
@@ -26,7 +26,7 @@ export async function recordCallTap(listingId) {
   const id = typeof listingId === "number" ? listingId : parseInt(String(listingId ?? ""), 10);
   if (!Number.isFinite(id) || id <= 0 || !getAuthTokenSync()) return null;
   const role = getConfirmedBuyerRole();
-  if (role && !isBuyerRole(role)) return null;
+  if (role && !isBuyerCapableRole(role)) return null;
   try {
     return await apiPost(`/buyer/listings/${id}/call-events`);
   } catch {

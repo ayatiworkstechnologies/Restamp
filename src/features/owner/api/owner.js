@@ -894,6 +894,19 @@ export function ownerReplyErrorMessage(error) {
 }
 
 /**
+ * The buyer's phone for one of the caller's own leads, for Call Buyer and
+ * WhatsApp Chat: POST /owner/leads/{lead_id}/contact -> {phone}. The backend
+ * answers only the lead's owner (404 for anyone else, 404 "Contact not
+ * available" when the buyer has no phone) and audits every reveal. The
+ * number is never stored in lead state or the owner context; screens keep it
+ * in memory for the open screen only. Returns the phone string or null.
+ */
+export async function revealLeadBuyerContact(leadId) {
+  const row = await apiPost(`/owner/leads/${Number(leadId)}/contact`);
+  return row && typeof row.phone === "string" ? row.phone : null;
+}
+
+/**
  * Persist an owner-side lead status change (P4).
  * Status accepts either UI casing ("contacted") or backend casing
  * ("CONTACTED"); it is normalized to the backend vocabulary
@@ -978,8 +991,20 @@ function formatLeadPaise(paise, period) {
  * response carries one (null on list items → undefined). Nothing is inferred
  * from other fields when one of these is missing.
  */
+/**
+ * Who sent an owner lead, from the backend's source_role: "agent" (BROKER),
+ * "buyer" (BUYER), or undefined when the backend sent no role.
+ */
+export function leadSourceRole(sourceRole) {
+  const role = String(sourceRole || "").toUpperCase();
+  if (role === "BROKER") return "agent";
+  if (role === "BUYER") return "buyer";
+  return undefined;
+}
+
 export function toOwnerLead(row) {
   const listing = row && row.listing ? row.listing : null;
+  const sourceRole = leadSourceRole(row && row.source_role);
   const created = parseLeadTimestamp(row && row.created_at);
   const lastAt = parseLeadTimestamp(row && row.last_message_at);
   return {
@@ -987,11 +1012,15 @@ export function toOwnerLead(row) {
     propertyId: row.property_listing_id != null ? String(row.property_listing_id) : undefined,
     property_listing_id: row.property_listing_id,
     buyer_user_id: row.buyer_user_id,
+    // "buyer" | "agent" | undefined — the Buyer/Agent badge on lead cards.
+    sourceRole,
     customerName:
       typeof row.buyer_display_name === "string" && row.buyer_display_name.trim()
         ? row.buyer_display_name.trim()
         : row.buyer_user_id != null
-        ? `Buyer #${row.buyer_user_id}`
+        ? `${sourceRole === "agent" ? "Agent" : "Buyer"} #${row.buyer_user_id}`
+        : sourceRole === "agent"
+        ? "Agent enquiry"
         : "Buyer enquiry",
     phone: undefined,
     avatar: undefined,
@@ -1428,5 +1457,7 @@ export function toOwnerProperty(apiListing) {
     enquiries: typeof apiListing.enquiry_count === "number" ? apiListing.enquiry_count : 0,
     visits: typeof apiListing.visit_count === "number" ? apiListing.visit_count : 0,
     calls: typeof apiListing.call_count === "number" ? apiListing.call_count : null,
+    // Of those taps, how many came from agents (counts only, no identities).
+    agentCalls: typeof apiListing.agent_call_count === "number" ? apiListing.agent_call_count : null,
   };
 }

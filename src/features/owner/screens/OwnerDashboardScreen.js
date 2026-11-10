@@ -7,7 +7,6 @@ import {
   StatusBar,
   TouchableOpacity,
   Image,
-  Alert,
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,6 +29,8 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 
 import COLORS from "../../../shared/constants/colors.js";
+import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
+import { contactLeadBuyer } from "../utils/contactLeadBuyer.js";
 import { useOwner, selectOwnerScopedProperties } from "../context/OwnerContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { fetchAllOwnerListings, toOwnerProperty, freshAddParams, sumOwnerMetrics, fetchOwnerLeads, toOwnerLead, leadPropertyLabel } from "../api/owner.js";
@@ -397,19 +398,12 @@ export default function OwnerDashboardScreen({ navigation }) {
                 >
                   {/* Round Profile Avatar Image (initial fallback when no genuine photo) */}
                   <View style={styles.enquiryAvatarWrap}>
-                    {lead.avatar ? (
-                      <Image
-                        source={{ uri: lead.avatar }}
-                        style={styles.enquiryAvatar}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={[styles.enquiryAvatar, { alignItems: "center", justifyContent: "center", backgroundColor: "#EFF6FF" }]}>
-                        <Text style={{ fontSize: 16, fontWeight: "700", color: "#2563EB" }}>
-                          {(lead.customerName || "B").charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
+                    <InitialsAvatar
+                      name={lead.customerName}
+                      uri={lead.avatar}
+                      style={styles.enquiryAvatar}
+                      textStyle={{ fontSize: 16 }}
+                    />
                   </View>
 
                   {/* Middle Info */}
@@ -430,22 +424,11 @@ export default function OwnerDashboardScreen({ navigation }) {
                     </View>
                   </View>
 
-                  {/* Right Action: Call button (honest unavailable when no genuine number) */}
+                  {/* Right Action: Call via the audited owner reveal; an
+                      honest alert when the number is unavailable. */}
                   <TouchableOpacity
                     style={styles.enquiryCallBtn}
-                    onPress={() => {
-                      if (!lead.phone) {
-                        Alert.alert(
-                          "Phone Number Unavailable",
-                          "The buyer's contact number is not available."
-                        );
-                        return;
-                      }
-                      Alert.alert("Call Lead", `Dialing ${lead.phone}?`, [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Call", onPress: () => {} },
-                      ]);
-                    }}
+                    onPress={() => contactLeadBuyer(lead, "call")}
                     activeOpacity={0.7}
                   >
                     <Phone size={14} color={COLORS.primary} fill={COLORS.primary} />

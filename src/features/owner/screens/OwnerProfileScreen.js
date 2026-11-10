@@ -6,7 +6,6 @@ import {
   ScrollView,
   StatusBar,
   TouchableOpacity,
-  Image,
   Alert,
   Modal,
   TextInput,
@@ -37,6 +36,7 @@ import {
   Pencil,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
 import { useOwner } from "../context/OwnerContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import ConfirmationModal from "../components/ConfirmationModal.js";
@@ -122,13 +122,12 @@ export default function OwnerProfileScreen({ navigation }) {
       >
         {/* PROFILE HEADER (identity comes from the authenticated user) */}
         <View style={styles.profileHeaderCard}>
-          {ownerProfile.avatar ? (
-            <Image source={{ uri: ownerProfile.avatar }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, { alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" }]}>
-              <User size={24} color="#64748B" />
-            </View>
-          )}
+          <InitialsAvatar
+            name={ownerProfile.name}
+            uri={ownerProfile.avatar}
+            style={styles.avatar}
+            iconSize={24}
+          />
 
           <View style={styles.profileInfo}>
             <TouchableOpacity

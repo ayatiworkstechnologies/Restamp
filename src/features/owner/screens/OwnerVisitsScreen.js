@@ -25,6 +25,7 @@ import {
 import COLORS from "../../../shared/constants/colors.js";
 import ScheduleVisitModal from "../../buyer/components/ScheduleVisitModal.js";
 import StatusBadge from "../components/StatusBadge.js";
+import LeadSourceBadge from "../components/LeadSourceBadge.js";
 import EmptyState from "../components/EmptyState.js";
 import {
   fetchOwnerVisits,
@@ -34,7 +35,13 @@ import {
   updateOwnerVisit,
 } from "../../../shared/api/visits.js";
 import { getVisitDisplay } from "../../../shared/utils/visitStatus.js";
-import { ownerVisitActions, ownerVisitErrorMessage } from "../utils/ownerVisits.js";
+import {
+  ownerRescheduleLabel,
+  ownerRescheduleSuccess,
+  ownerVisitActions,
+  isClosedLeadError,
+  ownerVisitErrorMessage,
+} from "../utils/ownerVisits.js";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -109,6 +116,8 @@ export default function OwnerVisitsScreen({ navigation }) {
     } catch (error) {
       const copy = ownerVisitErrorMessage(error, action);
       Alert.alert(copy.title, copy.message);
+      // Closed with its lead (possibly from another screen): show real state.
+      if (isClosedLeadError(error)) loadVisits();
     } finally {
       setBusyVisitId(null);
     }
@@ -163,10 +172,12 @@ export default function OwnerVisitsScreen({ navigation }) {
         ...(noteChanged ? { note: data?.note ?? "" } : {}),
       });
       await loadVisits();
-      Alert.alert("Visit Rescheduled", "The proposed time was updated.");
+      const done = ownerRescheduleSuccess(visit.serverStatus);
+      Alert.alert(done.title, done.message);
     } catch (error) {
       const copy = ownerVisitErrorMessage(error, "reschedule");
       Alert.alert(copy.title, copy.message);
+      if (isClosedLeadError(error)) loadVisits();
     } finally {
       setBusyVisitId(null);
     }
@@ -206,7 +217,7 @@ export default function OwnerVisitsScreen({ navigation }) {
             disabled={busyVisitId !== null}
           >
             <RotateCcw size={14} color={COLORS.primary} style={{ marginRight: 5 }} />
-            <Text style={styles.secondaryActionText}>Reschedule</Text>
+            <Text style={styles.secondaryActionText}>{ownerRescheduleLabel(visit.serverStatus)}</Text>
           </TouchableOpacity>
         )}
         {actions.decline && (
@@ -318,7 +329,9 @@ export default function OwnerVisitsScreen({ navigation }) {
                 .filter(Boolean)
                 .join(", ");
               return (
-              <View key={visit.id} style={styles.card}>
+              <View key={visit.id} style={[styles.card, visit.requesterRole && styles.cardTagged]}>
+                {/* Corner tag: requested by a Buyer or an Agent (backend requester_role). */}
+                <LeadSourceBadge sourceRole={visit.requesterRole} inset={14} />
                 <View style={styles.cardHeader}>
                   <View style={styles.propertyRow}>
                     <View style={styles.iconCircle}>
@@ -428,6 +441,8 @@ const styles = StyleSheet.create({
     padding: 14,
     backgroundColor: "#FFFFFF",
   },
+  // Room for the Buyer/Agent corner tag above the header.
+  cardTagged: { paddingTop: 24 },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
   propertyRow: { flexDirection: "row", alignItems: "flex-start", flex: 1, gap: 10 },
   iconCircle: {

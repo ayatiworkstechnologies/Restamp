@@ -426,9 +426,11 @@ check(
 }
 {
   const screens = [
-    ["Leads", leadsSrc, "await loadLeads();", "handleCloseOutcome(leadId, outcome)"],
-    ["PropertyLeads", propertyLeadsSrc, "await loadLeads();", "handleCloseOutcome(leadId, outcome)"],
-    ["LeadDetail", detailSrc, "await loadLead();", "handleCloseOutcome(outcome)"],
+    // The refetch also reloads visits: the server cancels the lead's active
+    // visit in the same close (lead-close-contact.test.mjs).
+    ["Leads", leadsSrc, "await Promise.all([loadLeads(), loadOwnerVisits()]);", "handleCloseOutcome(leadId, outcome)"],
+    ["PropertyLeads", propertyLeadsSrc, "await Promise.all([loadLeads(), loadOwnerVisits()]);", "handleCloseOutcome(leadId, outcome)"],
+    ["LeadDetail", detailSrc, "await Promise.all([loadLead(), loadOwnerVisit()]);", "handleCloseOutcome(outcome)"],
   ];
   for (const [label, s, refetch, handler] of screens) {
     check(

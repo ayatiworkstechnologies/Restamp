@@ -216,10 +216,11 @@ function futureParts(daysAhead = 7) {
   check(
     "V18 detail shows real owner name, secure call flow (guest login-resume, no auto-dial)",
     // Real owner name: the loaded detail first, then the listing card.
-    modalSrc.includes("liveDetail?.ownerName || property?.ownerName") &&
+    // (then this listing's own contact reveal; owner/ownerContact.js).
+    modalSrc.includes("ownerNameFor(liveDetail, null) ||") &&
       modalSrc.includes("handleCallOwner") &&
-      modalSrc.includes("revealContactPhone") &&
-      modalSrc.includes("tel:${phone}") &&
+      modalSrc.includes("revealContact(backendId)") &&
+      modalSrc.includes("const url = ownerDialUrl(phone);") &&
       !modalSrc.includes("Contact Number Unavailable\",\n                    \"Owner contact details are shared only")
   );
   const leadDetailSrc = src("src/features/owner/screens/OwnerLeadDetailScreen.js");

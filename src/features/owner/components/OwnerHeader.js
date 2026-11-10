@@ -1,7 +1,8 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
-import { Bell, ArrowLeft, User } from "../../../shared/components/HugeIcon.js";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { Bell, ArrowLeft } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
 import { useOwner } from "../context/OwnerContext.js";
 import { useNavigation } from "@react-navigation/native";
 
@@ -92,16 +93,12 @@ export default function OwnerHeader({
                 activeOpacity={0.8}
                 onPress={handleProfilePress}
               >
-                {ownerProfile.avatar ? (
-                  <Image
-                    source={{ uri: ownerProfile.avatar }}
-                    style={styles.avatarImg}
-                  />
-                ) : (
-                  <View style={[styles.avatarImg, { alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" }]}>
-                    <User size={18} color="#64748B" />
-                  </View>
-                )}
+                <InitialsAvatar
+                  name={ownerProfile.name}
+                  uri={ownerProfile.avatar}
+                  style={styles.avatarImg}
+                  iconSize={18}
+                />
                 <View style={styles.onlineDot} />
               </TouchableOpacity>
           </View>

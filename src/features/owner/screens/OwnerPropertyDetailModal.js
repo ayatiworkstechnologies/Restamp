@@ -290,6 +290,10 @@ export default function OwnerPropertyDetailModal({
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{formatCount(property.calls)}</Text>
                   <Text style={styles.statLabel}>Calls</Text>
+                  {/* Agents tap the same Call button; shown only when real. */}
+                  {property.agentCalls > 0 ? (
+                    <Text style={styles.statSubLabel}>{formatCount(property.agentCalls)} from agents</Text>
+                  ) : null}
                 </View>
               )}
             </View>
@@ -676,6 +680,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 2,
     letterSpacing: 0.2,
+  },
+  statSubLabel: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: COLORS.warning,
+    marginTop: 1,
   },
 
   /* ── Divider ── */

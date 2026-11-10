@@ -83,3 +83,47 @@ export function getVisitDisplay(visit, viewer = "owner") {
   const tone = VISIT_TONE_BY_KEY[key];
   return { key, label: labels[key], tone, ...VISIT_TONES[tone], serverStatus, isRescheduled };
 }
+
+/**
+ * Who set the current time, from the viewer's side, or null when unknown.
+ * PROPOSED always means the owner's time awaiting the buyer — either an
+ * owner-started proposal or the owner's counter to a buyer request.
+ * @param {object} visit - a toUiVisit() row ({serverStatus, initiator})
+ * @param {"buyer"|"owner"} viewer
+ */
+export function getVisitOriginLabel(visit, viewer = "owner") {
+  const status = normalizeStatus(visit);
+  const initiator = String((visit && visit.initiator) || "").toUpperCase();
+  if (!status || (initiator !== "BUYER" && initiator !== "OWNER")) return null;
+  const buyer = viewer === "buyer";
+  if (status === "PROPOSED") {
+    if (initiator === "BUYER") return buyer ? "Owner proposed a new time" : "You proposed a new time";
+    return buyer ? "Proposed by the owner" : "Proposed by you";
+  }
+  if (initiator === "BUYER") return buyer ? "Requested by you" : "Requested by the buyer";
+  return buyer ? "Proposed by the owner" : "Proposed by you";
+}
+
+/**
+ * The server's refusal of a visit write whose lead the owner has closed
+ * (422 "Lead is closed"; backend services/visits.py). Closing a lead also
+ * cancels its active visits, so the buyer's copy says both.
+ */
+export const VISIT_LEAD_CLOSED_DETAIL = "Lead is closed";
+
+export function isVisitLeadClosedError(error) {
+  return !!error && error.status === 422 && error.detail === VISIT_LEAD_CLOSED_DETAIL;
+}
+
+/** Buyer copy: changing an existing visit, or asking for a new one. */
+export function buyerLeadClosedCopy(kind = "change") {
+  return kind === "request"
+    ? {
+        title: "Enquiry Closed",
+        message: "The owner closed your enquiry on this property. Send a new enquiry to arrange a visit.",
+      }
+    : {
+        title: "Enquiry Closed",
+        message: "The owner closed your enquiry on this property, so this visit was cancelled and can't be changed.",
+      };
+}

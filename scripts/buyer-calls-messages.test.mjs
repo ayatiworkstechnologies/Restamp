@@ -44,7 +44,8 @@ const { toUiEnquiry, fetchMyEnquiries } = await import(join(tmp, "enquiries.js")
 const read = (rel) => readFileSync(join(SRC, rel), "utf8");
 const savedSrc = read("features/buyer/screens/SavedScreen.js");
 const modalSrc = read("features/buyer/components/PropertyDetailModal.js");
-const searchSrc = read("features/buyer/screens/SearchScreen.js");
+// The search card + View Number sheet live in the shared PropertySearchCard (also used by agents).
+const searchSrc = read("features/buyer/screens/SearchScreen.js") + read("features/buyer/components/PropertySearchCard.js");
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -202,8 +203,9 @@ const card = {
   // The phone icon reveals the number into a call popup; its "Call now"
   // dials through dialOwner, which records the tap right before tel:.
   const modalCall = modalSrc.slice(modalSrc.indexOf("const dialOwner"), modalSrc.indexOf("const dialOwner") + 2000);
-  check("W11 detail modal records the tap right before tel:", modalCall.indexOf("recordCallTap(backendId)") > -1 && modalCall.indexOf("recordCallTap(backendId)") < modalCall.indexOf("tel:"));
-  check("W12 search Call records the tap before tel:", searchSrc.indexOf("recordCallTap(property?.backendId)") > -1 && searchSrc.indexOf("recordCallTap(property?.backendId)") < searchSrc.indexOf("tel:+${digits}"));
+  check("W11 detail modal records the tap right before tel:", modalCall.indexOf("recordCallTap(backendId)") > -1 && modalCall.indexOf("recordCallTap(backendId)") < modalCall.indexOf("Linking.openURL(url)"));
+  const searchCall = searchSrc.slice(searchSrc.indexOf("const handleCall = (property) =>"), searchSrc.indexOf("const handleCall = (property) =>") + 1200);
+  check("W12 search Call records the tap before the dialler opens", searchCall.indexOf("recordCallTap(property?.backendId)") > -1 && searchCall.indexOf("recordCallTap(property?.backendId)") < searchCall.indexOf("Linking.openURL(url)") && searchCall.includes("const url = ownerDialUrl(known.phone);"));
   check("W13 fabricated visit note removed", !modalSrc.includes("Requested via Property Details page."));
   check("W14 buyer visits use shared status + names + reschedule prefill", savedSrc.includes('getVisitDisplay(item, "buyer")') && savedSrc.includes("item.ownerLabel") && savedSrc.includes("toScheduleModalInitial(selectedVisitForDetails || {})"));
 }

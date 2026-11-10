@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -32,6 +32,7 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 
 import COLORS from "../../../shared/constants/colors.js";
+import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
 import { useOwner, selectOwnerScopedProperties } from "../context/OwnerContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import {
@@ -53,7 +54,18 @@ import {
 } from "../api/owner.js";
 import { fetchOwnerVisits, toUiVisit, toVisitPayload, updateOwnerVisit } from "../../../shared/api/visits.js";
 import { getVisitDisplay } from "../../../shared/utils/visitStatus.js";
-import { ownerVisitActions, ownerVisitErrorMessage, proposeVisitForLead } from "../utils/ownerVisits.js";
+import {
+  isClosedLeadError,
+  isLeadClosed,
+  leadVisitBlockedReason,
+  ownerRescheduleLabel,
+  ownerRescheduleSuccess,
+  ownerVisitActions,
+  ownerVisitErrorMessage,
+  proposeVisitForLead,
+} from "../utils/ownerVisits.js";
+import { formatBuyerPhone } from "../utils/leadContact.js";
+import { contactLeadBuyer } from "../utils/contactLeadBuyer.js";
 import StatusBadge from "../components/StatusBadge.js";
 import PrimaryButton from "../components/PrimaryButton.js";
 import SecondaryButton from "../components/SecondaryButton.js";
@@ -88,6 +100,10 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
   const [visitsLoading, setVisitsLoading] = useState(false);
   const [visitsError, setVisitsError] = useState(false);
   const [visitBusy, setVisitBusy] = useState(false);
+  // Buyer's number from the audited reveal, kept in memory for this screen
+  // only (never in lead state or the owner context).
+  const [buyerPhone, setBuyerPhone] = useState(null);
+  const [contactBusy, setContactBusy] = useState(null);
 
   // Internal notes are device-independent: they exist only behind
   // GET/POST /owner/leads/{id}/notes (contract §F), never in a local store.
@@ -206,6 +222,14 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
     );
   }, [scopedProperties, lead]);
 
+  // A closed lead is read-only (any outcome). If it becomes closed while the
+  // visit sheet is open (closed elsewhere, then refreshed on focus), the
+  // sheet is dismissed so it can't submit; the server refuses it anyway.
+  const leadClosed = isLeadClosed(lead);
+  useEffect(() => {
+    if (leadClosed) setShowVisitModal(false);
+  }, [leadClosed]);
+
   if (!lead) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -221,7 +245,15 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
     );
   }
 
+  // The server refused a write because the lead is closed: show it and pull
+  // the real lead + visit state so the screen turns read-only.
+  const reconcileClosedLead = () => {
+    loadLead();
+    loadOwnerVisit();
+  };
+
   const handleUpdateStatus = (newStatus) => {
+    if (leadClosed) return;
     if (newStatus === "closed" || newStatus === "lost") {
       setShowCloseModal(true);
       return;
@@ -253,9 +285,14 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         status: mapped.status,
         closedOutcome: mapped.closedOutcome,
       }));
-    } catch {
+    } catch (error) {
       updateLeadStatus(lead.id, prevSnapshot.status, prevSnapshot.closedOutcome);
       setLead(prevSnapshot);
+      if (isClosedLeadError(error)) {
+        Alert.alert("Lead is closed", "This lead was already closed, so its status can't change.");
+        reconcileClosedLead();
+        return;
+      }
       Alert.alert(
         "Couldn't update lead",
         "Please check your connection and try again."
@@ -268,21 +305,30 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
   // Never touches any listing endpoint; on success the lead is refetched so
   // status, filters, and counts come from the server, and the saved status +
   // outcome are applied from the server-confirmed PATCH response first.
+  // The server cancels the lead's active site visit in the same transaction,
+  // so the visit is reloaded too and shows its real (cancelled) state.
   const handleCloseOutcome = async (outcome) => {
-    const updated = await updateOwnerLeadStatus(lead.id, {
-      status: "closed",
-      closingReason: outcome,
-    });
+    let updated;
+    try {
+      updated = await updateOwnerLeadStatus(lead.id, {
+        status: "closed",
+        closingReason: outcome,
+      });
+    } catch (error) {
+      if (isClosedLeadError(error)) reconcileClosedLead();
+      throw error;
+    }
     const mapped = toOwnerLead(updated);
     setLead((prev) => (mapped && Number(mapped.id) === Number(lead.id)
       ? { ...prev, status: mapped.status, closedOutcome: mapped.closedOutcome }
       : prev
     ));
-    await loadLead();
+    updateLeadStatus(lead.id, mapped.status, mapped.closedOutcome);
+    await Promise.all([loadLead(), loadOwnerVisit()]);
   };
 
   const applyVisitStatus = async (status, action) => {
-    if (!ownerVisit || typeof ownerVisit.id !== "number" || visitBusy) return;
+    if (!ownerVisit || typeof ownerVisit.id !== "number" || visitBusy || leadClosed) return;
     setVisitBusy(true);
     try {
       await updateOwnerVisit(ownerVisit.id, { status });
@@ -290,6 +336,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
     } catch (error) {
       const copy = ownerVisitErrorMessage(error, action);
       Alert.alert(copy.title, copy.message);
+      if (isClosedLeadError(error)) reconcileClosedLead();
     } finally {
       setVisitBusy(false);
     }
@@ -314,6 +361,10 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
   };
 
   const handleScheduleVisit = async (visitData) => {
+    if (leadClosed) {
+      setShowVisitModal(false);
+      return;
+    }
     setVisitBusy(true);
     try {
       if (ownerVisitIsOpen && typeof ownerVisit.id === "number") {
@@ -336,7 +387,8 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
           scheduledAtISO,
           ...(noteChanged ? { note: visitData?.note ?? "" } : {}),
         });
-        Alert.alert("Visit Rescheduled", "The proposed time was updated.");
+        const done = ownerRescheduleSuccess(ownerVisit.serverStatus);
+        Alert.alert(done.title, done.message);
       } else {
         await proposeVisitForLead(lead, visitData);
         Alert.alert("Visit Proposed", "The buyer can now confirm or decline the proposed time.");
@@ -354,42 +406,32 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
       }
       const copy = ownerVisitErrorMessage(error, ownerVisitIsOpen ? "reschedule" : "propose");
       Alert.alert(copy.title, copy.message);
+      if (isClosedLeadError(error)) {
+        setShowVisitModal(false);
+        reconcileClosedLead();
+      }
     } finally {
       setVisitBusy(false);
     }
   };
 
-  const handleCall = () => {
-    // P3 honesty: real leads carry no phone; never dial a sample number.
-    if (!lead.phone) {
-      Alert.alert(
-        "Phone Number Unavailable",
-        "The buyer's contact number is not available."
-      );
-      return;
-    }
-    Alert.alert("Calling Customer", `Dialing ${lead.customerName} (${lead.phone})...`);
-    if (lead.status === "new") {
-      handleUpdateStatus("contacted");
-    }
-  };
-
-  const handleWhatsApp = () => {
-    if (!lead.phone) {
-      Alert.alert(
-        "Phone Number Unavailable",
-        "The buyer's contact number is not available."
-      );
-      return;
-    }
-    Alert.alert(
-      "WhatsApp & Message",
-      `Opening direct chat with ${lead.customerName} (${lead.phone}).`
-    );
-    if (lead.status === "new") {
-      handleUpdateStatus("contacted");
+  // Call / WhatsApp: the number comes from the audited owner reveal (lead
+  // rows never carry it), is validated, and only then is a tel: or wa.me URL
+  // opened. A NEW lead is marked contacted only after the app really opened.
+  const contactBuyer = async (channel) => {
+    if (contactBusy) return;
+    setContactBusy(channel);
+    try {
+      const result = await contactLeadBuyer(lead, channel, { cachedPhone: buyerPhone });
+      if (result.phone) setBuyerPhone(result.phone);
+      if (!result.ok) return;
+      if (lead.status === "new") handleUpdateStatus("contacted");
+    } finally {
+      setContactBusy(null);
     }
   };
+  const handleCall = () => contactBuyer("call");
+  const handleWhatsApp = () => contactBuyer("whatsapp");
 
   const handleAddNote = async () => {
     // While the request is in flight the button stays disabled, so a second
@@ -493,18 +535,12 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
         {/* ================= BUYER DETAILS ================= */}
         <View style={styles.section}>
           <View style={styles.buyerTopRow}>
-            {lead.avatar ? (
-              <Image
-                source={{ uri: lead.avatar }}
-                style={styles.buyerAvatar}
-              />
-            ) : (
-              <View style={[styles.buyerAvatar, { alignItems: "center", justifyContent: "center", backgroundColor: "#EFF6FF" }]}>
-                <Text style={{ fontSize: 20, fontWeight: "700", color: "#2563EB" }}>
-                  {(lead.customerName || "B").charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
+            <InitialsAvatar
+              name={lead.customerName}
+              uri={lead.avatar}
+              style={styles.buyerAvatar}
+              textStyle={{ fontSize: 20 }}
+            />
 
             <View style={styles.buyerInfoCol}>
               <View style={styles.buyerNameRow}>
@@ -517,7 +553,9 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
                 activeOpacity={0.7}
               >
                 <Phone size={13} color="#2563EB" style={{ marginRight: 6 }} />
-                <Text style={styles.buyerPhoneText}>{lead.phone || "Not available"}</Text>
+                <Text style={styles.buyerPhoneText}>
+                  {buyerPhone ? formatBuyerPhone(buyerPhone) : "Shown when you call or message"}
+                </Text>
               </TouchableOpacity>
 
               {lead.email ? (
@@ -534,19 +572,21 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
             <TouchableOpacity
               style={[styles.buyerActionBtn, styles.callBtn]}
               onPress={handleCall}
+              disabled={contactBusy !== null}
               activeOpacity={0.8}
             >
               <Phone size={14} color="#2563EB" style={{ marginRight: 6 }} />
-              <Text style={styles.callBtnText}>Call Buyer</Text>
+              <Text style={styles.callBtnText}>{contactBusy === "call" ? "Opening…" : "Call Buyer"}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.buyerActionBtn, styles.whatsappBtn]}
               onPress={handleWhatsApp}
+              disabled={contactBusy !== null}
               activeOpacity={0.8}
             >
               <MessageCircle size={15} color="#16A34A" style={{ marginRight: 6 }} />
-              <Text style={styles.whatsappBtnText}>WhatsApp Chat</Text>
+              <Text style={styles.whatsappBtnText}>{contactBusy === "whatsapp" ? "Opening…" : "WhatsApp Chat"}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -792,7 +832,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
               ) : null}
 
               <View style={styles.visitActionRow}>
-                {ownerVisitActions(ownerVisit.serverStatus).confirm && (
+                {ownerVisitActions(ownerVisit.serverStatus, { leadClosed }).confirm && (
                   <TouchableOpacity
                     style={styles.rescheduleBtn}
                     onPress={() => confirmVisitStatus("CONFIRMED", "confirm")}
@@ -803,7 +843,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
                     <Text style={styles.rescheduleBtnText}>Confirm Visit</Text>
                   </TouchableOpacity>
                 )}
-                {ownerVisitActions(ownerVisit.serverStatus).complete && (
+                {ownerVisitActions(ownerVisit.serverStatus, { leadClosed }).complete && (
                   <TouchableOpacity
                     style={styles.rescheduleBtn}
                     onPress={() => confirmVisitStatus("COMPLETED", "complete")}
@@ -814,7 +854,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
                     <Text style={styles.rescheduleBtnText}>Complete Visit</Text>
                   </TouchableOpacity>
                 )}
-                {ownerVisitActions(ownerVisit.serverStatus).reschedule && (
+                {ownerVisitActions(ownerVisit.serverStatus, { leadClosed }).reschedule && (
                   <TouchableOpacity
                     style={styles.rescheduleBtn}
                     onPress={() => setShowVisitModal(true)}
@@ -822,10 +862,14 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
                     activeOpacity={0.8}
                   >
                     <Calendar size={14} color="#2563EB" style={{ marginRight: 6 }} />
-                    <Text style={styles.rescheduleBtnText}>Reschedule Visit</Text>
+                    <Text style={styles.rescheduleBtnText}>
+                      {ownerVisit.serverStatus === "REQUESTED"
+                        ? ownerRescheduleLabel("REQUESTED")
+                        : "Reschedule Visit"}
+                    </Text>
                   </TouchableOpacity>
                 )}
-                {ownerVisitActions(ownerVisit.serverStatus).decline && (
+                {ownerVisitActions(ownerVisit.serverStatus, { leadClosed }).decline && (
                   <TouchableOpacity
                     style={styles.visitDangerBtn}
                     onPress={() => confirmVisitStatus("DECLINED", "decline")}
@@ -836,7 +880,7 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
                     <Text style={styles.visitDangerBtnText}>Decline</Text>
                   </TouchableOpacity>
                 )}
-                {ownerVisitActions(ownerVisit.serverStatus).cancel && (
+                {ownerVisitActions(ownerVisit.serverStatus, { leadClosed }).cancel && (
                   <TouchableOpacity
                     style={styles.visitDangerBtn}
                     onPress={() => confirmVisitStatus("CANCELLED", "cancel")}
@@ -854,14 +898,18 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
               <Text style={styles.noVisitText}>
                 No site visit has been requested or proposed for this buyer yet.
               </Text>
-              <TouchableOpacity
-                style={styles.scheduleVisitSmallBtn}
-                onPress={() => setShowVisitModal(true)}
-                activeOpacity={0.8}
-              >
-                <Calendar size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.scheduleVisitSmallBtnText}>Propose Site Visit</Text>
-              </TouchableOpacity>
+              {leadVisitBlockedReason(matchedProperty, lead) ? (
+                <Text style={styles.noVisitText}>{leadVisitBlockedReason(matchedProperty, lead)}</Text>
+              ) : (
+                <TouchableOpacity
+                  style={styles.scheduleVisitSmallBtn}
+                  onPress={() => setShowVisitModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Calendar size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.scheduleVisitSmallBtnText}>Propose Site Visit</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -942,22 +990,35 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
           )}
         </View>
 
-        {/* ================= BOTTOM ACTION BUTTONS ================= */}
-        <View style={styles.bottomButtonsRow}>
-          <PrimaryButton
-            title={ownerVisitIsOpen ? "Update Site Visit" : "Propose New Site Visit"}
-            onPress={() => setShowVisitModal(true)}
-            icon={Calendar}
-            style={{ width: "100%", marginBottom: 12 }}
-          />
+        {/* ================= BOTTOM ACTION BUTTONS =================
+            Closed leads are read-only: no visit or close controls, just the
+            final outcome. History above (thread, visit, notes) stays. */}
+        {leadClosed ? (
+          <View style={styles.bottomButtonsRow}>
+            <Text style={styles.closedLeadTitle}>
+              Lead closed{lead.closedOutcome ? ` · ${lead.closedOutcome}` : ""}
+            </Text>
+            <Text style={styles.closedLeadText}>
+              This lead is read-only. Its site visit can no longer be proposed, changed or cancelled.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.bottomButtonsRow}>
+            <PrimaryButton
+              title={ownerVisitIsOpen ? "Update Site Visit" : "Propose New Site Visit"}
+              onPress={() => setShowVisitModal(true)}
+              icon={Calendar}
+              style={{ width: "100%", marginBottom: 12 }}
+            />
 
-          <SecondaryButton
-            title="Close Lead / Mark Outcome"
-            onPress={() => setShowCloseModal(true)}
-            variant="outline"
-            style={{ width: "100%" }}
-          />
-        </View>
+            <SecondaryButton
+              title="Close Lead / Mark Outcome"
+              onPress={() => setShowCloseModal(true)}
+              variant="outline"
+              style={{ width: "100%" }}
+            />
+          </View>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -1002,6 +1063,17 @@ export default function OwnerLeadDetailScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  closedLeadTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  closedLeadText: {
+    fontSize: 13,
+    color: COLORS.muted,
+    lineHeight: 19,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: "#FFFFFF",

@@ -184,7 +184,9 @@ for (const [label, s] of [["Leads", ownerLeadsSrc], ["PropertyLeads", propertyLe
     `${label} no fabricated phone fallbacks`,
     !s.includes('phone || "+') &&
       !s.includes('phone || "+91') &&
-      s.includes("Phone Number Unavailable")
+      // Numbers come only from the audited reveal; its honest "unavailable"
+      // copy lives in utils/leadContact.js (checked below).
+      s.includes("contactLeadBuyer(")
   );
   check(
     `${label} no invented ratings/messages`,
@@ -199,7 +201,7 @@ check(
     dashboardSrc.includes("toOwnerLead") &&
     dashboardSrc.includes("serverRecentLeads") &&
     !dashboardSrc.includes("/owner/leads?") &&
-    dashboardSrc.includes("Phone Number Unavailable")
+    dashboardSrc.includes("contactLeadBuyer(")
 );
 check(
   "Dashboard no invented chip/counter fallbacks",
@@ -215,7 +217,12 @@ check(
     !leadDetailSrc.includes("FOR RENT") &&
     leadDetailSrc.includes("Property Details Unavailable") &&
     leadDetailSrc.includes("Not available") &&
-    leadDetailSrc.includes("Phone Number Unavailable")
+    leadDetailSrc.includes("contactLeadBuyer(")
+);
+check(
+  "Contact actions keep an honest unavailable state (never a sample number)",
+  src("src/features/owner/utils/leadContact.js").includes('title: "Phone Number Unavailable"') &&
+    !/\+91\s?9\d{4}\s?\d{5}/.test(src("src/features/owner/utils/leadContact.js"))
 );
 
 // --- 4. P4 status persistence + stale-request protection ---
@@ -286,7 +293,7 @@ check(
   leadDetailSrc.includes("handleCloseOutcome") &&
     leadDetailSrc.includes('status: "closed"') &&
     leadDetailSrc.includes("closingReason: outcome") &&
-    leadDetailSrc.includes("await loadLead();") &&
+    leadDetailSrc.includes("await Promise.all([loadLead(), loadOwnerVisit()]);") &&
     !leadDetailSrc.includes('status: "lost"') &&
     !leadDetailSrc.includes('"lost" : "closed"') &&
     leadDetailSrc.includes("Couldn't update lead")
