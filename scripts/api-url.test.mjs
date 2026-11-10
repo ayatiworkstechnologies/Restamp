@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "shared", "api");
 const LOCAL = "http://127.0.0.1:8000";
-const PROD = "https://restamp-backend-h3x8.onrender.com";
+const PROD = "https://api.restamp.in";
 
 async function loadClient(envUrl) {
   const tmp = mkdtempSync(join(tmpdir(), "api-url-test-"));

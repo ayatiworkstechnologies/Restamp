@@ -8,14 +8,15 @@
  * - Local dev (`expo start`, `__DEV__ === true`) with no configured URL uses the
  *   local FastAPI backend at http://127.0.0.1:8000. Prefer setting
  *   EXPO_PUBLIC_API_URL in `.env.local` (gitignored) for LAN-device testing.
- * - Production (`expo export`, Vercel) with no configured URL uses the deployed
- *   Render backend. Set EXPO_PUBLIC_API_URL in the Vercel dashboard to override.
+ * - Production (`expo export`, Vercel, EAS builds) with no configured URL uses
+ *   the live RESTAMP API (https://api.restamp.in). Set EXPO_PUBLIC_API_URL in
+ *   the Vercel / EAS environment to override.
  * - A configured URL always wins in both environments.
  * The base URL is fixed per app load: requests never silently switch between
  * local and production hosts after a failure.
  */
 const DEFAULT_LOCAL_API_URL = "http://127.0.0.1:8000";
-const DEFAULT_PROD_API_URL = "https://restamp-backend-h3x8.onrender.com";
+const DEFAULT_PROD_API_URL = "https://api.restamp.in";
 
 function trimTrailingSlashes(url) {
   return String(url || "").trim().replace(/\/+$/, "");
