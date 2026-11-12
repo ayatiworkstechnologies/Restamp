@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Image,
   StatusBar,
@@ -13,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {

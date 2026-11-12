@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   TextInput,
   TouchableOpacity,
   Alert,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ArrowLeft,

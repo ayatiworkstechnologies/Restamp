@@ -20,6 +20,7 @@ import {
   CheckCircle2,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import RestampWordmark from "../../../shared/components/RestampWordmark.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { ensureOwnerRole } from "../../../shared/api/users.js";
 
@@ -30,6 +31,10 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
   const listingLimit = route?.params?.listingLimit || "Up to 1 Active Listing";
   const amountPaid = route?.params?.amountPaid || "₹499";
   const txnId = route?.params?.txnId || "—";
+
+  const billedName = auth?.user?.name || auth?.user?.full_name || "Restamp Owner";
+  const billedPhone = auth?.user?.phone || auth?.user?.phone_number || "";
+  const invoiceDate = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
   const scaleAnim = useRef(new Animated.Value(0.4)).current;
   const redirectTimerRef = useRef(null);
@@ -66,10 +71,6 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
       useNativeDriver: Platform.OS !== "web",
     }).start();
 
-    // Auto-redirect to Owner Dashboard after ~3 seconds
-    redirectTimerRef.current = setTimeout(() => {
-      handleGoToDashboard();
-    }, 3200);
 
     return () => {
       if (redirectTimerRef.current) {
@@ -92,7 +93,7 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
           <ArrowLeft size={20} color="#111111" strokeWidth={2.2} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Payment Successful</Text>
+        <Text style={styles.headerTitle}>Invoice</Text>
 
         <TouchableOpacity
           style={styles.circleBtn}
@@ -113,65 +114,68 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* CARD 1: PAYMENT SUCCESSFUL (simulated) */}
-        <Animated.View style={[styles.successCard, { transform: [{ scale: scaleAnim }] }]}>
-          <CheckCircle2 size={34} color="#16A34A" />
-          <Text style={styles.statusTitle}>Payment Successful</Text>
-          <Text style={styles.statusSubtitle}>
-            Your {planName} is now active. You can start listing properties right away.
-          </Text>
-          <Text style={[styles.statusSubtitle, { fontSize: 11, marginTop: 6 }]}>
-            Simulated payment — no real money was charged.
+        {/* INVOICE (one page) */}
+        <Animated.View style={[styles.invoice, { transform: [{ scale: scaleAnim }] }]}>
+          {/* Brand + paid status */}
+          <View style={styles.invTop}>
+            <RestampWordmark height={16} />
+            <View style={styles.paidPill}>
+              <Check size={12} color="#16A34A" strokeWidth={3} />
+              <Text style={styles.paidPillText}>PAID</Text>
+            </View>
+          </View>
+
+          <Text style={styles.invHeading}>Invoice</Text>
+          <View style={styles.invMetaRow}>
+            <View>
+              <Text style={styles.invMetaLabel}>Invoice No.</Text>
+              <Text style={styles.invMetaVal}>{txnId}</Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.invMetaLabel}>Date</Text>
+              <Text style={styles.invMetaVal}>{invoiceDate}</Text>
+            </View>
+          </View>
+
+          <View style={styles.invBilled}>
+            <Text style={styles.invMetaLabel}>Billed to</Text>
+            <Text style={styles.invMetaVal}>{billedName}</Text>
+            {billedPhone ? <Text style={styles.invMetaSub}>{billedPhone}</Text> : null}
+          </View>
+
+          <View style={styles.invDashed} />
+
+          {/* Line item */}
+          <View style={styles.invItemRow}>
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={styles.invItemTitle}>{planName}</Text>
+              <Text style={styles.invItemSub}>
+                Owner plan · {planValidity} · {listingLimit}
+              </Text>
+            </View>
+            <Text style={styles.invItemAmt}>{amountPaid}</Text>
+          </View>
+
+          <View style={styles.invDashed} />
+
+          <View style={styles.invSumRow}>
+            <Text style={styles.invSumKey}>Subtotal</Text>
+            <Text style={styles.invSumVal}>{amountPaid}</Text>
+          </View>
+          <View style={styles.invSumRow}>
+            <Text style={styles.invSumKey}>Payment</Text>
+            <Text style={styles.invSumVal}>Successful</Text>
+          </View>
+
+          <View style={styles.invTotalRow}>
+            <Text style={styles.invTotalKey}>Total Paid</Text>
+            <Text style={styles.invTotalVal}>{amountPaid}</Text>
+          </View>
+
+          <Text style={styles.invNote}>
+            Simulated payment — no real money was charged. This is not a tax invoice.
           </Text>
         </Animated.View>
-
-        {/* CARD 2: SUBSCRIPTION STATUS */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Subscription Status</Text>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Plan</Text>
-            <Text style={styles.summaryVal}>{planName}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Status</Text>
-            <Text style={[styles.summaryVal, { color: "#16A34A" }]}>Active</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Validity</Text>
-            <Text style={styles.summaryVal}>{planValidity}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Listing Limit</Text>
-            <Text style={styles.summaryVal}>{listingLimit}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Amount Paid</Text>
-            <Text style={styles.summaryVal}>{amountPaid}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Transaction</Text>
-            <Text style={styles.summaryVal}>{txnId}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Invoice</Text>
-            <Text style={styles.summaryVal}>Not issued (simulated)</Text>
-          </View>
-        </View>
-
-        {/* Redirect Notice Card */}
-        <View style={styles.redirectNoticeBox}>
-          <Zap size={14} color="#D97706" style={{ marginRight: 6 }} />
-          <Text style={styles.redirectNoticeText}>
-            Redirecting to Owner Dashboard in 3 seconds...
-          </Text>
-        </View>
 
         <View style={{ height: 20 }} />
       </ScrollView>
@@ -372,6 +376,135 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#B45309",
     fontWeight: "400",
+  },
+  invoice: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 20,
+    padding: 20,
+  },
+  invTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  paidPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    height: 26,
+    borderRadius: 100,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  paidPillText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#16A34A",
+    letterSpacing: 0.6,
+  },
+  invHeading: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.5,
+    marginTop: 20,
+    marginBottom: 14,
+  },
+  invMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  invMetaLabel: {
+    fontSize: 11.5,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  invMetaVal: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginTop: 3,
+  },
+  invMetaSub: {
+    fontSize: 13,
+    color: "#475569",
+    marginTop: 2,
+  },
+  invBilled: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "#F8FAFC",
+  },
+  invDashed: {
+    borderTopWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "#CBD5E1",
+    marginVertical: 16,
+  },
+  invItemRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  invItemTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  invItemSub: {
+    fontSize: 12.5,
+    color: "#64748B",
+    marginTop: 3,
+    lineHeight: 18,
+  },
+  invItemAmt: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  invSumRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  invSumKey: {
+    fontSize: 13,
+    color: "#64748B",
+  },
+  invSumVal: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  invTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#EFF6FF",
+  },
+  invTotalKey: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  invTotalVal: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+  invNote: {
+    fontSize: 11.5,
+    color: "#94A3B8",
+    textAlign: "center",
+    marginTop: 14,
+    lineHeight: 16,
   },
   bottomBar: {
     paddingHorizontal: 20,

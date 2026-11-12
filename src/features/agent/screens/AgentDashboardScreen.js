@@ -238,29 +238,6 @@ export default function AgentDashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Row 2: Earnings & Commission */}
-        <View style={[styles.metricsGrid, { marginTop: 10 }]}>
-          {/* Card 4: Earnings & Commission */}
-          <TouchableOpacity
-            style={styles.metricCard}
-            onPress={() => navigation.navigate("AgentEarnings")}
-            activeOpacity={0.85}
-          >
-            <View style={styles.metricCardTop}>
-              <View style={styles.metricIconWrap}>
-                <Wallet size={17} color="#1E293B" strokeWidth={1.8} />
-              </View>
-              <ArrowRight size={14} color="#94A3B8" />
-            </View>
-            <Text style={styles.metricNumber}>
-              {formattedEarned || "₹0"}
-            </Text>
-            <Text style={styles.metricLabel} numberOfLines={1}>
-              Earnings & Comm.
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         {/* 4. COVERED LOCATIONS COMPACT CHIPS SECTION */}
         <View style={styles.locationsSection}>
           <View style={styles.sectionHeader}>
@@ -433,42 +410,46 @@ export default function AgentDashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* 8. AGENT SUBSCRIPTION SUMMARY (Matching Owner minimalListCard) */}
-        <View style={styles.minimalSection}>
-          <View style={styles.sectionHeader}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <ShieldCheck size={18} color="#16A34A" style={{ marginRight: 6 }} />
-              <Text style={styles.sectionTitle}>Agent Subscription</Text>
+        {/* 8. AGENT SUBSCRIPTION SUMMARY (compact card) */}
+        <View style={styles.subCard}>
+          <View style={styles.subTopRow}>
+            <View style={styles.subIconWrap}>
+              <ShieldCheck size={18} color={COLORS.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.subLabel}>Agent Subscription</Text>
+              <Text style={styles.subTitle} numberOfLines={1}>
+                {agentPlan?.name || "No active plan"}
+              </Text>
             </View>
             <View style={styles.planStatusPill}>
               <Text style={styles.planStatusText}>Active</Text>
             </View>
           </View>
 
-          <View style={styles.minimalListCard}>
-            <View style={styles.planRowItem}>
-              <Text style={styles.planKey}>Current Plan</Text>
-              <Text style={styles.planVal}>{agentPlan?.name || "No active plan"}</Text>
-            </View>
-            <View style={styles.planRowDivider} />
-            <View style={styles.planRowItem}>
-              <Text style={styles.planKey}>Coverage Limit</Text>
-              <Text style={styles.planVal}>
-                {selectedLocalities.length} of {agentPlan?.locationLimit || 0} Locations Used
-              </Text>
-            </View>
-            <View style={styles.planRowDivider} />
-            <View style={styles.planRowItem}>
-              <Text style={styles.planKey}>Active until</Text>
-              <Text style={styles.planVal}>20 Nov 2026</Text>
-            </View>
+          {/* Locations used */}
+          <View style={styles.subProgressTrack}>
+            <View
+              style={[
+                styles.subProgressFill,
+                {
+                  width: `${Math.min(
+                    100,
+                    agentPlan?.locationLimit
+                      ? (selectedLocalities.length / agentPlan.locationLimit) * 100
+                      : 0
+                  )}%`,
+                },
+              ]}
+            />
+          </View>
 
-            <TouchableOpacity
-              style={styles.managePlanBtn}
-              onPress={handleManagePlan}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.managePlanBtnText}>Manage Plan</Text>
+          <View style={styles.subBottomRow}>
+            <Text style={styles.subMeta} numberOfLines={1}>
+              {selectedLocalities.length}/{agentPlan?.locationLimit || 0} locations · until 20 Nov 2026
+            </Text>
+            <TouchableOpacity style={styles.subManageBtn} onPress={handleManagePlan} activeOpacity={0.8}>
+              <Text style={styles.subManageText}>Manage</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -941,7 +922,7 @@ const styles = StyleSheet.create({
   quickActionPillBtn: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 100,
     borderWidth: 1,
     borderColor: "#EEF2F6",
     paddingVertical: 11,
@@ -1113,7 +1094,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E2E8F0",
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: 100,
     marginTop: 10,
   },
   viewAllFullBtnText: {
@@ -1130,6 +1111,76 @@ const styles = StyleSheet.create({
     borderColor: "#EEF2F6",
     overflow: "hidden",
   },
+  subCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 20,
+  },
+  subTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  subIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 100,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  subLabel: {
+    fontSize: 11.5,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  subTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginTop: 1,
+  },
+  subProgressTrack: {
+    height: 6,
+    borderRadius: 100,
+    backgroundColor: "#EFF6FF",
+    marginTop: 12,
+    overflow: "hidden",
+  },
+  subProgressFill: {
+    height: 6,
+    borderRadius: 100,
+    backgroundColor: COLORS.primary,
+  },
+  subBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  subMeta: {
+    flex: 1,
+    fontSize: 12.5,
+    color: "#64748B",
+    marginRight: 8,
+  },
+  subManageBtn: {
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+  },
+  subManageText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
   planStatusPill: {
     backgroundColor: "#F0FDF4",
     paddingHorizontal: 8,
@@ -1145,13 +1196,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
   planRowDivider: {
     height: 1,
     backgroundColor: "#F1F5F9",
-    marginHorizontal: 16,
+    marginHorizontal: 14,
   },
   planKey: {
     fontSize: 13,
@@ -1164,11 +1215,11 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
   managePlanBtn: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    marginTop: 8,
-    height: 44,
-    borderRadius: 12,
+    marginHorizontal: 14,
+    marginBottom: 12,
+    marginTop: 4,
+    height: 36,
+    borderRadius: 100,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",

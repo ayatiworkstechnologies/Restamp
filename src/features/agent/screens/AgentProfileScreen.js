@@ -82,7 +82,7 @@ export default function AgentProfileScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* TOP BRAND HEADER */}

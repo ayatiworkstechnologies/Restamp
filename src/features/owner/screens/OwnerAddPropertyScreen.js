@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   TouchableOpacity,
   Image,
@@ -13,6 +12,7 @@ import {
   Modal,
   TextInput,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ArrowLeft,
@@ -3222,7 +3222,7 @@ const styles = StyleSheet.create({
   saveDraftBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     borderWidth: 1,
     borderColor: COLORS.primary,
@@ -3871,7 +3871,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     height: 50,
     paddingHorizontal: 20,
-    borderRadius: 6,
+    borderRadius: 100,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -3886,7 +3886,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     height: 50,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",

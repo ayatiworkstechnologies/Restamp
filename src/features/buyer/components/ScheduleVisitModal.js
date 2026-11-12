@@ -5,11 +5,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   TextInput,
   Platform,
   Dimensions,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import {
   ChevronLeft,
   ChevronRight,
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   backdropPressable: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
   },
   modalContainer: {
     backgroundColor: "#FFFFFF",

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   TouchableOpacity,
   Image,
@@ -13,6 +12,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Users,
@@ -450,7 +450,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
     : "—";
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
 
@@ -1276,7 +1276,7 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: 14,
     marginBottom: 16,
-    borderRadius: 10,
+    borderRadius: 100,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
@@ -1514,7 +1514,7 @@ const styles = StyleSheet.create({
   },
   scheduleVisitBtn: {
     backgroundColor: "#E2E8F0",
-    borderRadius: 18,
+    borderRadius: 100,
     paddingVertical: 13,
     alignItems: "center",
     justifyContent: "center",

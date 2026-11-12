@@ -7,13 +7,14 @@ import {
   Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { HugeBuilding, HugeSearch, HugeBell } from "./HugeIcon.js";
-import RestampLogo from "./RestampLogo.js";
+import { HugeBuilding, HugeSearch, HugeBell, Sparkles } from "./HugeIcon.js";
+import RestampWordmark from "./RestampWordmark.js";
 import COLORS from "../constants/colors.js";
 import { useAuth } from "../../features/auth/context/AuthContext.js";
 import { enterBuyerFlow, enterOwnerFlow } from "../api/users.js";
 import { useRequireAuth } from "../../features/auth/useRequireAuth.js";
 import { getUnreadCount, subscribeNotifications } from "../data/notificationsStore.js";
+import { useReva } from "../../features/reva/context/RevaContext.js";
 
 function AppBrandHeader({
   currentRole = "buyer",
@@ -24,6 +25,7 @@ function AppBrandHeader({
 }) {
   const navigation = useNavigation();
   const auth = useAuth();
+  const { openReva } = useReva();
   const [switchingRole, setSwitchingRole] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(getUnreadCount());
 
@@ -66,18 +68,12 @@ function AppBrandHeader({
     <View style={[styles.header, style]}>
       {/* Left Side Restamp Logotype */}
       <View style={styles.logoContainer}>
-        <View style={styles.logoIconBg}>
-          <RestampLogo size={28} />
-        </View>
-        <Text style={styles.logoText}>
-          Res<Text style={styles.logoTextAccent}>tamp</Text>
-        </Text>
+        <RestampWordmark height={20} />
       </View>
 
       {/* Right Side Actions */}
       <View style={styles.headerRightActions}>
         {rightActions}
-
         {showSwitch && (
           <TouchableOpacity
             style={styles.switchRolePill}
@@ -144,6 +140,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  revaHeaderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F7FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  revaHeaderText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
   switchRolePill: {
     flexDirection: "row",
     alignItems: "center",
@@ -156,6 +167,22 @@ const styles = StyleSheet.create({
   },
   switchRoleText: {
     fontSize: 12.5,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  revaHeaderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    marginRight: 6,
+  },
+  revaHeaderBtnText: {
+    fontSize: 12,
     fontWeight: "700",
     color: "#2563EB",
   },

@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   cancelBtn: {
     flex: 1,
     height: 46,
-    borderRadius: 12,
+    borderRadius: 100,
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   confirmBtn: {
     flex: 1,
     height: 46,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",

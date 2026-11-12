@@ -13,10 +13,9 @@ import {
   Alert,
   Dimensions,
   ImageBackground,
-  ScrollView,
-  KeyboardAvoidingView,
   Keyboard,
 } from "react-native";
+import { ScrollView, KeyboardAvoidingView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect, Defs, LinearGradient, Stop } from "react-native-svg";
 import {
@@ -47,7 +46,7 @@ import {
 import { planLoginResume } from "../requireAuth.js";
 import { fetchAgentPlan } from "../../../shared/api/agentPlans.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
-import RestampLogo from "../../../shared/components/RestampLogo.js";
+import RestampLoginLogo from "../../../shared/components/RestampLoginLogo.js";
 
 // Internal-testing OTP code chip (only appears when the backend's test display
 // mode returns a code). Hidden per design; set true to show it again.
@@ -113,8 +112,11 @@ function AppleIcon({ size = 20, color = "#FFFFFF" }) {
 
 export default function LoginScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  // Lift the pinned footer (Sign in / Help? / Resend OTP) clear of the
+  // keyboard. Android edge-to-edge needs the nav-bar inset added too,
+  // otherwise the keyboard covers the bottom text in release APKs.
   const keyboardVerticalOffset =
-    Platform.OS === "ios" ? (insets.bottom > 0 ? insets.bottom + 16 : 20) : 0;
+    insets.bottom > 0 ? insets.bottom + 16 : 20;
   const {
     loginWithToken,
     saveProfileName,
@@ -559,12 +561,12 @@ export default function LoginScreen({ navigation }) {
     <SafeAreaView
       style={[
         styles.safeArea,
-        { backgroundColor: step === 0 ? "#111317" : "#FFFFFF" },
+        { backgroundColor: "#FFFFFF" },
       ]}
       edges={step === 0 ? [] : ["top", "bottom"]}
     >
       <StatusBar
-        barStyle={step === 0 ? "light-content" : "dark-content"}
+        barStyle="dark-content"
         backgroundColor="transparent"
         translucent={true}
       />
@@ -572,7 +574,7 @@ export default function LoginScreen({ navigation }) {
       <View
         style={[
           styles.wrapper,
-          { backgroundColor: step === 0 ? "#111317" : "#FFFFFF" },
+          { backgroundColor: "#FFFFFF" },
         ]}
       >
         {/* ======================================================== */}
@@ -580,38 +582,6 @@ export default function LoginScreen({ navigation }) {
         {/* ======================================================== */}
         {step === 0 && (
           <View style={styles.perplexityContainer}>
-            {/* Top Architectural Hero with Fade Gradient (Fullscreen Absolute Background) */}
-            <View style={styles.perplexityHeroWrapper} pointerEvents="none">
-              <ImageBackground
-                source={require("../../../../assets/login-screen-img.jpg")}
-                style={styles.perplexityHeroImage}
-                resizeMode="cover"
-              >
-                {/* SVG Gradient smoothly fading the image down into dark background #111317 */}
-                <Svg
-                  height="100%"
-                  width="100%"
-                  style={StyleSheet.absoluteFillObject}
-                >
-                  <Defs>
-                    <LinearGradient id="heroFade" x1="0" y1="0" x2="0" y2="1">
-                      <Stop offset="0" stopColor="#111317" stopOpacity="0" />
-                      <Stop offset="0.45" stopColor="#111317" stopOpacity="0.08" />
-                      <Stop offset="0.75" stopColor="#111317" stopOpacity="0.75" />
-                      <Stop offset="1" stopColor="#111317" stopOpacity="1" />
-                    </LinearGradient>
-                  </Defs>
-                  <Rect
-                    x="0"
-                    y="0"
-                    width="100%"
-                    height="100%"
-                    fill="url(#heroFade)"
-                  />
-                </Svg>
-              </ImageBackground>
-            </View>
-
             {/* Minimalist Top Right 'Skip' Link (Pinned to absolute top-right below status bar) */}
             <View
               style={[
@@ -640,8 +610,7 @@ export default function LoginScreen({ navigation }) {
             >
               {/* Centered Brand Mark + Wordmark */}
               <View style={styles.perplexityBrandContainer}>
-                <RestampLogo size={46} color="#FFFFFF" />
-                <Text style={styles.perplexityBrandText}>restamp</Text>
+                <RestampLoginLogo width={290} />
               </View>
 
               {/* Action Buttons Stack (Perplexity style) */}
@@ -733,7 +702,7 @@ export default function LoginScreen({ navigation }) {
         {step === 1 && (
           <KeyboardAvoidingView
             style={styles.flowContainer}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior="padding"
             keyboardVerticalOffset={keyboardVerticalOffset}
           >
             {/* Top Navigation Bar: Back arrow and Skip Here */}
@@ -859,7 +828,7 @@ export default function LoginScreen({ navigation }) {
         {step === 2 && (
           <KeyboardAvoidingView
             style={styles.flowContainer}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior="padding"
             keyboardVerticalOffset={keyboardVerticalOffset}
           >
             {/* Top Navigation Bar: Back Arrow */}
@@ -1010,7 +979,7 @@ export default function LoginScreen({ navigation }) {
         {step === 3 && (
           <KeyboardAvoidingView
             style={styles.flowContainer}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior="padding"
             keyboardVerticalOffset={keyboardVerticalOffset}
           >
             {/* Top Navigation Bar: Back Arrow */}
@@ -1196,7 +1165,7 @@ const styles = StyleSheet.create({
   /* ================= STEP 0: WELCOME SCREEN (PERPLEXITY DESIGN) ================= */
   perplexityContainer: {
     flex: 1,
-    backgroundColor: "#111317",
+    backgroundColor: "#FFFFFF",
     position: "relative",
   },
   perplexityHeroWrapper: {
@@ -1222,7 +1191,7 @@ const styles = StyleSheet.create({
   perplexitySkipText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: "#0F172A",
     letterSpacing: -0.2,
   },
   perplexityContent: {
@@ -1235,9 +1204,10 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   perplexityBrandContainer: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 24,
+    paddingBottom: 40,
   },
   perplexityBrandText: {
     fontSize: 32,
@@ -1261,21 +1231,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
     paddingHorizontal: 20,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 3,
-      },
-      web: {
-        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
-        cursor: "pointer",
-      },
-    }),
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   perplexityWhiteBtnText: {
     fontSize: 15.5,
@@ -1344,7 +1301,7 @@ const styles = StyleSheet.create({
   perplexitySignUpLink: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: COLORS.primary,
   },
 
   /* ================= FLOW SCREENS (STEP 1 & 2) ================= */

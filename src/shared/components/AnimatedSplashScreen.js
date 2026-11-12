@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,23 +9,21 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
-import { useFonts, KaushanScript_400Regular } from "@expo-google-fonts/kaushan-script";
+import RestampWordmark from "./RestampWordmark.js";
 import COLORS from "../constants/colors.js";
 
 const BRAND = COLORS.primary || "#2563EB";
 const SPLASH_DURATION = 2000;
 
-// Handwritten wordmark: brush-script "Res" in ink, "tamp" in brand blue,
-// revealed left to right behind a pen tip as if being written.
+// RESTAMP wordmark (same artwork as the app header), revealed left to right.
+const WORD_H = 32;
+const WORD_W = Math.round((WORD_H * 93) / 11);
 const WRITE_START = 200;
 const WRITE_DURATION = 1050;
 
 export default function AnimatedSplashScreen({ onAnimationComplete }) {
   const useNative = Platform.OS !== "web";
 
-  // Wordmark is "written" by widening a clipping box over the full word.
-  const [fontsLoaded] = useFonts({ KaushanScript_400Regular });
-  const [wordWidth, setWordWidth] = useState(0);
   const write = useRef(new Animated.Value(0)).current;
   // Exit: content first, then the backdrop, so nothing ghosts over the app.
   const contentOpacity = useRef(new Animated.Value(1)).current;
@@ -58,7 +56,7 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
         toValue: 1,
         duration: WRITE_DURATION,
         easing: Easing.inOut(Easing.sin),
-        useNativeDriver: false,
+        useNativeDriver: useNative,
       }),
     ]).start();
 
@@ -71,52 +69,32 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <Pressable style={styles.pressableArea} onPress={triggerExit}>
         <Animated.View style={[styles.content, { opacity: contentOpacity }]}>
-          {/* Wordmark (handwritten). The full word is laid out invisibly to
-              size the row; a clipping box widens over a copy of it. */}
-          <View style={styles.wordmarkRow}>
-            <Text
-              style={[styles.scriptWord, fontsLoaded && styles.scriptFont, styles.wordGhost]}
-              onLayout={(e) => {
-                // Measure only once the script font is in, so the clip
-                // matches the final glyph widths.
-                if (fontsLoaded) setWordWidth(Math.ceil(e.nativeEvent.layout.width) + 2);
-              }}
-              key={fontsLoaded ? "script" : "fallback"}
-            >
-              Res<Text style={styles.brandTitleAccent}>tamp</Text>
-            </Text>
-            {wordWidth > 0 ? (
-              <>
-                <Animated.View
-                  style={[
-                    styles.writeClip,
-                    { width: write.interpolate({ inputRange: [0, 1], outputRange: [0, wordWidth] }) },
-                  ]}
-                >
-                  <Text style={[styles.scriptWord, fontsLoaded && styles.scriptFont, { width: wordWidth }]}>
-                    Res<Text style={styles.brandTitleAccent}>tamp</Text>
-                  </Text>
-                </Animated.View>
-                {/* Pen tip riding the writing edge */}
-                <Animated.View
-                  style={[
-                    styles.penTip,
-                    {
-                      opacity: write.interpolate({ inputRange: [0, 0.02, 0.96, 1], outputRange: [0, 1, 1, 0] }),
-                      transform: [
-                        { translateX: write.interpolate({ inputRange: [0, 1], outputRange: [0, wordWidth] }) },
-                        {
-                          translateY: write.interpolate({
-                            inputRange: [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1],
-                            outputRange: [6, -10, 4, -6, 8, -8, 2, 0],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                />
-              </>
-            ) : null}
+          {/* RESTAMP wordmark, revealed left to right as a white cover slides off. */}
+          <View style={{ width: WORD_W, height: WORD_H, overflow: "hidden" }}>
+            <RestampWordmark height={WORD_H} />
+            {/* White cover slides right to uncover the word (native driver). */}
+            <Animated.View
+              style={[
+                styles.cover,
+                {
+                  transform: [
+                    { translateX: write.interpolate({ inputRange: [0, 1], outputRange: [0, WORD_W + 8] }) },
+                  ],
+                },
+              ]}
+            />
+            {/* Light tip riding the reveal edge */}
+            <Animated.View
+              style={[
+                styles.penTip,
+                {
+                  opacity: write.interpolate({ inputRange: [0, 0.02, 0.96, 1], outputRange: [0, 1, 1, 0] }),
+                  transform: [
+                    { translateX: write.interpolate({ inputRange: [0, 1], outputRange: [0, WORD_W] }) },
+                  ],
+                },
+              ]}
+            />
           </View>
         </Animated.View>
       </Pressable>
@@ -126,7 +104,7 @@ export default function AnimatedSplashScreen({ onAnimationComplete }) {
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 999999,
     backgroundColor: "#FFFFFF",
     alignItems: "center",
@@ -157,6 +135,14 @@ const styles = StyleSheet.create({
   wordGhost: {
     opacity: 0,
   },
+  cover: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: WORD_W + 8,
+    backgroundColor: "#FFFFFF",
+  },
   writeClip: {
     position: "absolute",
     left: 0,
@@ -166,8 +152,8 @@ const styles = StyleSheet.create({
   },
   penTip: {
     position: "absolute",
-    left: -4,
-    top: 39,
+    left: 0,
+    top: WORD_H / 2 - 4,
     width: 8,
     height: 8,
     borderRadius: 4,

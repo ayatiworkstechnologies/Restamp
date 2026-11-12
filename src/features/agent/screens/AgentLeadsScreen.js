@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   TouchableOpacity,
   Image,
@@ -12,6 +11,7 @@ import {
   Alert,
   Modal,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Search,
@@ -30,7 +30,6 @@ import {
 import COLORS from "../../../shared/constants/colors.js";
 import { useAgent } from "../context/AgentContext.js";
 import StatusBadge from "../../owner/components/StatusBadge.js";
-import EmptyState from "../../owner/components/EmptyState.js";
 
 const FILTER_TABS = [
   "All",
@@ -141,7 +140,7 @@ export default function AgentLeadsScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* TOP BRAND HEADER */}
@@ -152,31 +151,29 @@ export default function AgentLeadsScreen({ navigation }) {
         <Text style={styles.headerSubtitle}>Manage your customer enquiries</Text>
       </View>
 
-      {/* SUMMARY PILLS: All Leads, New, Follow-ups, Visits */}
-      <View style={styles.summaryBar}>
-        <View style={styles.summaryPill}>
-          <Text style={styles.summaryNumber}>{summaryCounts.all}</Text>
-          <Text style={styles.summaryLabel}>All Leads</Text>
-        </View>
-        <View style={[styles.summaryPill, { backgroundColor: "#EFF6FF", borderColor: "#DBEAFE" }]}>
-          <Text style={[styles.summaryNumber, { color: COLORS.primary }]}>{summaryCounts.newCount}</Text>
-          <Text style={styles.summaryLabel}>New</Text>
-        </View>
-        <View style={styles.summaryPill}>
-          <Text style={styles.summaryNumber}>{summaryCounts.followUps}</Text>
-          <Text style={styles.summaryLabel}>Follow-ups</Text>
-        </View>
-        <View style={[styles.summaryPill, { backgroundColor: "#FFF7ED", borderColor: "#FFEDD5" }]}>
-          <Text style={[styles.summaryNumber, { color: "#EA580C" }]}>{summaryCounts.visits}</Text>
-          <Text style={styles.summaryLabel}>Visits</Text>
-        </View>
+      {/* SUMMARY: one card, four stats */}
+      <View style={styles.summaryCard}>
+        {[
+          { label: "All Leads", value: summaryCounts.all, color: "#0F172A" },
+          { label: "New", value: summaryCounts.newCount, color: COLORS.primary },
+          { label: "Follow-ups", value: summaryCounts.followUps, color: "#0F172A" },
+          { label: "Visits", value: summaryCounts.visits, color: "#EA580C" },
+        ].map((item, i) => (
+          <React.Fragment key={item.label}>
+            {i > 0 ? <View style={styles.summaryDivider} /> : null}
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryNumber, { color: item.color }]}>{item.value}</Text>
+              <Text style={styles.summaryLabel}>{item.label}</Text>
+            </View>
+          </React.Fragment>
+        ))}
       </View>
 
       {/* SEARCH AND FILTER TABS */}
       <View style={styles.filterSection}>
         {/* Search bar */}
         <View style={styles.searchBar}>
-          <Search size={16} color="#94A3B8" style={{ marginRight: 8 }} />
+          <Search size={18} color="#94A3B8" style={{ marginRight: 10 }} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search leads by name, locality, or requirement..."
@@ -223,13 +220,61 @@ export default function AgentLeadsScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         {filteredLeads.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title="No new leads yet."
-            description="Leads from interested buyers in your localities will appear here."
-            buttonTitle={activeTab !== "All" ? "View All Leads" : undefined}
-            onButtonPress={activeTab !== "All" ? () => setActiveTab("All") : undefined}
-          />
+          <View style={styles.emptyWrap}>
+            {/* Fanned lead-cards illustration */}
+            <View style={styles.emptyArt}>
+              {["left", "right"].map((side) => (
+                <View
+                  key={side}
+                  style={[styles.emptySheet, side === "left" ? styles.emptySheetLeft : styles.emptySheetRight]}
+                >
+                  <View style={styles.leadArtAvatarSm} />
+                  <View style={styles.emptySheetLine} />
+                  <View style={[styles.emptySheetLine, { width: "55%" }]} />
+                </View>
+              ))}
+              <View style={[styles.emptySheet, styles.emptySheetCenter]}>
+                {/* Lead header: avatar + name + status */}
+                <View style={styles.leadArtHeader}>
+                  <View style={styles.leadArtAvatar}>
+                    <Users size={14} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1, gap: 5 }}>
+                    <View style={[styles.leadArtLine, { width: "90%", backgroundColor: "#CBD5E1" }]} />
+                    <View style={[styles.leadArtLine, { width: "60%" }]} />
+                  </View>
+                </View>
+                <View style={styles.leadArtChip}>
+                  <Text style={styles.leadArtChipText}>New</Text>
+                </View>
+                {/* Requirement rows */}
+                <View style={[styles.leadArtLine, { width: "100%" }]} />
+                <View style={[styles.leadArtLine, { width: "75%" }]} />
+                {/* Actions: call + message */}
+                <View style={styles.leadArtActions}>
+                  <View style={[styles.leadArtBtn, { backgroundColor: COLORS.primary, borderColor: COLORS.primary }]}>
+                    <Phone size={11} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.leadArtBtn}>
+                    <MessageSquare size={11} color={COLORS.primary} />
+                  </View>
+                </View>
+              </View>
+            </View>
+            <Text style={styles.emptyTitle}>No new leads yet.</Text>
+            <Text style={styles.emptyText}>
+              Leads from interested buyers in your localities will appear here.
+            </Text>
+            {activeTab !== "All" ? (
+              <TouchableOpacity
+                style={styles.emptyBtn}
+                onPress={() => setActiveTab("All")}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.emptyBtnText}>View All Leads</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         ) : (
           <View style={styles.leadsList}>
             {filteredLeads.map((lead) => {
@@ -404,67 +449,70 @@ const styles = StyleSheet.create({
   },
   screenHeader: {
     paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 14,
   },
   headerTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.6,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: "#64748B",
+    marginTop: 4,
+  },
+  summaryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginBottom: 14,
+    paddingVertical: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 20,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  summaryDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: "#E2E8F0",
+  },
+  summaryNumber: {
     fontSize: 20,
     fontWeight: "800",
     color: "#0F172A",
     letterSpacing: -0.4,
   },
-  headerSubtitle: {
-    fontSize: 12.5,
-    color: "#64748B",
-    marginTop: 2,
-  },
-  summaryBar: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    gap: 8,
-    marginBottom: 10,
-  },
-  summaryPill: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 12,
-    paddingVertical: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  summaryNumber: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
   summaryLabel: {
-    fontSize: 10.5,
+    fontSize: 12,
     color: "#64748B",
     fontWeight: "500",
-    marginTop: 1,
+    marginTop: 2,
   },
   filterSection: {
     paddingHorizontal: 16,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EEF2F6",
+    paddingBottom: 12,
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 42,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 100,
+    paddingHorizontal: 16,
+    height: 48,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    marginBottom: 10,
+    marginBottom: 12,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     color: "#0F172A",
     paddingVertical: 0,
   },
@@ -474,10 +522,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   tabChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 16,
+    height: 36,
+    justifyContent: "center",
+    borderRadius: 100,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
@@ -486,13 +535,139 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   tabChipText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "600",
     color: "#475569",
   },
   tabChipTextActive: {
     color: "#FFFFFF",
     fontWeight: "700",
+  },
+  emptyWrap: {
+    alignItems: "center",
+    paddingTop: 40,
+    paddingHorizontal: 8,
+  },
+  emptyArt: {
+    width: 200,
+    height: 150,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 28,
+  },
+  emptySheet: {
+    position: "absolute",
+    width: 96,
+    height: 124,
+    borderRadius: 14,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 14,
+    paddingTop: 16,
+    gap: 8,
+  },
+  emptySheetLeft: {
+    transform: [{ translateX: -44 }, { rotate: "-10deg" }],
+  },
+  emptySheetRight: {
+    transform: [{ translateX: 44 }, { rotate: "10deg" }],
+  },
+  emptySheetCenter: {
+    width: 112,
+    height: 140,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    gap: 8,
+  },
+  leadArtAvatarSm: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#E2E8F0",
+    marginBottom: 2,
+  },
+  leadArtHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  leadArtAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  leadArtLine: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#E2E8F0",
+  },
+  leadArtChip: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 100,
+    backgroundColor: "#EFF6FF",
+  },
+  leadArtChipText: {
+    fontSize: 8,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  leadArtActions: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: "auto",
+    marginBottom: 12,
+  },
+  leadArtBtn: {
+    flex: 1,
+    height: 20,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptySheetLine: {
+    height: 6,
+    width: "80%",
+    borderRadius: 3,
+    backgroundColor: "#E2E8F0",
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.4,
+    textAlign: "center",
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 21,
+    marginTop: 8,
+    maxWidth: 300,
+  },
+  emptyBtn: {
+    alignSelf: "stretch",
+    height: 52,
+    marginTop: 28,
+    borderRadius: 100,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   container: {
     flex: 1,
@@ -508,13 +683,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#EEF2F6",
+    borderColor: "#E2E8F0",
     padding: 16,
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
   },
   cardHeaderRow: {
     flexDirection: "row",

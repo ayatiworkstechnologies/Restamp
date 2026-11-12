@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Modal,
-  ScrollView,
   Image,
   TouchableOpacity,
   TextInput,
@@ -16,6 +15,7 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import {
   ArrowLeft,
   Heart,
@@ -2716,7 +2716,7 @@ const styles = StyleSheet.create({
   bottomCallBtn: {
     width: 48,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 100,
     borderWidth: 1.5,
     borderColor: "#16A34A",
     backgroundColor: "#16A34A",
@@ -2729,7 +2729,7 @@ const styles = StyleSheet.create({
     flex: 1.25,
     paddingHorizontal: 6,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 100,
     borderWidth: 1.5,
     borderColor: COLORS.primary,
     backgroundColor: "#FFFFFF",
@@ -2755,7 +2755,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 6,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
@@ -2906,7 +2906,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   backdropPressable: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
   },
   enquiryModalContainer: {
     backgroundColor: "#FFFFFF",
@@ -3071,7 +3071,7 @@ const styles = StyleSheet.create({
   },
   enquirySubmitBtn: {
     height: 50,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",

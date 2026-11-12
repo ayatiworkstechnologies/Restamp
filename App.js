@@ -1,3 +1,4 @@
+import { KeyboardSafeProvider } from "./src/shared/components/KeyboardSafe.js";
 import React, { useState } from "react";
 import { Platform, Alert } from "react-native";
 import { enableScreens } from "react-native-screens";
@@ -9,6 +10,7 @@ import { WishlistProvider } from "./src/features/buyer/context/WishlistContext";
 import { OwnerProvider } from "./src/features/owner/context/OwnerContext";
 import { AgentProvider } from "./src/features/agent/context/AgentContext";
 import { AuthProvider } from "./src/features/auth/context/AuthContext";
+import { RevaProvider, RevaChatbot } from "./src/features/reva";
 import AnimatedSplashScreen from "./src/shared/components/AnimatedSplashScreen";
 import { installWebAlert } from "./src/shared/utils/webAlert";
 
@@ -51,21 +53,26 @@ export default function App() {
   const [isSplashVisible, setIsSplashVisible] = useState(true);
 
   return (
+    <KeyboardSafeProvider>
     <SafeAreaProvider style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       <AuthProvider>
         <WishlistProvider>
           <OwnerProvider>
             <AgentProvider>
-              <AppNavigator />
-              {isSplashVisible && (
-                <AnimatedSplashScreen
-                  onAnimationComplete={() => setIsSplashVisible(false)}
-                />
-              )}
+              <RevaProvider>
+                <AppNavigator />
+                {!isSplashVisible && <RevaChatbot />}
+                {isSplashVisible && (
+                  <AnimatedSplashScreen
+                    onAnimationComplete={() => setIsSplashVisible(false)}
+                  />
+                )}
+              </RevaProvider>
             </AgentProvider>
           </OwnerProvider>
         </WishlistProvider>
       </AuthProvider>
     </SafeAreaProvider>
+    </KeyboardSafeProvider>
   );
 }

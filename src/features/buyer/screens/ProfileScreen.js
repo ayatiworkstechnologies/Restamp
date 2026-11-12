@@ -3,15 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   TouchableOpacity,
   Alert,
   Modal,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { ScrollView, KeyboardAvoidingView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   User,
@@ -38,6 +37,7 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
+import Svg, { Defs, LinearGradient as SvgLinearGradient, RadialGradient, Stop, Rect } from "react-native-svg";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useWishlist } from "../context/WishlistContext.js";
 import { useOwner } from "../../owner/context/OwnerContext.js";
@@ -251,7 +251,7 @@ export default function ProfileScreen({ navigation }) {
   // just the existing auth entry point.
   if (!authUser) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
         <ScrollView
@@ -260,8 +260,19 @@ export default function ProfileScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.loggedOutCard}>
-            <View style={styles.loggedOutIconWrap}>
-              <User size={26} color={COLORS.primary} />
+            {/* Fanned-cards illustration */}
+            <View style={styles.loggedOutArt}>
+              <View style={[styles.loggedOutSheet, styles.loggedOutSheetLeft]}>
+                <View style={styles.loggedOutSheetLine} />
+                <View style={[styles.loggedOutSheetLine, { width: "55%" }]} />
+              </View>
+              <View style={[styles.loggedOutSheet, styles.loggedOutSheetRight]}>
+                <View style={styles.loggedOutSheetLine} />
+                <View style={[styles.loggedOutSheetLine, { width: "55%" }]} />
+              </View>
+              <View style={[styles.loggedOutSheet, styles.loggedOutSheetCenter]}>
+                <User size={28} color="#94A3B8" />
+              </View>
             </View>
             <Text style={styles.loggedOutTitle}>You're not signed in</Text>
             <Text style={styles.loggedOutText}>
@@ -279,6 +290,7 @@ export default function ProfileScreen({ navigation }) {
               activeOpacity={0.85}
             >
               <Text style={styles.loggedOutBtnText}>Login</Text>
+              <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -287,7 +299,7 @@ export default function ProfileScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       <ScrollView
@@ -345,6 +357,24 @@ export default function ProfileScreen({ navigation }) {
           onPress={hasAgentPlan ? handleSwitchToAgent : handleSwitchToOwner}
           activeOpacity={0.88}
         >
+          {/* Gradient background */}
+          <View style={styles.modeSwitchGradient} pointerEvents="none">
+            <Svg width="100%" height="100%">
+              <Defs>
+                <SvgLinearGradient id="modeSwitchGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0" stopColor="#3B82F6" />
+                  <Stop offset="0.55" stopColor="#2563EB" />
+                  <Stop offset="1" stopColor="#6D4FE8" />
+                </SvgLinearGradient>
+                <RadialGradient id="modeSwitchGlow" cx="0.12" cy="0.1" r="0.6">
+                  <Stop offset="0" stopColor="#5EEBF2" stopOpacity="0.45" />
+                  <Stop offset="1" stopColor="#5EEBF2" stopOpacity="0" />
+                </RadialGradient>
+              </Defs>
+              <Rect width="100%" height="100%" fill="url(#modeSwitchGrad)" />
+              <Rect width="100%" height="100%" fill="url(#modeSwitchGlow)" />
+            </Svg>
+          </View>
           <View style={styles.modeSwitchLeft}>
             <View style={styles.modeSwitchIconWrap}>
               {hasAgentPlan ? (
@@ -644,7 +674,7 @@ export default function ProfileScreen({ navigation }) {
         onRequestClose={() => setIsEditing(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior="padding"
           style={styles.modalBackdrop}
         >
           <View style={styles.modalSheet}>
@@ -761,55 +791,81 @@ const styles = StyleSheet.create({
   },
   loggedOutCard: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    paddingHorizontal: 20,
-    paddingVertical: 28,
-    marginTop: 12,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    paddingTop: 48,
+    paddingBottom: 24,
+    paddingHorizontal: 8,
   },
-  loggedOutIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#EFF6FF",
+  loggedOutArt: {
+    width: 200,
+    height: 150,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
+    marginBottom: 28,
+  },
+  loggedOutSheet: {
+    position: "absolute",
+    width: 96,
+    height: 124,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 14,
+    paddingTop: 22,
+    gap: 8,
+  },
+  loggedOutSheetLeft: {
+    transform: [{ translateX: -44 }, { rotate: "-10deg" }],
+    backgroundColor: "#F8FAFC",
+  },
+  loggedOutSheetRight: {
+    transform: [{ translateX: 44 }, { rotate: "10deg" }],
+    backgroundColor: "#F8FAFC",
+  },
+  loggedOutSheetCenter: {
+    width: 104,
+    height: 134,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 0,
+  },
+  loggedOutSheetLine: {
+    height: 6,
+    width: "80%",
+    borderRadius: 3,
+    backgroundColor: "#E2E8F0",
   },
   loggedOutTitle: {
-    fontSize: 17,
-    fontWeight: "600",
+    fontSize: 20,
+    fontWeight: "800",
     color: "#0F172A",
-    letterSpacing: -0.2,
+    letterSpacing: -0.4,
+    textAlign: "center",
   },
   loggedOutText: {
-    fontSize: 13,
+    fontSize: 14,
     color: "#64748B",
     textAlign: "center",
-    marginTop: 6,
-    lineHeight: 19,
+    lineHeight: 21,
+    marginTop: 8,
+    marginBottom: 28,
+    maxWidth: 300,
   },
   loggedOutBtn: {
-    height: 46,
-    minWidth: 140,
-    borderRadius: 10,
+    flexDirection: "row",
+    alignSelf: "stretch",
+    height: 52,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 18,
   },
   loggedOutBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
     color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
   },
+
   profileHeaderCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -880,7 +936,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: COLORS.primary,
+    backgroundColor: "#2563EB",
     borderRadius: 18,
     paddingVertical: 16,
     paddingHorizontal: 16,
@@ -890,6 +946,15 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
+  },
+  modeSwitchGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 18,
+    overflow: "hidden",
   },
   modeSwitchLeft: {
     flexDirection: "row",

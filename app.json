@@ -10,10 +10,20 @@
       "web"
     ],
     "android": {
-      "package": "com.restamp.app"
+      "package": "com.restamp.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "ios": {
-      "bundleIdentifier": "com.restamp.app"
+      "bundleIdentifier": "com.restamp.app",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow Restamp to turn your voice into text for Reva AI.",
+        "NSMicrophoneUsageDescription": "Allow Restamp to access your microphone to speak with Reva AI."
+      }
     },
     "plugins": [
       [
@@ -23,11 +33,30 @@
         }
       ],
       "expo-font",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Restamp to access your microphone to speak with Reva AI."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Restamp to access your microphone to speak with Reva AI.",
+          "speechRecognitionPermission": "Allow Restamp to turn your voice into text for Reva AI."
+        }
+      ]
     ],
     "web": {
       "bundler": "metro",
       "output": "single"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4923b31d-379d-4763-95cb-a95b7245cf3d"
+      }
+    },
+    "owner": "srinathgovindaraj"
   }
 }

@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import React from "react";
 import { Platform } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -46,6 +47,9 @@ const ownerTabConfig = {
 };
 
 export default function OwnerNavigator() {
+  // Lift the tab bar above the phone's gesture/nav bar (edge-to-edge Android).
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, Platform.OS === "ios" ? 16 : 0);
   return (
     <Tab.Navigator
       initialRouteName="Dashboard"
@@ -85,9 +89,9 @@ export default function OwnerNavigator() {
             backgroundColor: "#FFFFFF",
             borderTopWidth: 1,
             borderTopColor: "#EEF2F6",
-            height: Platform.OS === "ios" ? 84 : 64,
+            height: 60 + bottomInset,
             paddingTop: 8,
-            paddingBottom: Platform.OS === "ios" ? 24 : 8,
+            paddingBottom: 8 + bottomInset,
             paddingHorizontal: 12,
             shadowColor: "#000000",
             shadowOffset: { width: 0, height: -2 },

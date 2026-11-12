@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
   primaryBtn: {
     flex: 2,
     height: 44,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
   outlineBtn: {
     flex: 1,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 100,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",

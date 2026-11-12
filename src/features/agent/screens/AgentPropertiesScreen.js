@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   TouchableOpacity,
   TextInput,
   Modal,
   ActivityIndicator,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Search,
@@ -104,7 +104,7 @@ export default function AgentPropertiesScreen({ navigation }) {
     searchQuery.trim() !== "";
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* TOP BRAND HEADER */}
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F8FAFC",
-    borderRadius: 12,
+    borderRadius: 100,
     paddingHorizontal: 12,
     height: 42,
     borderWidth: 1,

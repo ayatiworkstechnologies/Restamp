@@ -1,9 +1,8 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   TouchableOpacity,
   TextInput,
@@ -12,6 +11,7 @@ import {
   Pressable,
   Alert,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ArrowLeft,
@@ -24,6 +24,7 @@ import {
   X,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import StatusSheet from "../../../shared/components/StatusSheet.js";
 import { useAgent } from "../context/AgentContext.js";
 import { subscribeAgentPlan } from "../../../shared/api/agentPlans.js";
 
@@ -52,6 +53,8 @@ export default function AgentPaymentScreen({ route, navigation }) {
 
   const [selectedMethodId, setSelectedMethodId] = useState("card_1");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [sheetStatus, setSheetStatus] = useState(null); // "processing" | "success" | null
+  const pendingSuccess = useRef(null);
   const [showAddMethodModal, setShowAddMethodModal] = useState(false);
   const [newUpiId, setNewUpiId] = useState("");
 
@@ -98,17 +101,19 @@ export default function AgentPaymentScreen({ route, navigation }) {
       return;
     }
     setIsProcessing(true);
+    setSheetStatus("processing");
     subscribeAgentPlan(plan.id, selectedLocalities)
       .then((server) => {
         applyServerPlan(server);
         const unmatched = Array.isArray(server?.unmatched_localities) ? server.unmatched_localities : [];
-        navigation.navigate("AgentPaymentSuccess", {
+        pendingSuccess.current = ["AgentPaymentSuccess", {
           planName: server?.plan_name || plan.name,
           locationLimit: `${(server?.localities || selectedLocalities).length} Localities (${server?.locality_limit || plan.locationLimit || 10} Limit)`,
           selectedLocalities: server?.localities || selectedLocalities,
           planValidity: plan.validity || "30 Days",
           amountPaid: formattedAmount,
-        });
+        }];
+        setSheetStatus("success");
         if (unmatched.length > 0) {
           Alert.alert(
             "Some localities aren't served yet",
@@ -117,6 +122,7 @@ export default function AgentPaymentScreen({ route, navigation }) {
         }
       })
       .catch((e) => {
+        setSheetStatus(null);
         const status = e?.status;
         const detail = typeof e?.detail === "string" ? e.detail : null;
         if (status === 401 || e?.kind === "login") {
@@ -150,7 +156,7 @@ export default function AgentPaymentScreen({ route, navigation }) {
     if (type === "card") {
       return (
         <View style={styles.cardIconBox}>
-          <CreditCard size={22} color="#111111" strokeWidth={1.9} />
+          <CreditCard size={22} color={COLORS.primary} strokeWidth={1.9} />
         </View>
       );
     }
@@ -208,7 +214,7 @@ export default function AgentPaymentScreen({ route, navigation }) {
             const isLast = index === paymentMethods.length - 1;
 
             return (
-              <View key={method.id} style={[!isLast && styles.methodItemContainerBorder]}>
+              <View key={method.id} style={[styles.methodCardItem, isSelected && styles.methodCardItemActive]}>
                 <TouchableOpacity
                   style={styles.methodRow}
                   onPress={() => setSelectedMethodId(method.id)}
@@ -333,7 +339,7 @@ export default function AgentPaymentScreen({ route, navigation }) {
             onPress={() => setShowAddMethodModal(true)}
             activeOpacity={0.8}
           >
-            <Plus size={16} color="#111111" strokeWidth={2.4} style={{ marginRight: 6 }} />
+            <Plus size={16} color={COLORS.primary} strokeWidth={2.4} style={{ marginRight: 6 }} />
             <Text style={styles.addMethodBtnText}>Add Payment Method</Text>
           </TouchableOpacity>
         </View>
@@ -405,6 +411,19 @@ export default function AgentPaymentScreen({ route, navigation }) {
           )}
         </TouchableOpacity>
       </View>
+
+      <StatusSheet
+        visible={sheetStatus !== null}
+        status={sheetStatus || "processing"}
+        subtitle={sheetStatus === "success" ? "Your plan is now active" : "Your payment is processing"}
+        buttonText="Continue"
+        onButtonPress={() => {
+          const args = pendingSuccess.current;
+          setSheetStatus(null);
+          pendingSuccess.current = null;
+          if (args) navigation.navigate(...args);
+        }}
+      />
 
       {/* Add Payment Method Modal */}
       <Modal
@@ -494,32 +513,35 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 24,
   },
-  methodsCard: {
+  methodCardItem: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#EEF2F6",
+    borderColor: "#E2E8F0",
+    borderRadius: 20,
+  },
+  methodCardItemActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#F8FBFF",
+  },
+  methodsCard: {
+    gap: 12,
+    marginBottom: 20,
   },
   methodItemContainerBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-    paddingBottom: 4,
   },
   methodRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    padding: 14,
   },
   methodIconWrapper: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: "#F8FAFC",
-    justifyContent: "center",
+    width: 44,
+    height: 44,
+    borderRadius: 100,
+    backgroundColor: "#EFF6FF",
     alignItems: "center",
-    marginRight: 14,
+    justifyContent: "center",
+    marginRight: 12,
   },
   cardIconBox: {
     justifyContent: "center",
@@ -538,24 +560,24 @@ const styles = StyleSheet.create({
   },
   methodTitle: {
     fontSize: 15,
-    fontWeight: "500",
-    color: "#111111",
+    fontWeight: "700",
+    color: "#0F172A",
   },
   methodSubtitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: "#64748B",
-    marginTop: 3,
-    fontWeight: "400",
+    marginTop: 2,
   },
   radioCircle: {
     width: 22,
     height: 22,
-    borderRadius: 11,
-    justifyContent: "center",
+    borderRadius: 100,
     alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
   },
   radioCircleSelected: {
-    backgroundColor: "#2563EB",
+    backgroundColor: COLORS.primary,
   },
   radioCircleUnselected: {
     borderWidth: 1.5,
@@ -563,31 +585,28 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   inlineFieldsBox: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    marginHorizontal: 14,
+    marginBottom: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#DBEAFE",
   },
   inlineLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "600",
     color: "#64748B",
     marginBottom: 6,
   },
   inlineInput: {
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
+    height: 48,
+    borderRadius: 100,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    paddingHorizontal: 12,
-    fontSize: 13,
-    color: "#111111",
-    marginBottom: 10,
-    outlineStyle: "none",
-    outlineWidth: 0,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 18,
+    fontSize: 15,
+    color: "#0F172A",
+    marginBottom: 12,
   },
   inlineRow: {
     flexDirection: "row",
@@ -598,40 +617,41 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   bankChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+    height: 36,
+    justifyContent: "center",
+    borderRadius: 100,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
   },
   bankChipActive: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#2563EB",
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   bankChipText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "600",
-    color: "#111111",
+    color: "#475569",
   },
   bankChipTextActive: {
-    color: "#2563EB",
+    color: "#FFFFFF",
   },
   addMethodBtn: {
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 14,
+    height: 52,
+    borderRadius: 100,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "#BFDBFE",
+    backgroundColor: "#FFFFFF",
   },
   addMethodBtnText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111111",
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.primary,
   },
   summaryCard: {
     backgroundColor: "#FFFFFF",

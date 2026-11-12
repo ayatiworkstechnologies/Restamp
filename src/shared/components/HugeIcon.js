@@ -60,6 +60,7 @@ import {
   Menu as LucideMenu,
   MessageCircle as LucideMessageCircle,
   MessageSquare as LucideMessageSquare,
+  Mic as LucideMic,
   Minus as LucideMinus,
   Pencil as LucidePencil,
   Phone as LucidePhone,
@@ -77,6 +78,7 @@ import {
   SlidersHorizontal as LucideSlidersHorizontal,
   Smartphone as LucideSmartphone,
   Sparkles as LucideSparkles,
+  Square as LucideSquare,
   SquarePen as LucideSquarePen,
   Star as LucideStar,
   Tag as LucideTag,
@@ -87,6 +89,8 @@ import {
   Upload as LucideUpload,
   User as LucideUser,
   Users as LucideUsers,
+  Volume2 as LucideVolume2,
+  VolumeX as LucideVolumeX,
   Wallet as LucideWallet,
   WifiOff as LucideWifiOff,
   Wrench as LucideWrench,
@@ -219,6 +223,10 @@ export const HugeUpload = createHuge(LucideUpload);
 export const HugeWallet = createHuge(LucideWallet);
 export const HugeWifiOff = createHuge(LucideWifiOff);
 export const HugeWrench = createHuge(LucideWrench);
+export const HugeMic = createHuge(LucideMic);
+export const HugeSquare = createHuge(LucideSquare);
+export const HugeVolume = createHuge(LucideVolume2);
+export const HugeVolumeX = createHuge(LucideVolumeX);
 
 // ================= Drop-in Component Aliases (Lucide names) =================
 export const AlertCircle = HugeAlertCircle;
@@ -278,6 +286,7 @@ export const Maximize2 = HugeMaximize;
 export const Menu = HugeMenu;
 export const MessageCircle = HugeMessage;
 export const MessageSquare = createHuge(LucideMessageSquare);
+export const Mic = HugeMic;
 export const Minus = HugeMinus;
 export const MoreHorizontal = HugeMoreHorizontal;
 export const MoreVertical = HugeMoreVertical;
@@ -300,6 +309,7 @@ export const ShieldCheck = HugeShieldCheck;
 export const SlidersHorizontal = HugeSliders;
 export const Smartphone = HugeSmartphone;
 export const Sparkles = HugeSparkles;
+export const Square = HugeSquare;
 export const SquarePen = createHuge(LucideSquarePen);
 export const Star = HugeStar;
 export const Tag = HugeTag;
@@ -309,6 +319,8 @@ export const Truck = HugeTruck;
 export const Upload = HugeUpload;
 export const User = HugeUser;
 export const Users = HugeUsers;
+export const Volume2 = HugeVolume;
+export const VolumeX = HugeVolumeX;
 export const Wallet = HugeWallet;
 export const WifiOff = HugeWifiOff;
 export const Wrench = HugeWrench;

@@ -5,11 +5,11 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   Modal,
   Platform,
   ActivityIndicator,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Search, X, XCircle, Check, ChevronDown, Bed, Maximize2 } from "../../../shared/components/HugeIcon.js";
 import SafeImage from "../../../shared/components/SafeImage.js";
@@ -1100,7 +1100,7 @@ const styles = StyleSheet.create({
   modalShowBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",

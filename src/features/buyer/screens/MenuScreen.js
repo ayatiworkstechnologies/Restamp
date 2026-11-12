@@ -1026,7 +1026,7 @@ const styles = StyleSheet.create({
   },
   refCtaBtn: {
     height: 38,
-    borderRadius: 10,
+    borderRadius: 100,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1166,7 +1166,7 @@ const styles = StyleSheet.create({
   /* Big Search Button (Original App Color) */
   flightSearchActionBtn: {
     height: 48,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
@@ -1306,7 +1306,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2563EB",
     paddingHorizontal: 13,
     paddingVertical: 6.5,
-    borderRadius: 10,
+    borderRadius: 100,
   },
   ownerTestBtnText: {
     fontSize: 11.5,

@@ -8,9 +8,9 @@ import {
   Image,
   Pressable,
   Modal,
-  KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { KeyboardAvoidingView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   SquarePen,
@@ -255,7 +255,7 @@ export default function MessageScreen() {
 
             {/* Message Bubble List */}
             <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              behavior="padding"
               style={{ flex: 1 }}
             >
               <FlatList

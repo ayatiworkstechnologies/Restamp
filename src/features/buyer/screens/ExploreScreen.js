@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Image,
   TouchableOpacity,
   TextInput,
@@ -11,6 +10,7 @@ import {
   Platform,
   Linking,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   MapPin,
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
     resizeMode: "cover",
   },
   localityOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: "rgba(15, 23, 42, 0.45)",
   },
   localityCountBadge: {

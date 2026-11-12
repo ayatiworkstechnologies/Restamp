@@ -334,7 +334,7 @@ export default function SearchScreen({ navigation, route }) {
 
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* ========================================================================= */}
@@ -1028,11 +1028,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
   },
   searchInputContainer: {
     flex: 1,
@@ -1045,11 +1040,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 14,
     marginHorizontal: 10,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
   },
   searchInput: {
     flex: 1,
@@ -1365,7 +1355,7 @@ const styles = StyleSheet.create({
   applyBtn: {
     flex: 2,
     height: 44,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",

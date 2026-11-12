@@ -40,6 +40,7 @@ import {
   SlidersHorizontal,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import RestampWordmark from "../../../shared/components/RestampWordmark.js";
 import TYPOGRAPHY from "../../../shared/constants/typography.js";
 import {
   PROPERTY_TYPES,
@@ -484,7 +485,7 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <ScrollView
         style={styles.container}
@@ -496,9 +497,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.header}>
           {/* Left Side Restamp Logotype */}
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>
-              Res<Text style={styles.logoTextAccent}>tamp</Text>
-            </Text>
+            <RestampWordmark height={20} />
           </View>
 
           {/* Right Side Header Actions: Login + Notification Bell. Owner mode
@@ -1389,13 +1388,8 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     paddingHorizontal: 16,
     height: 52,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: "#E2E8F0",
   },
   searchIcon: {
     marginRight: 10,
@@ -1626,7 +1620,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginRight: 12,
     borderWidth: 1,
-    borderColor: "#EEF2F6",
+    borderColor: "#E2E8F0",
   },
   recommendedImageContainer: {
     height: 110,
@@ -1684,7 +1678,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginRight: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "#E2E8F0",
   },
   recentImageWrap: {
     width: "100%",
@@ -1792,7 +1786,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginRight: 14,
     borderWidth: 1,
-    borderColor: "#EEF2F6",
+    borderColor: "#E2E8F0",
   },
   projectBanner: {
     backgroundColor: "#FEF3C7",
@@ -1966,7 +1960,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginRight: 14,
     borderWidth: 1,
-    borderColor: "#EEF2F6",
+    borderColor: "#E2E8F0",
   },
   demandCategoryTitle: {
     fontSize: 16,
@@ -2065,7 +2059,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginRight: 16,
     borderWidth: 1,
-    borderColor: "#EEF2F6",
+    borderColor: "#E2E8F0",
   },
   cardImageContainer: {
     height: 170,
@@ -2197,7 +2191,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#EEF2F6",
+    borderColor: "#E2E8F0",
   },
   verticalImageContainer: {
     height: 160,
@@ -2228,14 +2222,14 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     position: "relative",
     borderWidth: 1,
-    borderColor: "#EEF2F6",
+    borderColor: "#E2E8F0",
   },
   locationCardImage: {
     width: "100%",
     height: "100%",
   },
   locationOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
   },
   locationCardContent: {
@@ -2295,7 +2289,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#EEF2F6",
+    borderColor: "#E2E8F0",
   },
   modalSectionLabel: {
     ...TYPOGRAPHY.sectionHeading,

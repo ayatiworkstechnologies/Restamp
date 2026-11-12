@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   TouchableOpacity,
   Image,
@@ -12,6 +11,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ArrowLeft,
@@ -1004,7 +1004,7 @@ const styles = StyleSheet.create({
   },
   scheduleVisitBtn: {
     backgroundColor: "#E2E8F0",
-    borderRadius: 18,
+    borderRadius: 100,
     paddingVertical: 13,
     alignItems: "center",
     justifyContent: "center",

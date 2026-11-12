@@ -5,10 +5,10 @@ import {
   StyleSheet,
   StatusBar,
   TouchableOpacity,
-  ScrollView,
   TextInput,
   Alert,
 } from "react-native";
+import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ArrowLeft,
