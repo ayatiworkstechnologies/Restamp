@@ -48,8 +48,9 @@ import { fetchAgentPlan } from "../../../shared/api/agentPlans.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 import RestampLoginLogo from "../../../shared/components/RestampLoginLogo.js";
 
-// Internal-testing OTP code chip (only appears when the backend's test display
-// mode returns a code). Hidden per design; set true to show it again.
+// Development OTP code chip: appears only when the backend returned a code
+// (backend RESTAMP_OTP_DISPLAY_MODE=1 in a development environment; production
+// never returns one). Set false to hide it even then.
 const SHOW_OTP_CODE_CHIP = true;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -148,21 +149,11 @@ export default function LoginScreen({ navigation }) {
   const [canResend, setCanResend] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Backend-selected code for the restricted internal-testing display mode.
+  // Backend-selected code from the backend's development display mode.
   // Non-null ONLY when the backend actually returned debug_code (production
   // responses never contain it). The app never fabricates a code locally.
   const [devCode, setDevCode] = useState(null);
 
-  // Restricted demo login (visible demo-mode panel on the OTP screen,
-  // rendered ONLY when the OTP request itself failed — e.g. the production
-  // fail-closed 503 while SMS delivery is not connected). The demo code is
-  // the LAST SIX DIGITS of the phone entered on the same screen, typed by
-  // the authorized presenter at runtime ONLY: never hardcoded, never read
-  // from EXPO_PUBLIC_* or any bundle/env value, and never persisted
-  // anywhere — it lives solely in React state (digits as a string, so
-  // leading zeros are preserved) and is cleared the moment the request
-  // completes. Responses reuse the existing token contract; no fake
-  // success is ever simulated.
   // Input refs
   const phoneInputRef = useRef(null);
   const otpInputRefs = useRef([]);
@@ -324,7 +315,7 @@ export default function LoginScreen({ navigation }) {
     try {
       const resp = await requestOtp(fullPhone());
       // The backend includes the code in the response ONLY in the explicitly
-      // restricted internal-testing display mode (non-production, flag-set);
+      // development display mode (RESTAMP_OTP_DISPLAY_MODE=1, never production);
       // in every shipped configuration — ALWAYS in production — the response
       // carries no code and nothing is displayed or auto-filled. What is
       // shown is always the backend-SELECTED code taken from the response.
@@ -439,7 +430,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   // Tap-to-fill the code the backend actually issued (the chip is rendered
-  // only when the backend returned a code in an internal-testing run).
+  // only when the backend returned a code in development display mode).
   const handleAutoFill = (codeToFill) => {
     const targetCode = codeToFill || devCode;
     if (!targetCode) return;
@@ -905,8 +896,8 @@ export default function LoginScreen({ navigation }) {
                 })}
               </View>
 
-              {/* Internal-Testing Code Auto-fill Chip — rendered ONLY when the
-                  backend actually returned a code (restricted internal-testing
+              {/* Development Code Auto-fill Chip — rendered ONLY when the
+                  backend actually returned a code (development
                   display mode; never in production responses) */}
               {SHOW_OTP_CODE_CHIP && devCode ? (
                 <TouchableOpacity

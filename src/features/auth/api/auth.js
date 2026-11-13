@@ -1,7 +1,7 @@
 /**
  * Authentication API against the real backend contract:
  * - POST /auth/otp/request {phone} -> {message} normally; in the backend's
- *   restricted internal-testing display mode ONLY (non-production, flag-set,
+ *   development display mode ONLY (RESTAMP_OTP_DISPLAY_MODE=1, non-production,
  *   also refused at production startup) the backend-selected code is returned
  *   as `debug_code` so the login screen can show it. Production responses
  *   never contain a code and this module adds none of its own.
