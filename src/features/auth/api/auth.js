@@ -1,10 +1,9 @@
 /**
  * Authentication API against the real backend contract:
- * - POST /auth/otp/request {phone} -> {message} normally; in the backend's
- *   development display mode ONLY (RESTAMP_OTP_DISPLAY_MODE=1, non-production,
- *   also refused at production startup) the backend-selected code is returned
- *   as `debug_code` so the login screen can show it. Production responses
- *   never contain a code and this module adds none of its own.
+ * - POST /auth/otp/request {phone} -> {message, debug_code}. The backend has
+ *   ONE fixed testing OTP ("349086", app/services/otp.py) and returns it as
+ *   `debug_code` in local/staging so the login screen can show it. Production
+ *   responses never contain a code and this module adds none of its own.
  * - POST /auth/otp/verify {phone, code} -> TokenOut {access_token, ...}
  * - POST /auth/google {id_token} -> TokenOut {access_token, ...}
  *   (404 GOOGLE_UNKNOWN when the Google identity is not linked; no auto-creation)

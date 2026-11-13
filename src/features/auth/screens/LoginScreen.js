@@ -49,8 +49,8 @@ import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 import RestampLoginLogo from "../../../shared/components/RestampLoginLogo.js";
 
 // Development OTP code chip: appears only when the backend returned a code
-// (backend RESTAMP_OTP_DISPLAY_MODE=1 in a development environment; production
-// never returns one). Set false to hide it even then.
+// (the backend's fixed testing OTP "349086", returned in local/staging;
+// production never returns one). Set false to hide it even then.
 const SHOW_OTP_CODE_CHIP = true;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -149,7 +149,7 @@ export default function LoginScreen({ navigation }) {
   const [canResend, setCanResend] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Backend-selected code from the backend's development display mode.
+  // Backend code from the backend's fixed testing OTP.
   // Non-null ONLY when the backend actually returned debug_code (production
   // responses never contain it). The app never fabricates a code locally.
   const [devCode, setDevCode] = useState(null);
@@ -314,11 +314,10 @@ export default function LoginScreen({ navigation }) {
     setBusy(true);
     try {
       const resp = await requestOtp(fullPhone());
-      // The backend includes the code in the response ONLY in the explicitly
-      // development display mode (RESTAMP_OTP_DISPLAY_MODE=1, never production);
-      // in every shipped configuration — ALWAYS in production — the response
-      // carries no code and nothing is displayed or auto-filled. What is
-      // shown is always the backend-SELECTED code taken from the response.
+      // The backend includes the code in the response ONLY in local/staging
+      // (its fixed testing OTP "349086"); in production the request fails
+      // closed with a 503 and the response never carries a code. What is
+      // shown is always the code the backend itself returned.
       const serverCode =
         resp && resp.debug_code ? String(resp.debug_code) : null;
       setDevCode(serverCode);
@@ -329,7 +328,7 @@ export default function LoginScreen({ navigation }) {
       setFocusedOtpIndex(0);
     } catch (e) {
       // OTP request failed — normally the production fail-closed 503
-      // while SMS delivery is not connected, or offline/throttles/outages.
+      // (no OTP is issued there), or offline/throttles/outages.
       // Stay on the phone step: the OTP screen claims a code was sent.
       setDevCode(null);
       showAlert("Sign-in Failed", otpErrorMessage(e));
@@ -430,7 +429,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   // Tap-to-fill the code the backend actually issued (the chip is rendered
-  // only when the backend returned a code in development display mode).
+  // only when the backend returned a code: local/staging testing OTP).
   const handleAutoFill = (codeToFill) => {
     const targetCode = codeToFill || devCode;
     if (!targetCode) return;
@@ -459,7 +458,7 @@ export default function LoginScreen({ navigation }) {
       setTimer(30);
       setCanResend(false);
       // Same backend-driven rule as the initial request: whatever is shown
-      // is the code the backend just selected; a code-less response clears
+      // is the code the backend just returned; a code-less response clears
       // the chip (production never returns a code).
       const newCode =
         resp && resp.debug_code ? String(resp.debug_code) : null;
@@ -897,8 +896,8 @@ export default function LoginScreen({ navigation }) {
               </View>
 
               {/* Development Code Auto-fill Chip — rendered ONLY when the
-                  backend actually returned a code (development
-                  display mode; never in production responses) */}
+                  backend actually returned a code (its local/staging
+                  testing OTP; never in production responses) */}
               {SHOW_OTP_CODE_CHIP && devCode ? (
                 <TouchableOpacity
                   style={styles.devCodeNotice}
