@@ -1600,6 +1600,20 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home" })
               </View>
             ) : null}
 
+            {/* Email (read-only: comes from the linked login; PATCH /users/me
+                only accepts display_name, so it cannot be edited here) */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email</Text>
+              <View style={[styles.textInput, { justifyContent: "center" }]}>
+                <Text
+                  style={{ fontSize: 16, color: authUser?.email ? "#0F172A" : "#94A3B8" }}
+                  numberOfLines={1}
+                >
+                  {authUser?.email || "No email linked"}
+                </Text>
+              </View>
+            </View>
+
             {/* Action Buttons */}
             <View style={styles.editModalButtonsRow}>
               <TouchableOpacity
@@ -2494,20 +2508,20 @@ const styles = StyleSheet.create({
   cancelModalBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 12,
+    borderRadius: 100,
     backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
   },
   cancelModalBtnText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
     color: "#64748B",
   },
   saveModalBtn: {
-    flex: 2,
+    flex: 1,
     height: 48,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",

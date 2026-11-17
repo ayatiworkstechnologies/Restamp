@@ -34,7 +34,7 @@ import OwnerHeader from "../components/OwnerHeader.js";
 import OwnerPropertyCard from "../components/OwnerPropertyCard.js";
 import EmptyState from "../components/EmptyState.js";
 import ConfirmationModal from "../components/ConfirmationModal.js";
-import OwnerPropertyDetailModal from "./OwnerPropertyDetailModal.js";
+import PropertyDetailModal from "../../buyer/components/PropertyDetailModal.js";
 
 const STATUS_TABS = [
   "All",
@@ -353,6 +353,30 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
     return Number.isFinite(n) && n > 0 ? n : null;
   };
 
+  // Map an owner card onto the shape the buyer details sheet reads; the
+  // sheet then loads the full record from GET /owner/listings/{id}.
+  const toBuyerPreview = (property) => {
+    if (!property) return null;
+    const images = property.images?.length
+      ? property.images
+      : property.coverPhoto
+      ? [property.coverPhoto]
+      : [];
+    const price =
+      property.priceFormatted ||
+      (property.price
+        ? `₹${Number(property.price).toLocaleString("en-IN")}${property.priceUnit || ""}`
+        : "Price on request");
+    return {
+      ...property,
+      backendId: serverListingId(property) ?? undefined,
+      price,
+      location: property.address || [property.locality, property.city].filter(Boolean).join(", "),
+      image: images[0],
+      gallery: images,
+    };
+  };
+
   // Guards duplicate taps while a lifecycle request is in flight.
   const [transitionBusyId, setTransitionBusyId] = useState(null);
 
@@ -637,9 +661,11 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
       />
 
       {/* Full Preview Modal for Owner */}
-      <OwnerPropertyDetailModal
+      {/* Preview uses the buyer property-details design (owner mode). */}
+      <PropertyDetailModal
+        ownerPreview
         visible={Boolean(selectedPropertyForPreview)}
-        property={selectedPropertyForPreview}
+        property={toBuyerPreview(selectedPropertyForPreview)}
         onClose={() => setSelectedPropertyForPreview(null)}
         onEdit={(prop) => {
           setSelectedPropertyForPreview(null);

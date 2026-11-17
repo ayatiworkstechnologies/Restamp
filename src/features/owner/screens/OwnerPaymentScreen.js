@@ -28,6 +28,7 @@ import StatusSheet from "../../../shared/components/StatusSheet.js";
 import { useOwner } from "../context/OwnerContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { ensureOwnerRole } from "../../../shared/api/users.js";
+import { subscribeOwnerPlan } from "../../../shared/api/ownerPlans.js";
 
 export default function OwnerPaymentScreen({ route, navigation }) {
   const auth = useAuth();
@@ -99,6 +100,12 @@ export default function OwnerPaymentScreen({ route, navigation }) {
       }
       const txnId = `SIM-${Date.now().toString().slice(-8)}`;
       activateSubscription({ ...plan, amountPaid: formattedAmount, txnId });
+      // Save the plan on the server so it survives logout and role switches.
+      // If this backend has no owner-plan endpoint yet, the plan stays active
+      // for this session only.
+      subscribeOwnerPlan(plan.id).catch((e) => {
+        console.warn("[owner-plan] not saved on server:", e?.status || e?.message);
+      });
       ensureOwnerRole(auth).catch(() => {});
       pendingSuccess.current = ["OwnerPaymentSuccess", {
         planName: plan.name,

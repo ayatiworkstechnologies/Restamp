@@ -1,0 +1,131 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>RESTAMP Information Architecture</title>
+<style>
+@page { size: A4 landscape; margin: 12mm; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color:#0F172A; margin:0; }
+.page { page-break-after: always; zoom:.82; }
+.page:last-child { page-break-after: auto; }
+h1 { font-size: 22px; margin:0 0 2px; }
+h2 { font-size: 13px; font-weight:500; color:#64748B; margin:0 0 14px; }
+h3 { font-size: 13px; margin:0 0 8px; color:#2563EB; letter-spacing:.3px; text-transform:uppercase; }
+.node { border:1.5px solid #CBD5E1; border-radius:9px; padding:6px 10px; font-size:12px; background:#fff; text-align:center; display:inline-block; }
+.root { background:#2563EB; color:#fff; border-color:#2563EB; font-weight:600; font-size:13px; }
+.l1 { background:#EFF6FF; border-color:#2563EB; font-weight:600; }
+.lock { background:#F8FAFC; border-style:dashed; }
+.center { text-align:center; }
+.v { width:1.5px; height:14px; background:#94A3B8; margin:0 auto; }
+.cols { display:grid; gap:14px; }
+.c3 { grid-template-columns: repeat(3, 1fr); }
+.c4 { grid-template-columns: repeat(4, 1fr); }
+.card { border:1px solid #E2E8F0; border-radius:12px; padding:12px; background:#fff; }
+.card.buyer { border-top:4px solid #2563EB; }
+.card.owner { border-top:4px solid #0EA5E9; }
+.card.agent { border-top:4px solid #6366F1; }
+.tab { font-weight:600; font-size:12px; margin:8px 0 3px; display:flex; align-items:center; gap:6px; }
+.tab i { font-style:normal; background:#F1F5F9; color:#475569; border-radius:4px; padding:1px 5px; font-size:10px; }
+ul { margin:0 0 0 2px; padding-left:14px; font-size:11px; color:#334155; line-height:1.5; }
+li small { color:#94A3B8; }
+.bar { border:1px solid #E2E8F0; border-radius:10px; padding:8px 12px; font-size:11.5px; background:#F8FAFC; margin-top:12px; }
+table { border-collapse:collapse; width:100%; font-size:11.5px; }
+th, td { border:1px solid #E2E8F0; padding:6px 8px; text-align:left; vertical-align:top; }
+th { background:#F1F5F9; font-weight:600; }
+.yes { color:#16A34A; font-weight:600; } .no { color:#DC2626; font-weight:600; } .warn { color:#B45309; font-weight:600; }
+</style></head><body>
+
+<!-- PAGE 1: SITEMAP -->
+<section class="page">
+<h1>RESTAMP · Information Architecture</h1>
+<h2>Sitemap · one phone number = one account with three contexts (Buyer / Owner / Agent)</h2>
+
+<div class="center"><span class="node root">RESTAMP App</span></div>
+<div class="v"></div>
+<div class="center">
+  <span class="node l1">Get Started (phone)</span> →
+  <span class="node l1">OTP Verification</span> →
+  <span class="node l1">What's your name? + role chips</span>
+  <span style="font-size:11px;color:#64748B">&nbsp;(new users only · Skip = guest browsing)</span>
+</div>
+<div class="v"></div>
+<div class="center"><span class="node" style="background:#FEF9C3;border-color:#EAB308">Role Switcher · Buyer | Owner | Agent</span>
+  <span style="font-size:11px;color:#64748B">&nbsp;on Buyer Home + Profile access cards · locked roles open their plan screen</span></div>
+<div class="v"></div>
+
+<div class="cols c3">
+  <div class="card buyer">
+    <h3>Buyer · always available</h3>
+    <div class="tab">Home <i>tab</i></div>
+    <ul><li>Deal tabs: Buy · Resale · Rent · Lease</li><li>Search bar + category chips</li><li>Property feed → Property Details
+      <ul><li>Gallery · Similar properties</li><li>View Number <small>(3 free, then Buyer Plans)</small></li><li>Enquire · Schedule Visit · Save</li></ul></li>
+      <li>Notifications · Reva AI assistant</li></ul>
+    <div class="tab">Search <i>tab</i></div>
+    <ul><li>Search Property sheet → results list</li><li>Explore by locality</li></ul>
+    <div class="tab">Activity <i>tab</i></div>
+    <ul><li>Saved properties · Viewed · Calls / messages</li></ul>
+    <div class="tab">Profile <i>tab</i></div>
+    <ul><li>Owner Dashboard card · Agent Dashboard card</li><li>Account · Linked accounts · My Activity · Settings</li></ul>
+    <div class="tab">Menu <i>tab</i></div>
+    <ul><li>Owner Plan · Agent Plan · market insights</li></ul>
+  </div>
+
+  <div class="card owner">
+    <h3>Owner · needs Owner Plan</h3>
+    <div class="tab">Dashboard <i>tab</i></div>
+    <ul><li>List a New Property banner</li><li>Recent Enquiries</li><li>Owner Plan status</li></ul>
+    <div class="tab">Properties <i>tab</i></div>
+    <ul><li>My listings · drafts</li><li>Property detail → Property Leads</li></ul>
+    <div class="tab">Add <i>tab</i></div>
+    <ul><li>Multi-step listing form <small>(details, photos, documents)</small></li><li>Publish Success</li></ul>
+    <div class="tab">Leads <i>tab</i></div>
+    <ul><li>Lead list → Lead Detail
+      <ul><li>Contact buyer · Notes / replies</li><li>Site visits · Close lead</li></ul></li><li>Visits</li></ul>
+    <div class="tab">Profile <i>tab</i></div>
+    <ul><li>Edit name · Plan · Switch to Find Property</li></ul>
+    <div class="tab">Plan flow</div>
+    <ul><li>Owner Plans → Confirm → Payment → Success / Failed</li></ul>
+  </div>
+
+  <div class="card agent">
+    <h3>Agent · needs Agent Plan</h3>
+    <div class="tab">Dashboard <i>tab</i></div>
+    <ul><li>Subscribed areas · activity summary</li></ul>
+    <div class="tab">Properties <i>tab</i></div>
+    <ul><li>Owner-posted properties in chosen areas only</li><li>Cannot add or publish properties</li></ul>
+    <div class="tab">Activity <i>tab</i></div>
+    <ul><li>Leads → Lead Detail</li><li>Site visits</li></ul>
+    <div class="tab">Profile <i>tab</i></div>
+    <ul><li>Plan & areas · Earnings · Switch to Find Property</li></ul>
+    <div class="tab">Plan flow</div>
+    <ul><li>Agent Plan (Menu) → Choose Your Locations <small>(5 / 10 / 15)</small> → Confirm → Payment → Success</li><li>Free trial: 1 area</li></ul>
+  </div>
+</div>
+
+<div class="bar"><b>Shared screens (all contexts):</b> Notifications · Active Memberships & Plans · Buyer Plans · My Enquiries · Login (opened by protected actions, then resumes the action)</div>
+</section>
+
+<!-- PAGE 2: ENTITLEMENTS & CONTENT -->
+<section class="page">
+<h1>Access Rules & Entitlements</h1>
+<h2>Each plan is stored on its own · buying one never removes another</h2>
+
+<table>
+  <tr><th style="width:14%">Context</th><th style="width:22%">Entry points</th><th style="width:22%">Access rule</th><th style="width:20%">Source of truth</th><th>Persists after relogin</th></tr>
+  <tr><td><b>Guest</b></td><td>Skip on Get Started</td><td>Browse Home, Search, Property Details. Protected actions open Login.</td><td>—</td><td>—</td></tr>
+  <tr><td><b>Buyer</b></td><td>Default after login · Role switcher · "Switch to Find Property"</td><td>Always open. 3 free unique contact reveals, then Buyer Plan.</td><td>Server: <code>/buyer/plan</code>, contact endpoint returns 402</td><td class="yes">Yes</td></tr>
+  <tr><td><b>Owner</b></td><td>Name-screen chip · Role switcher · Profile card · Menu → Owner Plan</td><td>Plan active → Owner Dashboard, else Owner Plans</td><td>Device only (no owner-plan API)</td><td class="no">No · backend gap</td></tr>
+  <tr><td><b>Agent</b></td><td>Name-screen chip · Role switcher · Profile card · Menu → Agent Plan</td><td>Plan active → Agent Dashboard, else Agent Plan</td><td>Server: <code>/broker/plan</code></td><td class="yes">Yes</td></tr>
+</table>
+
+<div class="cols c4" style="margin-top:16px">
+  <div class="card"><h3>Account</h3><ul><li>Personal Information</li><li>Saved Address</li><li>Active Memberships & Plans</li></ul></div>
+  <div class="card"><h3>Linked accounts</h3><ul><li>Google link <small>(profile only; sign-in removed)</small></li></ul></div>
+  <div class="card"><h3>My activity</h3><ul><li>Saved Properties</li><li>My Enquiries</li></ul></div>
+  <div class="card"><h3>Settings</h3><ul><li>Notifications · Language</li><li>Help & Support</li><li>Terms · Privacy Policy</li><li>Logout</li></ul></div>
+</div>
+<div style="font-size:11px;color:#64748B;margin-top:6px">Buyer Profile sections (top to bottom: header, Owner card, Agent card, then the four groups above)</div>
+
+<div class="bar"><b>Notes:</b> Only one context is active on the server at a time, so switching makes a server call; the session is kept. ·
+Agent tabs in the current build are Dashboard · Properties · Activity · Profile (Leads and Visits live inside Activity). ·
+Buyer and Owner plan payments are simulated until a payment gateway is connected.</div>
+</section>
+</body></html>

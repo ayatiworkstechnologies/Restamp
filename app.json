@@ -16,7 +16,13 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-      ]
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#FFFFFF"
+      }
     },
     "ios": {
       "bundleIdentifier": "com.restamp.app",
@@ -50,13 +56,15 @@
     ],
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {
         "projectId": "4923b31d-379d-4763-95cb-a95b7245cf3d"
       }
     },
-    "owner": "srinathgovindaraj"
+    "owner": "srinathgovindaraj",
+    "icon": "./assets/icon.png"
   }
 }

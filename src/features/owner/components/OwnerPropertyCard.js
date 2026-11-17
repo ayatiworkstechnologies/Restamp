@@ -238,7 +238,7 @@ function OwnerPropertyCard({
                 onPress={() => onViewProperty?.(property)}
                 activeOpacity={0.8}
               >
-                <ExternalLink size={15} color={COLORS.primary} style={{ marginRight: 4 }} />
+                <ExternalLink size={15} color={COLORS.primary} style={{ marginRight: 6 }} />
                 <Text style={styles.outlineBtnText}>Preview</Text>
               </TouchableOpacity>
             </>
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   primaryBtn: {
-    flex: 2,
+    flex: 1,
     height: 44,
     borderRadius: 100,
     backgroundColor: COLORS.primary,
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
   },
   outlineBtnText: {
     color: COLORS.textDark,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "500",
   },
   moderationNoticeBar: {

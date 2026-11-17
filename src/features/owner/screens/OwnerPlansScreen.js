@@ -52,7 +52,7 @@ export default function OwnerPlansScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* TOP HEADER: Circular Back Button | Screen Title */}
       <View style={styles.header}>
@@ -61,7 +61,7 @@ export default function OwnerPlansScreen({ navigation }) {
           onPress={handleBackToBuyer}
           activeOpacity={0.7}
         >
-          <ArrowLeft size={20} color="#FFFFFF" strokeWidth={2.2} />
+          <ArrowLeft size={20} color="#0F172A" strokeWidth={2.2} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
@@ -147,7 +147,7 @@ export default function OwnerPlansScreen({ navigation }) {
 
         {/* Assurance Box */}
         <View style={styles.assuranceBox}>
-          <ShieldCheck size={16} color="#4ADE80" style={{ marginRight: 8 }} />
+          <ShieldCheck size={16} color="#16A34A" style={{ marginRight: 8 }} />
           <Text style={styles.assuranceText}>
             Plan prices are indicative; no payment or refund flow is available.
           </Text>
@@ -162,7 +162,7 @@ export default function OwnerPlansScreen({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: "#FFFFFF",
   },
   header: {
     flexDirection: "row",
@@ -171,18 +171,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 14,
-    backgroundColor: "#000000",
+    backgroundColor: "#FFFFFF",
   },
   circleBackBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#111827",
+    backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#1F2937",
-    shadowColor: "#000000",
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -195,12 +195,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: "#0F172A",
     letterSpacing: -0.3,
   },
   container: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: "#FFFFFF",
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -217,14 +217,14 @@ const styles = StyleSheet.create({
   paneTitle: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: "#0F172A",
     letterSpacing: -0.4,
   },
   roleBadgeOwner: {
     marginLeft: 10,
-    backgroundColor: "#052E16",
+    backgroundColor: "#F0FDF4",
     borderWidth: 1,
-    borderColor: "#166534",
+    borderColor: "#BBF7D0",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
@@ -232,11 +232,11 @@ const styles = StyleSheet.create({
   roleBadgeTextOwner: {
     fontSize: 10,
     fontWeight: "600",
-    color: "#4ADE80",
+    color: "#16A34A",
   },
   paneSubtitle: {
     fontSize: 13,
-    color: "#94A3B8",
+    color: "#64748B",
     marginTop: 4,
     lineHeight: 18,
   },
@@ -252,17 +252,17 @@ const styles = StyleSheet.create({
 
   /* ================= SLEEK DARK PRICING CARDS ================= */
   planCard: {
-    backgroundColor: "#000000",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: "#1F2430",
+    borderColor: "#E2E8F0",
     marginBottom: 16,
   },
   planName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#E2E8F0",
+    color: "#1E293B",
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
   priceBig: {
     fontSize: 32,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: "#0F172A",
     letterSpacing: -0.5,
   },
   originalPriceText: {
@@ -287,13 +287,13 @@ const styles = StyleSheet.create({
   },
   billingText: {
     fontSize: 14,
-    color: "#94A3B8",
+    color: "#64748B",
     fontWeight: "400",
     marginBottom: 18,
   },
   cardDivider: {
     height: 1,
-    backgroundColor: "#1F2430",
+    backgroundColor: "#E2E8F0",
     marginHorizontal: -20,
     marginBottom: 18,
   },
@@ -306,12 +306,12 @@ const styles = StyleSheet.create({
   listingsLabel: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#FFFFFF",
+    color: "#0F172A",
   },
   listingsValue: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: "#0F172A",
   },
   featuresList: {
     gap: 12,
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 14,
-    color: "#E2E8F0",
+    color: "#1E293B",
     fontWeight: "400",
     lineHeight: 20,
     flex: 1,
@@ -338,28 +338,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#27272A",
-    backgroundColor: "#0A0A0A",
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
   },
   choosePlanText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: "#0F172A",
   },
 
   assuranceBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#052E16",
+    backgroundColor: "#F0FDF4",
     padding: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#166534",
+    borderColor: "#BBF7D0",
     marginTop: 8,
   },
   assuranceText: {
     fontSize: 12,
-    color: "#86EFAC",
+    color: "#166534",
     fontWeight: "500",
     flex: 1,
     lineHeight: 17,

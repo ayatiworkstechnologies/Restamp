@@ -33,6 +33,10 @@ export async function fetchMe() {
   return apiGetAuth("/auth/me");
 }
 
+export async function updateProfileEmail(email) {
+  return apiPatchAuth("/users/me", { email: email || "" });
+}
+
 export async function updateProfileName(displayName) {
   return apiPatchAuth("/users/me", { display_name: displayName });
 }

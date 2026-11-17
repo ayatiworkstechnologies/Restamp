@@ -1,0 +1,145 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>RESTAMP App Flow</title>
+<style>
+@page { size: A4 landscape; margin: 14mm; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color:#0F172A; margin:0; }
+.page { page-break-after: always; zoom: .82; }
+.page:last-child { page-break-after: auto; }
+h1 { font-size: 22px; margin:0 0 2px; }
+h2 { font-size: 13px; font-weight:500; color:#64748B; margin:0 0 16px; }
+.col { display:flex; flex-direction:column; align-items:center; }
+.row { display:flex; gap:22px; justify-content:center; align-items:flex-start; }
+.box { border:1.5px solid #CBD5E1; border-radius:10px; padding:8px 12px; font-size:12px; text-align:center; background:#fff; min-width:150px; max-width:230px; }
+.box b { display:block; font-size:12.5px; }
+.box small { color:#64748B; font-size:10.5px; }
+.start { background:#2563EB; color:#fff; border-color:#2563EB; border-radius:999px; }
+.start small { color:#DBEAFE; }
+.dec { background:#FEF9C3; border-color:#EAB308; }
+.ok { background:#DCFCE7; border-color:#16A34A; }
+.plan { background:#EFF6FF; border-color:#2563EB; }
+.gap { background:#FEE2E2; border-color:#DC2626; }
+.arrow { color:#94A3B8; font-size:16px; line-height:18px; margin:2px 0; text-align:center; }
+.lbl { font-size:10px; color:#475569; font-weight:600; }
+.branch { border:1px dashed #CBD5E1; border-radius:12px; padding:10px; }
+.legend { display:flex; gap:12px; font-size:10.5px; margin-top:14px; justify-content:center; }
+.legend span { display:inline-flex; align-items:center; gap:5px; }
+.sw { width:14px; height:10px; border-radius:3px; border:1.5px solid; display:inline-block; }
+.note { font-size:10.5px; color:#475569; margin-top:10px; text-align:center; }
+</style></head><body>
+
+<!-- PAGE 1 -->
+<section class="page">
+<h1>1 · Sign-in & Onboarding</h1>
+<h2>Phone OTP only (Google / Apple removed) · LoginScreen.js</h2>
+<div class="col">
+  <div class="box start"><b>Open App</b></div>
+  <div class="arrow">↓</div>
+  <div class="box"><b>Get Started</b><small>Phone number + Continue · Skip → browse as guest</small></div>
+  <div class="arrow">↓ <span class="lbl">POST send OTP</span></div>
+  <div class="box"><b>OTP Verification</b><small>6 digits · OS autofill / paste · Resend after 30s</small></div>
+  <div class="arrow">↓</div>
+  <div class="box dec"><b>Code valid?</b><small>No → "Invalid or expired code", stay on screen</small></div>
+  <div class="arrow">↓ <span class="lbl">Yes · JWT session saved</span></div>
+  <div class="box dec"><b>Profile has a name?</b></div>
+  <div class="row" style="margin-top:6px">
+    <div class="col branch">
+      <div class="lbl">YES · returning user</div>
+      <div class="arrow">↓</div>
+      <div class="box dec"><b>Server agent plan?</b><small>Yes → Agent Dashboard</small></div>
+      <div class="arrow">↓ <span class="lbl">No</span></div>
+      <div class="box dec"><b>Role = OWNER?</b><small>Yes → Owner Dashboard</small></div>
+      <div class="arrow">↓ <span class="lbl">No</span></div>
+      <div class="box ok"><b>Buyer Home</b></div>
+    </div>
+    <div class="col branch">
+      <div class="lbl">NO · new user</div>
+      <div class="arrow">↓</div>
+      <div class="box"><b>What's your name?</b><small>First + Last name · Buyer / Owner / Agent chips</small></div>
+      <div class="arrow">↓ <span class="lbl">Complete & Continue (name saved)</span></div>
+      <div class="row">
+        <div class="col"><div class="lbl">Buyer</div><div class="arrow">↓</div><div class="box ok" style="min-width:110px"><b>Buyer Home</b><small>no payment</small></div></div>
+        <div class="col"><div class="lbl">Owner</div><div class="arrow">↓</div><div class="box plan" style="min-width:110px"><b>Owner Plan</b><small>see page 2</small></div></div>
+        <div class="col"><div class="lbl">Agent</div><div class="arrow">↓</div><div class="box plan" style="min-width:110px"><b>Agent Plan</b><small>see page 2</small></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="legend">
+  <span><i class="sw" style="background:#2563EB;border-color:#2563EB"></i>Start</span>
+  <span><i class="sw" style="background:#FEF9C3;border-color:#EAB308"></i>Decision</span>
+  <span><i class="sw" style="background:#DCFCE7;border-color:#16A34A"></i>Destination</span>
+  <span><i class="sw" style="background:#EFF6FF;border-color:#2563EB"></i>Plan screen</span>
+  <span><i class="sw" style="background:#FEE2E2;border-color:#DC2626"></i>Backend gap</span>
+</div>
+</section>
+
+<!-- PAGE 2 -->
+<section class="page">
+<h1>2 · Plans & Role Switching</h1>
+<h2>One phone number = one account · each plan is stored on its own</h2>
+<div class="col">
+  <div class="box ok"><b>Buyer Home</b><small>Role switcher: Buyer | Owner | Agent (locked = needs plan)</small></div>
+  <div class="arrow">↓ <span class="lbl">also from Profile → Owner / Agent access cards</span></div>
+  <div class="row">
+    <div class="col branch">
+      <div class="lbl">OWNER</div>
+      <div class="arrow">↓</div>
+      <div class="box dec"><b>Owner plan active?</b></div>
+      <div class="arrow">↓ <span class="lbl">No</span></div>
+      <div class="box plan"><b>Owner Plan</b><small>existing screen</small></div>
+      <div class="arrow">↓</div>
+      <div class="box"><b>Payment → Confirmation</b><small>simulated · no gateway yet</small></div>
+      <div class="arrow">↓</div>
+      <div class="box ok"><b>Owner Dashboard</b><small>Dashboard · Properties · Add · Leads · Profile</small></div>
+      <div class="arrow">↑ <span class="lbl">Yes → straight here (server role switch)</span></div>
+      <div class="box gap"><b>Gap: no owner-plan API</b><small>purchase is device-only, lost on logout</small></div>
+    </div>
+    <div class="col branch">
+      <div class="lbl">AGENT</div>
+      <div class="arrow">↓</div>
+      <div class="box dec"><b>Agent plan active?</b><small>checked on server</small></div>
+      <div class="arrow">↓ <span class="lbl">No</span></div>
+      <div class="box plan"><b>Agent Plan</b><small>Menu → Agent tab · free trial available</small></div>
+      <div class="arrow">↓</div>
+      <div class="box plan"><b>Choose Your Locations</b><small>5 / 10 / 15 areas</small></div>
+      <div class="arrow">↓</div>
+      <div class="box"><b>Confirm → Payment → Success</b></div>
+      <div class="arrow">↓</div>
+      <div class="box ok"><b>Agent Dashboard</b><small>Dashboard · Properties · Leads · Visits · Profile</small></div>
+      <div class="arrow">↑ <span class="lbl">Yes → straight here</span></div>
+    </div>
+    <div class="col branch">
+      <div class="lbl">SWITCH BACK</div>
+      <div class="arrow">↓</div>
+      <div class="box"><b>Buyer selected</b><small>from any dashboard</small></div>
+      <div class="arrow">↓ <span class="lbl">server role → BUYER</span></div>
+      <div class="box ok"><b>Buyer Home</b><small>session kept · never logs out</small></div>
+    </div>
+  </div>
+  <div class="note">Buying Owner never removes Agent and vice versa · Buyer access is always available · each plan expires on its own</div>
+</div>
+</section>
+
+<!-- PAGE 3 -->
+<section class="page">
+<h1>3 · Buyer Contact Reveal</h1>
+<h2>3 free unique contacts · limit enforced by the backend, not the app</h2>
+<div class="col">
+  <div class="box ok"><b>Buyer Home</b></div>
+  <div class="arrow">↓</div>
+  <div class="box"><b>Property Details</b></div>
+  <div class="arrow">↓</div>
+  <div class="box"><b>Tap View Number</b></div>
+  <div class="arrow">↓</div>
+  <div class="box dec"><b>Signed in?</b><small>No → Login, then resume this action</small></div>
+  <div class="arrow">↓ <span class="lbl">Yes · POST /buyer/listings/{id}/contact</span></div>
+  <div class="box dec"><b>Server checks plan / free allowance</b><small>same contact again = no extra use · failed reveal = no use</small></div>
+  <div class="row" style="margin-top:6px">
+    <div class="col"><div class="lbl">1st–3rd new contact, or plan has leads</div><div class="arrow">↓</div><div class="box ok"><b>Number shown</b><small>Call / WhatsApp</small></div></div>
+    <div class="col"><div class="lbl">4th new contact · 402 BUYER_PLAN_REQUIRED</div><div class="arrow">↓</div><div class="box plan"><b>Buyer Plans</b><small>number stays hidden</small></div><div class="arrow">↓</div><div class="box"><b>Subscribe</b><small>simulated payment</small></div><div class="arrow">↓</div><div class="box ok"><b>Reveal allowed per plan</b></div></div>
+  </div>
+  <div class="note">The count survives logout and restart because it is stored on the server.</div>
+</div>
+</section>
+</body></html>

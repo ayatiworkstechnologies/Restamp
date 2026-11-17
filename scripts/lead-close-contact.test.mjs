@@ -149,7 +149,7 @@ check(
 check(
   "K21 the glue opens URLs with Linking and alerts when nothing opened",
   glueSrc.includes("Linking.openURL(url)") && glueSrc.includes("revealLeadBuyerContact") &&
-    glueSrc.includes("if (!result.ok) Alert.alert(result.title, result.message)")
+    glueSrc.includes("if (!result.ok) {") && glueSrc.includes("Alert.alert(result.title, result.message)")
 );
 
 // --- L: closed leads are read-only ----------------------------------------------------

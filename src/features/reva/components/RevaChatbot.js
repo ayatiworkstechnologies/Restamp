@@ -13,6 +13,8 @@ import {
   SafeAreaView,
   Pressable,
   Animated,
+  ScrollView,
+  Image,
 } from "react-native";
 import { KeyboardAvoidingView } from "../../../shared/components/KeyboardSafe.js";
 import * as Speech from "expo-speech";
@@ -50,6 +52,11 @@ import {
 import { useReva } from "../context/RevaContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { navigationRef } from "../../../shared/navigation/navRef.js";
+import { apiGet } from "../../../shared/api/client.js";
+import { buildListingParams, toUiProperty } from "../../../shared/api/mappers.js";
+import { fetchSavedWishlist } from "../../buyer/api/saved.js";
+import ViewNumberButton from "../../buyer/components/ViewNumberButton.js";
+import { fetchBuyerVisits, toUiVisit } from "../../../shared/api/visits.js";
 import { enterOwnerFlow } from "../../../shared/api/users.js";
 
 // Screens where the Reva button and chat must not appear.
@@ -110,6 +117,8 @@ export default function RevaChatbot() {
 
   const listRef = useRef(null);
   const nextId = useRef(1);
+  // Contact-owner flow: true while Reva waits for a property / location name.
+  const awaitingContactSearch = useRef(false);
   const activeAbort = useRef(null);
   const fabScale = useRef(new Animated.Value(1)).current;
   const webMediaRecorder = useRef(null);
@@ -298,6 +307,7 @@ export default function RevaChatbot() {
   const submit = useCallback(
     async (text, opts) => {
       const viaVoice = !!opts?.voice;
+      const dataKind = opts?.dataKind || null;
       const question = String(text ?? draft).trim();
       if (!question || busy || (!viaVoice && (recording || transcribing))) return;
       setVoiceNotice("");
@@ -321,6 +331,45 @@ export default function RevaChatbot() {
       const prev = messages;
       setMessages((items) => [...items, userMsg]);
 
+      const botMsg = (fields) => ({ id: `msg-${++nextId.current}`, from: "assistant", language, ...fields });
+
+      // Contact owner, step 1: ask what to search for (chip, or typed
+      // "contact owner" / "owner number" / "call owner").
+      const contactIntent =
+        dataKind === "contactPrompt" ||
+        /\b(contact|call|phone|number)\b.*\bowner\b|\bowner\b.*\b(contact|number|phone)\b/i.test(question);
+      if (contactIntent && !awaitingContactSearch.current) {
+        awaitingContactSearch.current = true;
+        setMessages((items) => [
+          ...items,
+          botMsg({ text: "Sure! Type the property name or location (e.g. \"Anna Nagar\" or \"4 BHK Villa\") and I'll find matching properties." }),
+        ]);
+        setBusy(false);
+        return;
+      }
+
+      // Contact owner, step 2: search real listings (GET /buyer/listings?q=)
+      // and let the user pick one.
+      if (awaitingContactSearch.current) {
+        awaitingContactSearch.current = false;
+        try {
+          const data = await apiGet("/buyer/listings", buildListingParams({ searchQuery: question }, 1, 8));
+          const found = (data.items || []).map(toUiProperty);
+          setMessages((items) => [
+            ...items,
+            found.length
+              ? botMsg({ text: `I found ${found.length} ${found.length === 1 ? "property" : "properties"} for "${question}". Tap one to see the owner's contact details.`, listings: found, pickContact: true })
+              : botMsg({ text: `I couldn't find any properties for "${question}". Try another property name or location.`, retryContact: true }),
+          ]);
+          if (!found.length) awaitingContactSearch.current = true;
+        } catch (e) {
+          setMessages((items) => [...items, botMsg({ text: "Couldn't search properties right now. Please try again." })]);
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
+
       const controller = new AbortController();
       activeAbort.current = controller;
 
@@ -336,6 +385,43 @@ export default function RevaChatbot() {
 
         if (controller.signal.aborted) return;
 
+        // Quick-action chips attach the user's real data (never sample data):
+        // listings -> GET /buyer/listings, saved -> GET /buyer/saved,
+        // visits -> GET /buyer/visits. Saved/visits need a login; on failure,
+        // an empty result, or no login, a short honest note replaces cards.
+        let listings = null;
+        let listingsRoute = "Search";
+        let visits = null;
+        let dataNote = null;
+        if (dataKind) {
+          const loggedIn = !!auth?.isAuthenticated;
+          try {
+            if (dataKind === "listings") {
+              const data = await apiGet("/buyer/listings", buildListingParams({}, 1, 5));
+              listings = (data.items || []).map(toUiProperty);
+              if (!listings.length) dataNote = "No properties are listed right now.";
+            } else if (!loggedIn) {
+              dataNote = dataKind === "saved"
+                ? "Log in to see your saved properties here."
+                : "Log in to see your site visits here.";
+            } else if (dataKind === "saved") {
+              const { items } = await fetchSavedWishlist(1, 10);
+              listings = items;
+              listingsRoute = "Activity";
+              if (!items.length) dataNote = "You haven't saved any properties yet. Tap the heart on a property to save it.";
+            } else if (dataKind === "visits") {
+              const data = await fetchBuyerVisits({ page: 1, pageSize: 10 });
+              visits = (data.items || []).map(toUiVisit);
+              if (!visits.length) dataNote = "You have no site visits yet. Open a property and tap Schedule Visit.";
+            }
+          } catch (e) {
+            listings = null;
+            visits = null;
+            dataNote = "Couldn't load your data right now. Please try again.";
+          }
+          if (controller.signal.aborted) return;
+        }
+
         setMessages((items) => [
           ...items,
           {
@@ -343,6 +429,10 @@ export default function RevaChatbot() {
             from: "assistant",
             text: result.text,
             action: result.action,
+            listings,
+            listingsRoute,
+            visits,
+            dataNote,
             language: result.language || language,
           },
         ]);
@@ -361,7 +451,7 @@ export default function RevaChatbot() {
         }
       }
     },
-    [draft, busy, recording, transcribing, messages, activeRole, language, autoSpeak, speakWords, auth?.token, t]
+    [draft, busy, recording, transcribing, messages, activeRole, language, autoSpeak, speakWords, auth?.token, auth?.isAuthenticated, t]
   );
   submitRef.current = submit;
 
@@ -386,6 +476,23 @@ export default function RevaChatbot() {
         navigationRef.navigate(action.route, action.params);
       }
     }
+  };
+
+  // Contact owner, step 3: the user picked a property. The number itself is
+  // revealed by ViewNumberButton (POST /buyer/listings/{id}/contact), so
+  // login, buyer-plan limits and lead counting work as on the detail page.
+  const pickContactProperty = (p) => {
+    setMessages((items) => [
+      ...items,
+      { id: `msg-${++nextId.current}`, from: "user", text: p.title || "This property" },
+      {
+        id: `msg-${++nextId.current}`,
+        from: "assistant",
+        language,
+        text: "Here are the owner's contact details. Tap View Number to see the phone number, then tap it to call.",
+        contactProperty: p,
+      },
+    ]);
   };
 
   const handleFabPressIn = () => {
@@ -546,6 +653,116 @@ export default function RevaChatbot() {
                           )}
                         </View>
 
+                        {item.listings && item.listings.length > 0 && (
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.listingScroll}
+                            contentContainerStyle={{ gap: 10, paddingRight: 8 }}
+                          >
+                            {item.listings.map((p) => (
+                              <TouchableOpacity
+                                key={p.id}
+                                style={styles.listingCard}
+                                activeOpacity={0.85}
+                                onPress={() =>
+                                  item.pickContact
+                                    ? pickContactProperty(p)
+                                    : handleActionClick({ route: item.listingsRoute || "Search" })
+                                }
+                              >
+                                {p.image ? (
+                                  <Image source={{ uri: p.image }} style={styles.listingImg} />
+                                ) : (
+                                  <View style={[styles.listingImg, { backgroundColor: "#E2E8F0" }]} />
+                                )}
+                                <View style={{ padding: 10 }}>
+                                  {p.price ? (
+                                    <Text style={styles.listingPrice} numberOfLines={1}>{p.price}</Text>
+                                  ) : null}
+                                  <Text style={styles.listingTitle} numberOfLines={1}>{p.title}</Text>
+                                  {p.location ? (
+                                    <Text style={styles.listingLoc} numberOfLines={1}>{p.location}</Text>
+                                  ) : null}
+                                </View>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        )}
+
+                        {item.visits && item.visits.length > 0 && (
+                          <View style={styles.visitList}>
+                            {item.visits.map((v) => (
+                              <TouchableOpacity
+                                key={v.id}
+                                style={styles.visitRow}
+                                activeOpacity={0.85}
+                                onPress={() => handleActionClick({ route: "Activity" })}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.listingTitle} numberOfLines={1}>
+                                    {v.propertyTitle || "Property"}
+                                  </Text>
+                                  {(v.date || v.time) ? (
+                                    <Text style={styles.listingLoc} numberOfLines={1}>
+                                      {[v.date, v.time].filter(Boolean).join(" · ")}
+                                    </Text>
+                                  ) : null}
+                                  {v.propertyLocality ? (
+                                    <Text style={styles.listingLoc} numberOfLines={1}>
+                                      {[v.propertyLocality, v.propertyCity].filter(Boolean).join(", ")}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                                <View
+                                  style={[
+                                    styles.visitPill,
+                                    v.status === "completed" && { backgroundColor: "#DCFCE7" },
+                                    v.status === "cancelled" && { backgroundColor: "#FEE2E2" },
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.visitPillText,
+                                      v.status === "completed" && { color: "#15803D" },
+                                      v.status === "cancelled" && { color: "#B91C1C" },
+                                    ]}
+                                  >
+                                    {v.status === "completed" ? "Completed" : v.status === "cancelled" ? "Cancelled" : "Upcoming"}
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+
+                        {item.contactProperty && (
+                          <View style={styles.contactCard}>
+                            <Text style={styles.contactLabel}>Owner</Text>
+                            <Text style={styles.contactName} numberOfLines={1}>
+                              {item.contactProperty.ownerName || "Property Owner"}
+                            </Text>
+                            <Text style={styles.listingLoc} numberOfLines={2}>
+                              {[item.contactProperty.title, item.contactProperty.location].filter(Boolean).join(" · ")}
+                            </Text>
+                            <ViewNumberButton
+                              property={item.contactProperty}
+                              navigation={navigationRef}
+                              onBeforeNavigate={handleClose}
+                              onLoginRequired={(resume) => {
+                                handleClose();
+                                if (auth?.setPendingAction) auth.setPendingAction(() => openReva && openReva());
+                                if (navigationRef.isReady()) navigationRef.navigate("Login");
+                              }}
+                              style={{ marginTop: 12 }}
+                            />
+                          </View>
+                        )}
+
+                        {item.dataNote ? (
+                          <Text style={styles.dataNote}>{item.dataNote}</Text>
+                        ) : null}
+
                         <TouchableOpacity
                           style={styles.listenBtn}
                           onPress={() => speakWords(item.text, item.language || language)}
@@ -581,7 +798,7 @@ export default function RevaChatbot() {
                               <TouchableOpacity
                                 key={idx}
                                 style={styles.chipBtn}
-                                onPress={() => submit(chip.question)}
+                                onPress={() => submit(chip.question, { dataKind: chip.dataKind })}
                                 activeOpacity={0.7}
                               >
                                 <Text style={styles.chipText}>{chip.label}</Text>
@@ -651,17 +868,16 @@ export default function RevaChatbot() {
                         <Mic size={18} color={REVA_THEME.primary} strokeWidth={2.2} />
                       )}
                     </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sendBtn, (!draft.trim() || busy || recording) && styles.sendBtnDisabled]}
+                      onPress={() => submit(draft)}
+                      disabled={!draft.trim() || busy || recording}
+                      activeOpacity={0.8}
+                      accessibilityLabel={t.send}
+                    >
+                      <Send size={18} color="#FFFFFF" strokeWidth={2.4} />
+                    </TouchableOpacity>
                   </View>
-
-                  <TouchableOpacity
-                    style={[styles.sendBtn, (!draft.trim() || busy || recording) && styles.sendBtnDisabled]}
-                    onPress={() => submit(draft)}
-                    disabled={!draft.trim() || busy || recording}
-                    activeOpacity={0.8}
-                    accessibilityLabel={t.send}
-                  >
-                    <Send size={18} color="#FFFFFF" strokeWidth={2.4} />
-                  </TouchableOpacity>
                 </View>
 
                 <Text style={styles.disclaimerText}>{t.disclaimer}</Text>
@@ -989,21 +1205,26 @@ const styles = StyleSheet.create({
   },
   composerRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 8,
+    alignItems: "center",
   },
   inputPill: {
     flex: 1,
     flexDirection: "row",
-    alignItems: "flex-end",
-    minHeight: 48,
-    backgroundColor: "#F1F5F9",
-    borderRadius: 24,
-    paddingLeft: 16,
-    paddingRight: 5,
-    paddingVertical: 5,
+    alignItems: "center",
+    minHeight: 52,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 26,
+    paddingLeft: 18,
+    paddingRight: 6,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "transparent",
+    borderColor: "#E2E8F0",
+    gap: 6,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   inputPillRecording: {
     borderColor: "#FCA5A5",
@@ -1015,15 +1236,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: "#0F172A",
     maxHeight: 100,
-    paddingTop: 9,
-    paddingBottom: 9,
-    paddingRight: 8,
+    paddingTop: 8,
+    paddingBottom: 8,
+    textAlignVertical: "center",
   },
   micBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#FFFFFF",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#EEF2FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1034,9 +1255,9 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   sendBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: REVA_THEME.primary,
     alignItems: "center",
     justifyContent: "center",
@@ -1046,8 +1267,52 @@ const styles = StyleSheet.create({
   },
   disclaimerText: {
     fontSize: 11,
+    lineHeight: 15,
     color: "#94A3B8",
     textAlign: "center",
-    marginTop: 8,
+    marginTop: 10,
+    paddingHorizontal: 12,
   },
+  listingScroll: { marginTop: 8, maxWidth: "100%" },
+  listingCard: {
+    width: 180,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+  },
+  listingImg: { width: "100%", height: 100 },
+  listingPrice: { fontSize: 14, fontWeight: "700", color: "#0F172A" },
+  listingTitle: { fontSize: 13, fontWeight: "600", color: "#334155", marginTop: 2 },
+  listingLoc: { fontSize: 12, color: "#64748B", marginTop: 2 },
+  visitList: { marginTop: 8, gap: 8 },
+  visitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
+    gap: 10,
+  },
+  visitPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 100,
+    backgroundColor: "#EEF2FF",
+  },
+  visitPillText: { fontSize: 11, fontWeight: "700", color: "#4338CA" },
+  contactCard: {
+    marginTop: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 14,
+  },
+  contactLabel: { fontSize: 11, fontWeight: "700", color: "#64748B", letterSpacing: 0.4, textTransform: "uppercase" },
+  contactName: { fontSize: 16, fontWeight: "700", color: "#0F172A", marginTop: 2, marginBottom: 2 },
+  dataNote: { fontSize: 13, color: "#64748B", marginTop: 8, lineHeight: 18 },
 });

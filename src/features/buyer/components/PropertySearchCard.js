@@ -102,7 +102,7 @@ export default function PropertySearchCard({
       {/* Row 1: Title on Left, Rating on Right (only when the backend sends a real rating) */}
       <View style={styles.titleRatingRow}>
         <Text style={styles.propertyTitle} numberOfLines={1}>
-          {property.address ? property.address.split(",")[0] : property.title}
+          {property.title || (property.address ? property.address.split(",")[0] : "")}
         </Text>
         {ratingText ? (
           <View style={styles.ratingBadge}>

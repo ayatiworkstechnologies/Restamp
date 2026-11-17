@@ -118,7 +118,8 @@ const loginSrc = src("src/features/auth/screens/LoginScreen.js");
 check("W1 login sanitizes input + caps length", loginSrc.includes("sanitizePhoneInput") && loginSrc.includes("handlePhoneChange"));
 check("W2 login gates submit on exact validity", loginSrc.includes("isPhoneValidForCountry(phoneNumber"));
 check("W3 login shows inline message", loginSrc.includes("phoneValidationMessage") && loginSrc.includes("phoneErrorText"));
-check("W4 login resumes or enters on every success path", (loginSrc.match(/enterAfterLogin\(\)/g) || []).length >= 3);
+// Phone OTP is the only sign-in: OTP verify + the name step are the success paths.
+check("W4 login resumes or enters on every success path", (loginSrc.match(/enterAfterLogin\(\)/g) || []).length >= 2);
 check("W5 skip + unmount abandon drop the action", loginSrc.includes("clearPendingAction") && loginSrc.includes("loginSucceededRef"));
 const wishSrc = src("src/features/buyer/context/WishlistContext.js");
 check("W6 wishlist toggle defers guests centrally", wishSrc.includes("planProtectedAction") && wishSrc.includes("goLogin()") && wishSrc.includes("setPendingAction"));

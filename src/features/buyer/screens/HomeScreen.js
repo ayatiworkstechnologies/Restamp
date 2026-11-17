@@ -41,6 +41,7 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import RestampWordmark from "../../../shared/components/RestampWordmark.js";
+import SwitchProfileButton from "../../../shared/components/SwitchProfileButton.js";
 import TYPOGRAPHY from "../../../shared/constants/typography.js";
 import {
   PROPERTY_TYPES,
@@ -516,6 +517,10 @@ export default function HomeScreen({ navigation }) {
               >
                 <Text style={styles.loginPillText}>Login</Text>
               </TouchableOpacity>
+            ) : null}
+
+            {!auth.isLoading && auth.isAuthenticated ? (
+              <SwitchProfileButton currentRole="buyer" />
             ) : null}
 
             <TouchableOpacity

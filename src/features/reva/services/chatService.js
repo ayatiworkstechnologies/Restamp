@@ -3,10 +3,11 @@ import { API_BASE_URL } from "../../../shared/api/client.js";
 export const QUICK_ACTIONS = {
   en: {
     Buyer: [
-      { label: "🏠 Find a property", question: "How do I find and filter properties in Chennai?" },
+      { label: "🏠 Find a property", question: "How do I find and filter properties in Chennai?", dataKind: "listings" },
       { label: "💰 0% Brokerage", question: "How does 0% brokerage work on Restamp?" },
-      { label: "📅 Schedule visit", question: "How can I book a site visit with an owner?" },
-      { label: "⭐ Saved properties", question: "Where do I find my shortlisted properties?" },
+      { label: "📅 Schedule visit", question: "How can I book a site visit with an owner?", dataKind: "visits" },
+      { label: "📞 Contact owner", question: "I want to contact a property owner", dataKind: "contactPrompt" },
+      { label: "⭐ Saved properties", question: "Where do I find my shortlisted properties?", dataKind: "saved" },
     ],
     Owner: [
       { label: "➕ Post property", question: "How do I list my property on Restamp?" },
@@ -23,10 +24,11 @@ export const QUICK_ACTIONS = {
   },
   ta: {
     Buyer: [
-      { label: "🏠 சொத்து தேடல்", question: "சென்னையில் சொத்துகளை எவ்வாறு தேடுவது?" },
+      { label: "🏠 சொத்து தேடல்", question: "சென்னையில் சொத்துகளை எவ்வாறு தேடுவது?", dataKind: "listings" },
       { label: "💰 0% தரகு", question: "Restamp-ல் 0% தரகு எவ்வாறு செயல்படுகிறது?" },
-      { label: "📅 பார்வை பதிவு", question: "சொத்துப் பார்வைக்கு எவ்வாறு நேரம் ஒதுக்குவது?" },
-      { label: "⭐ விருப்பப் பட்டியல்", question: "எனது சேமிக்கப்பட்ட சொத்துகளை எங்கே பார்ப்பது?" },
+      { label: "📅 பார்வை பதிவு", question: "சொத்துப் பார்வைக்கு எவ்வாறு நேரம் ஒதுக்குவது?", dataKind: "visits" },
+      { label: "📞 உரிமையாளரை தொடர்பு", question: "நான் சொத்து உரிமையாளரை தொடர்பு கொள்ள வேண்டும்", dataKind: "contactPrompt" },
+      { label: "⭐ விருப்பப் பட்டியல்", question: "எனது சேமிக்கப்பட்ட சொத்துகளை எங்கே பார்ப்பது?", dataKind: "saved" },
     ],
     Owner: [
       { label: "➕ சொத்து பதிவு", question: "எனது சொத்தை Restamp-ல் எவ்வாறு பதிவு செய்வது?" },

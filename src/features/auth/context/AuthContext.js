@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState, useMemo } from "react";
-import { fetchMe, updateProfileName } from "../api/auth.js";
+import { fetchMe, updateProfileName, updateProfileEmail } from "../api/auth.js";
 import { setMyRole } from "../../../shared/api/users.js";
 import { getAuthTokenSync, setAuthToken } from "../../../shared/api/client.js";
 import { invalidateBuyerMode, noteServerRole } from "../../buyer/api/buyerMode.js";
@@ -54,7 +54,7 @@ function toUser(me, local) {
     lastName,
     name,
     isProfileComplete,
-    email: null,
+    email: me.email || null,
     avatar: null,
     verified: (me.providers || []).includes("phone"),
   };
@@ -141,6 +141,14 @@ export function AuthProvider({ children }) {
       return updatedUser;
     });
     return updatedUser || toUser(updatedMe, null);
+  }, []);
+
+  // Saves the contact email (PATCH /users/me) and keeps the rest of the
+  // user (phone, local name parts) as-is.
+  const saveProfileEmail = useCallback(async (email) => {
+    const updatedMe = await updateProfileEmail((email || "").trim());
+    setUser((prev) => (prev ? { ...prev, email: updatedMe.email || null } : prev));
+    return updatedMe.email || null;
   }, []);
 
   const setLocalProfileName = useCallback((firstName, lastName) => {
@@ -235,6 +243,7 @@ export function AuthProvider({ children }) {
       sessionVersion,
       loginWithToken,
       saveProfileName,
+      saveProfileEmail,
       setLocalProfileName,
       refreshMe,
       logout,
@@ -242,7 +251,7 @@ export function AuthProvider({ children }) {
       consumePendingAction,
       clearPendingAction,
     }),
-    [user, isLoading, sessionVersion, loginWithToken, saveProfileName, setLocalProfileName, refreshMe, logout, setPendingAction, consumePendingAction, clearPendingAction]
+    [user, isLoading, sessionVersion, loginWithToken, saveProfileName, saveProfileEmail, setLocalProfileName, refreshMe, logout, setPendingAction, consumePendingAction, clearPendingAction]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

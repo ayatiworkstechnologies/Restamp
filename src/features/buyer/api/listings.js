@@ -12,14 +12,21 @@ import { toUiProperty } from "../../../shared/api/mappers.js";
 // which the backend restricts to the areas in the agent's plan (402
 // AGENT_AREA_NOT_IN_PLAN outside them). Default: the public buyer endpoints.
 export async function fetchListingDetail(listingId, { scope } = {}) {
+  // scope "owner": the owner's own listing (any status, incl. paused/draft).
   const data = scope === "agent"
     ? await apiGetAuth(`/broker/listings/${listingId}`)
+    : scope === "owner"
+    ? await apiGetAuth(`/owner/listings/${listingId}`)
     : await apiGet(`/buyer/listings/${listingId}`);
   if (!data || typeof data !== "object") {
     throw new Error(`Property not found (${listingId}).`);
   }
   const ui = toUiProperty(data);
-  const rawGallery = Array.isArray(data.gallery) ? data.gallery : [];
+  const rawGallery = Array.isArray(data.gallery)
+    ? data.gallery
+    : Array.isArray(data.photos)
+    ? data.photos.map((ph) => (typeof ph === "string" ? ph : ph && (ph.url || ph.uri)))
+    : [];
   const validGallery = rawGallery.filter(
     (u) => typeof u === "string" && u.startsWith("http") && !u.includes("seed.local")
   );

@@ -1,6 +1,36 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { shouldResetAccountScope, selectOwnerScopedProperties } from "../../auth/session.js";
+import { fetchOwnerPlan } from "../../../shared/api/ownerPlans.js";
+import { OWNER_PLANS_LIST } from "../data/ownerPlans.js";
+
+// Server owner plan -> the subscription shape the Owner screens use.
+function subscriptionFromServer(server) {
+  const local = OWNER_PLANS_LIST.find((p) => p.id === server.plan_id);
+  const fmt = (iso) =>
+    iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : null;
+  const end = server.end_date ? new Date(server.end_date) : null;
+  const daysRemaining = end ? Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86400000)) : null;
+  return {
+    id: server.plan_id,
+    name: server.name,
+    planName: server.name,
+    validity: `${server.duration_days} Days`,
+    daysRemaining,
+    listingLimit: server.listing_limit == null ? Infinity : server.listing_limit,
+    usedListings: 0,
+    price: local?.price || null,
+    amountPaid: local?.price || null,
+    active: true,
+    hasPurchased: true,
+    simulated: true,
+    status: "Active",
+    startDate: fmt(server.start_date),
+    expiryDate: fmt(server.end_date),
+    serverSaved: true,
+    category: "Residential",
+  };
+}
 
 // Re-exported so screens can import the scoping helper from the context
 // module (the implementation lives in the pure, unit-tested auth/session
@@ -78,6 +108,28 @@ export function OwnerProvider({ children }) {
     setLeads([]);
     setSelectedPlanForCheckout(null);
     setSubscription(INITIAL_SUBSCRIPTION);
+  }, [authUserId]);
+
+  // Load the saved owner plan from the server whenever the account changes,
+  // so a purchase survives logout, restart and switching roles.
+  const [ownerPlanLoaded, setOwnerPlanLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setOwnerPlanLoaded(false);
+    if (authUserId == null) return undefined;
+    fetchOwnerPlan().then((server) => {
+      if (!alive) return;
+      if (server) {
+        setSubscription((prev) => ({
+          ...subscriptionFromServer(server),
+          usedListings: prev?.usedListings || 0,
+        }));
+      }
+      setOwnerPlanLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
   }, [authUserId]);
 
   // NOTE: drafts are server-backed (src/api/owner.js draft helpers +
@@ -183,8 +235,12 @@ export function OwnerProvider({ children }) {
   // closing_reason (contract §G) — never a local-only flip, and it never
   // touches any listing status.
 
+  const hasOwnerPlan = !!(subscription && subscription.hasPurchased && subscription.active);
+
   const contextValue = useMemo(() => ({
     subscription,
+    hasOwnerPlan,
+    ownerPlanLoaded,
     setSubscription,
     activateSubscription,
     ownerProfile,
@@ -202,6 +258,8 @@ export function OwnerProvider({ children }) {
     setSelectedPlanForCheckout,
   }), [
     subscription,
+    hasOwnerPlan,
+    ownerPlanLoaded,
     ownerProfile,
     authUserId,
     properties,

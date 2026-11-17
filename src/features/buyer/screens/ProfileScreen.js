@@ -58,7 +58,7 @@ export default function ProfileScreen({ navigation }) {
   const { wishlist, wishlistSynced, refreshWishlist } = useWishlist();
   const { subscription } = useOwner();
   const { agentPlan, hasActivePlan, selectedLocalities } = useAgent();
-  const { user: authUser, logout, refreshMe, saveProfileName } = useAuth();
+  const { user: authUser, logout, refreshMe, saveProfileName, saveProfileEmail } = useAuth();
   const authForOwnerEntry = { user: authUser, refreshMe };
   const [switchingOwner, setSwitchingOwner] = useState(false);
   // Owner entry is protected (Change 2): guests log in first, then resume.
@@ -737,7 +737,7 @@ export default function ProfileScreen({ navigation }) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalSaveBtn}
-                onPress={() => {
+                onPress={async () => {
                   const updatedName = editName.trim() || userProfile.name;
                   const updatedPhone = editPhone.trim() || userProfile.phone;
                   const updatedEmail = editEmail.trim() || userProfile.email;
@@ -750,6 +750,15 @@ export default function ProfileScreen({ navigation }) {
                   if (saveProfileName && updatedName && updatedName !== authUser?.name) {
                     const parts = updatedName.split(/\s+/);
                     saveProfileName(parts[0], parts.slice(1).join(" ")).catch(() => {});
+                  }
+                  const typedEmail = editEmail.trim();
+                  if (saveProfileEmail && typedEmail !== (authUser?.email || "")) {
+                    try {
+                      await saveProfileEmail(typedEmail);
+                    } catch (e) {
+                      Alert.alert("Could Not Save Email", "Please enter a valid email address.");
+                      return;
+                    }
                   }
                   setIsEditing(false);
                 }}

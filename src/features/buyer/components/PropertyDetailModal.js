@@ -44,6 +44,7 @@ import {
   Compass,
   Maximize2,
   Car,
+  Edit,
 } from "../../../shared/components/HugeIcon.js";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import COLORS from "../../../shared/constants/colors.js";
@@ -146,6 +147,11 @@ function PropertyDetailModal({
   // screen showing viewed history can refresh). The sheet is the ONLY
   // place that records views, so callers never post their own.
   onViewRecorded,
+  // Owner preview: the owner sees their own listing in the buyer layout.
+  // Buyer-only actions (save, enquire, visit, call, similar) are hidden,
+  // no view is recorded, and the bottom bar offers Edit Property instead.
+  ownerPreview = false,
+  onEdit,
 }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -200,7 +206,7 @@ function PropertyDetailModal({
     // scheduled until the backend confirms it.
     setScheduledVisit(null);
     const backendId = property && property.backendId;
-    if (typeof backendId !== "number" || !getAuthTokenSync()) return;
+    if (ownerPreview || typeof backendId !== "number" || !getAuthTokenSync()) return;
     let cancelled = false;
     fetchBuyerVisits({ page: 1, pageSize: 50 }).then(
       (resp) => {
@@ -234,7 +240,7 @@ function PropertyDetailModal({
   onViewRecordedRef.current = onViewRecorded;
   useEffect(() => {
     const backendId = property && property.backendId;
-    if (!visible || typeof backendId !== "number") return;
+    if (ownerPreview || !visible || typeof backendId !== "number") return;
     recordViewed(backendId).then((recorded) => {
       if (recorded && onViewRecordedRef.current) onViewRecordedRef.current(recorded);
     });
@@ -262,7 +268,9 @@ function PropertyDetailModal({
         : null;
     if (typeof backendId !== "number") return;
     let cancelled = false;
-    fetchSimilar(backendId, 5, { scope: listingScope }).then(
+    const detailScope = ownerPreview ? "owner" : listingScope;
+    if (ownerPreview) setLiveSimilar(null);
+    else fetchSimilar(backendId, 5, { scope: listingScope }).then(
       (cards) => {
         if (!cancelled) setLiveSimilar(cards);
       },
@@ -272,7 +280,7 @@ function PropertyDetailModal({
     );
     const needsGallery = !property.gallery || property.gallery.length === 0;
     setLiveDetail(null);
-    fetchListingDetail(backendId, { scope: listingScope }).then(
+    fetchListingDetail(backendId, { scope: detailScope }).then(
       (detail) => {
         if (cancelled) return;
         setLiveDetail(detail);
@@ -298,6 +306,16 @@ function PropertyDetailModal({
   const sectionYMap = useRef({});
   const isProgrammaticScroll = useRef(false);
   const TAB_BAR_HEIGHT = 54;
+  // Horizontal tab bar: keep the active tab in view (e.g. Amenities is
+  // off-screen on narrow phones until the bar scrolls).
+  const tabScrollRef = useRef(null);
+  const tabXMap = useRef({});
+  useEffect(() => {
+    const x = tabXMap.current[activeTab];
+    if (x !== undefined && tabScrollRef.current) {
+      tabScrollRef.current.scrollTo({ x: Math.max(0, x - 16), animated: true });
+    }
+  }, [activeTab]);
 
   const scrollToSection = (tabId) => {
     setActiveTab(tabId);
@@ -974,6 +992,7 @@ function PropertyDetailModal({
                     <Share2 size={19} color="#0F172A" strokeWidth={2.2} />
                   </TouchableOpacity>
 
+                  {!ownerPreview && (
                   <TouchableOpacity
                     style={styles.floatingCircleBtn}
                     onPress={() => onToggleWishlist && onToggleWishlist(property)}
@@ -987,6 +1006,7 @@ function PropertyDetailModal({
                       strokeWidth={2.2}
                     />
                   </TouchableOpacity>
+                  )}
                 </View>
               </View>
 
@@ -1121,6 +1141,7 @@ function PropertyDetailModal({
           {/* CHILD 1: STICKY SECTION NAVIGATION TAB BAR */}
           <View style={styles.tabBarContainer}>
             <ScrollView
+              ref={tabScrollRef}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.tabBarScroll}
@@ -1132,6 +1153,9 @@ function PropertyDetailModal({
                     key={tab.id}
                     activeOpacity={0.8}
                     onPress={() => scrollToSection(tab.id)}
+                    onLayout={(e) => {
+                      tabXMap.current[tab.id] = e.nativeEvent.layout.x;
+                    }}
                     style={styles.tabItem}
                   >
                     <Text
@@ -1315,30 +1339,34 @@ function PropertyDetailModal({
                   <Text style={styles.ownerName} numberOfLines={1}>
                     {ownerDisplayName || "Property Owner"}
                   </Text>
-                  <Text style={styles.ownerRole} numberOfLines={1}>
-                    {property.agent?.agency || "Owner"}
-                  </Text>
+                  <View style={styles.ownerRolePill}>
+                    <Text style={styles.ownerRole} numberOfLines={1}>
+                      {property.agent?.agency || "Owner"}
+                    </Text>
+                  </View>
                 </View>
                 <TouchableOpacity
                   style={styles.ownerCallBtn}
                   onPress={() => handleCallOwner()}
                   accessibilityLabel="Call owner"
                 >
-                  <Phone size={18} color="#FFFFFF" />
+                  <Phone size={18} color="#16A34A" />
                 </TouchableOpacity>
               </View>
+              <View style={styles.ownerDivider} />
               <ViewNumberButton
                 property={property}
                 navigation={navigation}
                 onLoginRequired={(resume) => onLoginRequired && onLoginRequired(resume)}
-                style={{ marginTop: 12 }}
+                style={{ marginTop: 0 }}
               />
             </View>
           </View>
 
           <View style={styles.sectionDividerLine} />
 
-          {/* 10. GOT QUESTIONS ABOUT THIS PROPERTY */}
+          {/* 10. GOT QUESTIONS ABOUT THIS PROPERTY (buyers only) */}
+          {!ownerPreview && (
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionHeading}>
               Got questions about this property
@@ -1377,12 +1405,13 @@ function PropertyDetailModal({
               </TouchableOpacity>
             </View>
           </View>
+          )}
 
           <View style={styles.sectionDividerLine} />
 
           {/* 11. SIMILAR PROPERTIES (live API result, mock fallback otherwise;
               hidden when the loaded live result is empty) */}
-          {similarProps.length > 0 && (
+          {!ownerPreview && similarProps.length > 0 && (
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionHeading}>Similar Properties</Text>
 
@@ -1466,6 +1495,17 @@ function PropertyDetailModal({
             },
           ]}
         >
+          {ownerPreview ? (
+            <TouchableOpacity
+              style={[styles.sendEnquiryBtn, styles.ownerEditBtn]}
+              activeOpacity={0.85}
+              onPress={() => onEdit && onEdit(property)}
+              accessibilityLabel="Edit property"
+            >
+              <Edit size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.sendEnquiryBtnText}>Edit Property</Text>
+            </TouchableOpacity>
+          ) : (
             <>
               <TouchableOpacity
                 style={[
@@ -1497,7 +1537,7 @@ function PropertyDetailModal({
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
                 >
-                  {scheduledVisit ? `Visit: ${scheduledVisit.date}` : "Request Site Visit"}
+                  {scheduledVisit ? `Visit: ${scheduledVisit.date}` : "Site Visit"}
                 </Text>
               </TouchableOpacity>
 
@@ -1533,8 +1573,8 @@ function PropertyDetailModal({
                   {enquirySending
                     ? "Sending…"
                     : enquirySent
-                      ? "Enquiry Sent ✓"
-                      : "Send Enquiry"}
+                      ? "Enquired ✓"
+                      : "Enquire"}
                 </Text>
               </TouchableOpacity>
 
@@ -1548,6 +1588,7 @@ function PropertyDetailModal({
                 <Phone size={20} color="#FFFFFF" fill="#FFFFFF" />
               </TouchableOpacity>
             </>
+          )}
         </View>
 
         {/* ================= CALL OWNER POPUP ================= */}
@@ -2461,10 +2502,30 @@ const styles = StyleSheet.create({
 
   /* OWNER CARD */
   ownerCard: {
-    backgroundColor: "#F8FAFC",
-    padding: 14,
-    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderRadius: 16,
     marginTop: 4,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  ownerRolePill: {
+    alignSelf: "flex-start",
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: "#F1F5F9",
+  },
+  ownerDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 14,
   },
   ownerAvatar: {
     width: 48,
@@ -2477,10 +2538,10 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
   ownerRole: {
-    fontSize: 14,
-    color: "#64748B",
-    marginTop: 2,
-    fontWeight: "400",
+    fontSize: 12,
+    color: "#475569",
+    fontWeight: "600",
+    letterSpacing: 0.2,
   },
   ownerTopRow: {
     flexDirection: "row",
@@ -2489,7 +2550,7 @@ const styles = StyleSheet.create({
   ownerInitialAvatar: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.primary,
+    backgroundColor: "#EEF2FF",
   },
   ownerIconAvatar: {
     alignItems: "center",
@@ -2497,9 +2558,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   ownerInitialText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: COLORS.primary,
   },
   callPopupOverlay: {
     flex: 1,
@@ -2569,7 +2630,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#16A34A",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2694,24 +2757,18 @@ const styles = StyleSheet.create({
   },
 
   /* FIXED BOTTOM BAR */
+  ownerEditBtn: { flex: 1, borderRadius: 100 },
   bottomBar: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     height: 76,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    backgroundColor: "transparent",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 10,
   },
   bottomCallBtn: {
     width: 48,

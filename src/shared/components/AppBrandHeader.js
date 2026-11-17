@@ -7,11 +7,14 @@ import {
   Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { HugeBuilding, HugeSearch, HugeBell, Sparkles } from "./HugeIcon.js";
+import { HugeBuilding, HugeSearch, HugeBell, Sparkles, Repeat } from "./HugeIcon.js";
 import RestampWordmark from "./RestampWordmark.js";
+import SwitchProfileButton from "./SwitchProfileButton.js";
 import COLORS from "../constants/colors.js";
 import { useAuth } from "../../features/auth/context/AuthContext.js";
-import { enterBuyerFlow, enterOwnerFlow } from "../api/users.js";
+import { enterBuyerFlow, enterOwnerFlow, ensureRole } from "../api/users.js";
+import { useOwner } from "../../features/owner/context/OwnerContext.js";
+import { useAgent } from "../../features/agent/context/AgentContext.js";
 import { useRequireAuth } from "../../features/auth/useRequireAuth.js";
 import { getUnreadCount, subscribeNotifications } from "../data/notificationsStore.js";
 import { useReva } from "../../features/reva/context/RevaContext.js";
@@ -64,6 +67,34 @@ function AppBrandHeader({
 
   const isBuyer = currentRole === "buyer";
 
+  // Owner <-> Agent switch: shown on the Owner and Agent dashboards only
+  // when this account holds BOTH an owner plan and an agent plan.
+  const { hasOwnerPlan } = useOwner();
+  const { hasActivePlan: hasAgentPlan } = useAgent();
+  const canSwapOwnerAgent =
+    !!auth?.user && hasOwnerPlan && hasAgentPlan && (currentRole === "owner" || currentRole === "agent");
+  const swapTarget = currentRole === "owner" ? "agent" : "owner";
+
+  const handleOwnerAgentSwap = async () => {
+    if (switchingRole) return;
+    setSwitchingRole(true);
+    try {
+      await ensureRole(auth, swapTarget === "agent" ? "BROKER" : "OWNER");
+      const rootNav = navigation?.getParent?.() || navigation;
+      rootNav.reset({
+        index: 0,
+        routes: [{ name: swapTarget === "agent" ? "AgentNavigator" : "OwnerNavigator" }],
+      });
+    } catch (e) {
+      Alert.alert(
+        `Could not open ${swapTarget === "agent" ? "Agent" : "Owner"} mode`,
+        "The server did not confirm the switch. Please try again."
+      );
+    } finally {
+      setSwitchingRole(false);
+    }
+  };
+
   return (
     <View style={[styles.header, style]}>
       {/* Left Side Restamp Logotype */}
@@ -74,23 +105,7 @@ function AppBrandHeader({
       {/* Right Side Actions */}
       <View style={styles.headerRightActions}>
         {rightActions}
-        {showSwitch && (
-          <TouchableOpacity
-            style={styles.switchRolePill}
-            activeOpacity={0.75}
-            onPress={handleSwitchPress}
-            hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
-          >
-            {isBuyer ? (
-              <HugeBuilding size={13} color="#2563EB" style={{ marginRight: 4 }} />
-            ) : (
-              <HugeSearch size={13} color="#2563EB" style={{ marginRight: 4 }} />
-            )}
-            <Text style={styles.switchRoleText}>
-              {isBuyer ? "Owner" : "Buyer"}
-            </Text>
-          </TouchableOpacity>
-        )}
+        {showSwitch && <SwitchProfileButton currentRole={currentRole} />}
 
         {showNotification && (
           <TouchableOpacity

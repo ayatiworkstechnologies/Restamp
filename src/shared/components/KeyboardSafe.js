@@ -103,7 +103,10 @@ function useDismissOnTapOutside(onTouchStart, onTouchMove, onTouchEnd) {
 export const ScrollView = forwardRef(function KeyboardSafeScrollView(props, ref) {
   const touchHandlers = useDismissOnTapOutside(props.onTouchStart, props.onTouchMove, props.onTouchEnd);
   if (props.horizontal) return <RNScrollView ref={ref} {...props} />;
-  if (!KC) {
+  // KeyboardAwareScrollView wraps children in an extra view, which breaks
+  // stickyHeaderIndices (the sticky index would point at the wrapper).
+  // Screens with sticky headers keep the plain ScrollView.
+  if (!KC || props.stickyHeaderIndices) {
     return (
       <RNScrollView
         ref={ref}
