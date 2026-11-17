@@ -97,6 +97,26 @@ export function OwnerProvider({ children }) {
   // Pending selected plan during checkout
   const [selectedPlanForCheckout, setSelectedPlanForCheckout] = useState(null);
 
+  // Plan payments made in this app session (owner + dealer), newest first.
+  // Payments are simulated in-app; there is no server payments API yet.
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const recordPayment = (kind, plan, amount) => {
+    const now = new Date();
+    setPaymentHistory((prev) => [
+      {
+        id: plan?.txnId || `RST-${now.getTime()}`,
+        kind,
+        planName: plan?.name || (kind === "dealer" ? "Dealer Plan" : "Owner Plan"),
+        amount,
+        validity: plan?.validity || "",
+        listingLimit: plan?.listingLimit,
+        date: now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+        status: "Success",
+      },
+      ...prev,
+    ]);
+  };
+
   // Account scope: every row cached in this context belongs to ONE account.
   // When the authenticated principal changes (logout, or signing in as a
   // different user) the cached rows are dropped, so the next account can
@@ -108,6 +128,7 @@ export function OwnerProvider({ children }) {
     setProperties([]);
     setLeads([]);
     setSelectedPlanForCheckout(null);
+    setPaymentHistory([]);
     setSubscription(INITIAL_SUBSCRIPTION);
   }, [authUserId]);
 
@@ -132,6 +153,7 @@ export function OwnerProvider({ children }) {
     const days = parseInt(String(plan?.validity || "30"), 10) || 30;
     const now = new Date();
     const fmt = (d) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    recordPayment("dealer", plan, plan?.amountPaid || plan?.price);
     setDealerSubscription({
       id: plan?.id,
       name: plan?.name,
@@ -212,6 +234,7 @@ export function OwnerProvider({ children }) {
       category: plan?.category || "Residential",
     };
     setSubscription(newSub);
+    recordPayment("owner", plan, formattedAmount);
   };
 
   const addProperty = (newProp) => {
@@ -297,6 +320,7 @@ export function OwnerProvider({ children }) {
     updateLeadStatus,
     selectedPlanForCheckout,
     setSelectedPlanForCheckout,
+    paymentHistory,
   }), [
     subscription,
     dealerSubscription,
@@ -308,6 +332,7 @@ export function OwnerProvider({ children }) {
     properties,
     leads,
     selectedPlanForCheckout,
+    paymentHistory,
   ]);
 
   return (

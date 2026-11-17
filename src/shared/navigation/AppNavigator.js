@@ -25,6 +25,7 @@ import BuyerPlansScreen from "../../features/buyer/screens/BuyerPlansScreen.js";
 
 import OwnerNavigator from "../../features/owner/navigation/OwnerNavigator.js";
 import DealerNavigator from "../../features/dealer/navigation/DealerNavigator.js";
+import PaymentHistoryScreen from "../../features/owner/screens/PaymentHistoryScreen.js";
 import OwnerPlansScreen from "../../features/owner/screens/OwnerPlansScreen.js";
 import OwnerPlanConfirmScreen from "../../features/owner/screens/OwnerPlanConfirmScreen.js";
 import OwnerPaymentScreen from "../../features/owner/screens/OwnerPaymentScreen.js";
@@ -266,6 +267,10 @@ export default function AppNavigator() {
             animation: "slide_from_bottom",
           }}
         />
+
+        {/* Standalone plans page for Owner / Dealer / Agent (no buyer tabs). */}
+        <Stack.Screen name="RolePlans" component={MenuScreen} />
+        <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} />
 
         {/* BUYER PLANS (lead quota — reached when free contacts are used up) */}
         <Stack.Screen name="BuyerPlans" component={GuardedBuyerPlans} />

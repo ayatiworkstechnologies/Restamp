@@ -27,6 +27,7 @@ import {
   ArrowUpRight,
   MapPin,
   Building2,
+  HugeChevronLeft,
 } from "../../../shared/components/HugeIcon.js";
 import { DEALER_PLANS_LIST } from "../../dealer/data/dealerPlans.js";
 import COLORS from "../../../shared/constants/colors.js";
@@ -200,7 +201,10 @@ export default function MenuScreen({ navigation, route }) {
 
   // Vertical tab: 'owner' | 'agent'. The agent dashboard links back here
   // with initialTab "agent" to upgrade or renew.
-  const requestedTab = route?.params?.initialTab;
+  // lockedTab: opened as the standalone Plans page from the Owner / Dealer /
+  // Agent side. Shows only that role's plans, no buyer tab rail.
+  const lockedTab = route?.params?.lockedTab;
+  const requestedTab = lockedTab || route?.params?.initialTab;
   const [activeVerticalTab, setActiveVerticalTab] = useState(
     VERTICAL_TABS.some((t) => t.id === requestedTab) ? requestedTab : "owner"
   );
@@ -359,9 +363,21 @@ export default function MenuScreen({ navigation, route }) {
       {/* Brand header lives on Home only; keep the safe-area inset. */}
       <View style={{ paddingTop: safeTopPadding }} />
 
+      {lockedTab && (
+        <View style={styles.lockedHeader}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.lockedBackBtn} activeOpacity={0.7}>
+            <HugeChevronLeft size={22} color="#0F172A" />
+          </TouchableOpacity>
+          <Text style={styles.lockedTitle}>
+            {lockedTab === "agent" ? "Agent Plans" : lockedTab === "dealer" ? "Dealer Plans" : "Owner Plans"}
+          </Text>
+        </View>
+      )}
+
       {/* ================= MAIN TWO-COLUMN VERTICAL TAB LAYOUT ================= */}
       <View style={styles.mainLayoutContainer}>
         {/* ================= LEFT COLUMN: VERTICAL TAB RAIL ================= */}
+        {!lockedTab && (
         <View style={styles.verticalTabRail}>
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -405,6 +421,7 @@ export default function MenuScreen({ navigation, route }) {
             })}
           </ScrollView>
         </View>
+        )}
 
         {/* ================= RIGHT COLUMN: SCROLLABLE CONTENT PANE ================= */}
         <ScrollView
@@ -776,6 +793,24 @@ export default function MenuScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  lockedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  lockedBackBtn: {
+    padding: 8,
+  },
+  lockedTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginLeft: 4,
+  },
   screenRoot: {
     flex: 1,
     backgroundColor: "#FFFFFF",

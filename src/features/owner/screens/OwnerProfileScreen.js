@@ -38,12 +38,46 @@ import {
 import COLORS from "../../../shared/constants/colors.js";
 import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
 import { useOwner } from "../context/OwnerContext.js";
+import { OWNER_PLANS_LIST } from "../data/ownerPlans.js";
+import { DEALER_PLANS_LIST } from "../../dealer/data/dealerPlans.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import ConfirmationModal from "../components/ConfirmationModal.js";
 import { initialOwnerNameDraft, validateOwnerName, OWNER_NAME_MAX_LENGTH } from "../utils/ownerProfile.js";
 
-export default function OwnerProfileScreen({ navigation }) {
-  const { ownerProfile, subscription } = useOwner();
+export default function OwnerProfileScreen({ navigation, route }) {
+  const isDealerMode = route?.params?.mode === "dealer";
+  const { ownerProfile, subscription, hasDealerPlan, dealerSubscription } = useOwner();
+  const plan = isDealerMode ? dealerSubscription : subscription;
+  const planLimit = plan?.listingLimit === Infinity ? null : plan?.listingLimit;
+  const planUsed = plan?.usedListings || 0;
+  const openDealerPlans = () =>
+    navigation.navigate("RolePlans", { lockedTab: "dealer" });
+  const handleManagePlan = () => (isDealerMode ? openDealerPlans() : navigation.navigate("RolePlans", { lockedTab: "owner" }));
+  // Renew: an already-purchased plan goes straight to checkout for the same
+  // plan; with no plan yet, the user picks one on the Plans page.
+  const handleRenewPlan = () => {
+    const catalogue = isDealerMode ? DEALER_PLANS_LIST : OWNER_PLANS_LIST;
+    const current = plan?.hasPurchased ? catalogue.find((p) => p.id === plan.id) : null;
+    if (!current) {
+      handleManagePlan();
+      return;
+    }
+    navigation.navigate("OwnerPlanConfirm", {
+      plan: {
+        id: current.id,
+        ...(isDealerMode ? { kind: "dealer" } : {}),
+        name: current.name,
+        price: current.price,
+        originalPrice: current.originalPrice,
+        priceNumeric:
+          current.priceNumeric ?? (parseInt(String(current.price).replace(/[^0-9]/g, ""), 10) || 0),
+        validity: current.validity,
+        listingLimit: current.listingLimit,
+        features: current.features,
+        renewal: true,
+      },
+    });
+  };
   const { logout, saveProfileName } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
@@ -81,14 +115,6 @@ export default function OwnerProfileScreen({ navigation }) {
     } finally {
       setSavingName(false);
     }
-  };
-
-  const handleSwitchToBuyer = () => {
-    // Switch to Find Property: Returns user to Buyer mode. Do NOT log them out!
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "MainTabs" }],
-    });
   };
 
   const handleLogout = async () => {
@@ -151,27 +177,43 @@ export default function OwnerProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* MODE SWITCH BUTTON (Prominent: Switch to Find Property) */}
-        <TouchableOpacity
-          style={styles.modeSwitchBanner}
-          onPress={handleSwitchToBuyer}
-          activeOpacity={0.88}
-        >
-          <View style={styles.modeSwitchLeft}>
-            <View style={styles.modeSwitchIconWrap}>
-              <Search size={22} color="#FFFFFF" />
+        {/* MY PLAN (same card as the Agent profile) */}
+        <View style={styles.menuGroup}>
+          <Text style={styles.groupHeading}>MY PLAN</Text>
+
+          <View style={styles.planCardItem}>
+            <View style={styles.planCardTop}>
+              <View style={styles.planTitleCol}>
+                <Text style={styles.planTitleText}>
+                  {plan?.planName || (isDealerMode ? "Dealer Plan" : "Owner Plan")}
+                </Text>
+                <Text style={styles.planLimitSub}>
+                  {planLimit == null
+                    ? `${planUsed} Listings · Unlimited`
+                    : `${planUsed}/${planLimit} Listings${planLimit - planUsed > 0 ? ` · ${planLimit - planUsed} remaining` : ""}`}
+                </Text>
+              </View>
+
+              <View style={[styles.planActivePill, !plan?.active && { backgroundColor: "#FEE2E2" }]}>
+                <Text style={[styles.planActivePillText, !plan?.active && { color: "#991B1B" }]}>
+                  {plan?.active ? "Active" : "Expired"}
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.modeSwitchTitle}>Switch to Find Property</Text>
-              <Text style={styles.modeSwitchSub}>
-                Browse flats, villas & commercial properties as a Buyer
-              </Text>
+
+            <View style={styles.planExpiryRow}>
+              <Text style={styles.planExpiryLabel}>Expiry Date:</Text>
+              <Text style={styles.planExpiryVal}>{plan?.expiryDate || "—"}</Text>
             </View>
+
+            <TouchableOpacity style={styles.managePlanBtn} onPress={handleManagePlan} activeOpacity={0.8}>
+              <Sparkles size={14} color={COLORS.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.managePlanBtnText}>Manage Plan</Text>
+              <ChevronRight size={14} color={COLORS.primary} style={{ marginLeft: "auto" }} />
+            </TouchableOpacity>
+
           </View>
-          <View style={styles.modeSwitchArrow}>
-            <ArrowRight size={16} color={COLORS.primary} />
-          </View>
-        </TouchableOpacity>
+        </View>
 
         {/* 1. ACCOUNT */}
         <View style={styles.menuGroup}>
@@ -243,34 +285,7 @@ export default function OwnerProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => navigation.navigate("OwnerPlans")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <Crown size={18} color="#2563EB" style={styles.menuIcon} />
-              <Text style={styles.menuLabel}>Current Plan</Text>
-            </View>
-            <View style={styles.badgeRow}>
-              <Text style={styles.planBadge}>{subscription?.planName || "Standard"}</Text>
-              <ChevronRight size={16} color="#94A3B8" />
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => navigation.navigate("OwnerPlans")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <Sparkles size={18} color="#334155" style={styles.menuIcon} />
-              <Text style={styles.menuLabel}>Upgrade Plan</Text>
-            </View>
-            <ChevronRight size={16} color="#94A3B8" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => navigation.navigate("OwnerPlans")}
+            onPress={handleRenewPlan}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -282,7 +297,7 @@ export default function OwnerProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => Alert.alert("Payment History", "Transactions: \n• 01 Sep 2026 - ₹2,999 (Owner Pro Plan) - Success")}
+            onPress={() => navigation.navigate("PaymentHistory", { kind: isDealerMode ? "dealer" : "owner", view: "history" })}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -294,7 +309,7 @@ export default function OwnerProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 0 }]}
-            onPress={() => Alert.alert("Invoices", "Invoice #RST-2026-8819 downloaded.")}
+            onPress={() => navigation.navigate("PaymentHistory", { kind: isDealerMode ? "dealer" : "owner", view: "invoices" })}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -455,6 +470,73 @@ export default function OwnerProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  planCardItem: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  planCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  planTitleCol: {
+    flex: 1,
+  },
+  planTitleText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  planLimitSub: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  planActivePill: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  planActivePillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#166534",
+  },
+  planExpiryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  planExpiryLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    marginRight: 6,
+  },
+  planExpiryVal: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  managePlanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  managePlanBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
   nameModalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.45)",

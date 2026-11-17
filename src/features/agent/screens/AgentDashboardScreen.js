@@ -97,7 +97,7 @@ export default function AgentDashboardScreen({ navigation }) {
   const recentLeads = leads.slice(0, 3);
 
   const handleManagePlan = () => {
-    navigation.navigate("Menu", { initialTab: "agent" });
+    navigation.navigate("RolePlans", { lockedTab: "agent" });
   };
 
   const handleViewAllLocations = () => {

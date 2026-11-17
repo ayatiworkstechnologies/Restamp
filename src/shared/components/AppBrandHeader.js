@@ -9,7 +9,6 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { HugeBuilding, HugeSearch, HugeBell, Sparkles, Repeat } from "./HugeIcon.js";
 import RestampWordmark from "./RestampWordmark.js";
-import SwitchProfileButton from "./SwitchProfileButton.js";
 import COLORS from "../constants/colors.js";
 import { useAuth } from "../../features/auth/context/AuthContext.js";
 import { enterBuyerFlow, enterOwnerFlow, ensureRole } from "../api/users.js";
@@ -18,6 +17,23 @@ import { useAgent } from "../../features/agent/context/AgentContext.js";
 import { useRequireAuth } from "../../features/auth/useRequireAuth.js";
 import { getUnreadCount, subscribeNotifications } from "../data/notificationsStore.js";
 import { useReva } from "../../features/reva/context/RevaContext.js";
+
+// Mode tag shown beside the logo so the user always knows which side they are on.
+const ROLE_BADGE = {
+  owner: { label: "Owner", bg: "#EFF6FF", fg: "#1D4ED8" },
+  dealer: { label: "Dealer", bg: "#FEF3C7", fg: "#B45309" },
+  agent: { label: "Agent", bg: "#ECFDF5", fg: "#047857" },
+};
+
+export function RoleBadge({ role }) {
+  const badge = ROLE_BADGE[role];
+  if (!badge) return null;
+  return (
+    <View style={[styles.roleBadge, { backgroundColor: badge.bg }]}>
+      <Text style={[styles.roleBadgeText, { color: badge.fg }]}>{badge.label}</Text>
+    </View>
+  );
+}
 
 function AppBrandHeader({
   currentRole = "buyer",
@@ -100,12 +116,12 @@ function AppBrandHeader({
       {/* Left Side Restamp Logotype */}
       <View style={styles.logoContainer}>
         <RestampWordmark height={20} />
+        <RoleBadge role={currentRole} />
       </View>
 
       {/* Right Side Actions */}
       <View style={styles.headerRightActions}>
         {rightActions}
-        {showSwitch && <SwitchProfileButton currentRole={currentRole} />}
 
         {showNotification && (
           <TouchableOpacity
@@ -123,6 +139,17 @@ function AppBrandHeader({
 }
 
 const styles = StyleSheet.create({
+  roleBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  roleBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",

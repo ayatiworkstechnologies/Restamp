@@ -54,15 +54,8 @@ export default function AgentProfileScreen({ navigation }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
-  const handleSwitchToBuyer = () => {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "MainTabs" }],
-    });
-  };
-
   const handleManagePlan = () => {
-    navigation.navigate("Menu", { initialTab: "agent" });
+    navigation.navigate("RolePlans", { lockedTab: "agent" });
   };
 
   const handleManageLocations = () => {
@@ -122,26 +115,6 @@ export default function AgentProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* MODE SWITCH BUTTON (MATCHING OWNER PROFILE DESIGN) */}
-        <TouchableOpacity
-          style={styles.modeSwitchBanner}
-          onPress={handleSwitchToBuyer}
-          activeOpacity={0.88}
-        >
-          <View style={styles.modeSwitchLeft}>
-            <View style={styles.modeSwitchIconWrap}>
-              <Search size={20} color={COLORS.primary} />
-            </View>
-            <View>
-              <Text style={styles.modeSwitchTitle}>Switch to Find Property</Text>
-              <Text style={styles.modeSwitchSub}>
-                Browse flats, villas & commercial properties as a Buyer
-              </Text>
-            </View>
-          </View>
-          <ArrowRight size={18} color={COLORS.primary} />
-        </TouchableOpacity>
-
         {/* 1. MY PLAN */}
         <View style={styles.menuGroup}>
           <Text style={styles.groupHeading}>MY PLAN</Text>
@@ -177,6 +150,18 @@ export default function AgentProfileScreen({ navigation }) {
               <Text style={styles.managePlanBtnText}>Manage Plan</Text>
               <ChevronRight size={14} color={COLORS.primary} style={{ marginLeft: "auto" }} />
             </TouchableOpacity>
+
+            {!agentPlan?.isDealer && (
+              <TouchableOpacity
+                style={[styles.managePlanBtn, { marginTop: 8 }]}
+                onPress={() => navigation.navigate("RolePlans", { lockedTab: "dealer" })}
+                activeOpacity={0.8}
+              >
+                <Building2 size={14} color={COLORS.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.managePlanBtnText}>Change Plan · Upgrade to Dealer</Text>
+                <ChevronRight size={14} color={COLORS.primary} style={{ marginLeft: "auto" }} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 

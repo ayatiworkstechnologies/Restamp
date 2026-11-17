@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import {
+  HugeHome,
   HugeDashboard,
   HugeBuilding,
   HugeClock,
@@ -14,6 +15,7 @@ import AgentPropertiesScreen from "../screens/AgentPropertiesScreen.js";
 import AgentProfileScreen from "../screens/AgentProfileScreen.js";
 import AgentLocationSelectScreen from "../screens/AgentLocationSelectScreen.js";
 import { useAgent } from "../context/AgentContext.js";
+import { roleTabScreenOptions } from "../../../shared/navigation/roleTabOptions.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { ensureRole } from "../../../shared/api/users.js";
@@ -23,19 +25,26 @@ import { ensureRole } from "../../../shared/api/users.js";
 // Properties tab instead of the buyer Home tab.
 import SavedScreen from "../../buyer/screens/SavedScreen.js";
 
+import HomeScreen from "../../buyer/screens/HomeScreen.js";
+
 const Tab = createBottomTabNavigator();
+
 
 function AgentActivityScreen(props) {
   return <SavedScreen {...props} browseRoute="Properties" />;
 }
 
 const agentTabConfig = {
+  HomeLink: {
+    label: "Home",
+    Icon: HugeHome,
+  },
   Dashboard: {
-    label: "Dashboard",
+    label: "My Hub",
     Icon: HugeDashboard,
   },
   Properties: {
-    label: "Properties",
+    label: "My Ads",
     Icon: HugeBuilding,
   },
   Activity: {
@@ -122,6 +131,7 @@ function AgentSpinner() {
 }
 
 function AgentTabs() {
+  const { agentPlan } = useAgent();
   // Lift the tab bar above the phone's gesture/nav bar (edge-to-edge Android).
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === "ios" ? 16 : 0);
@@ -130,61 +140,15 @@ function AgentTabs() {
       initialRouteName="Dashboard"
       detachInactiveScreens={true}
       freezeOnBlur={true}
-      screenOptions={({ route }) => {
-        const config = agentTabConfig[route.name] || agentTabConfig.Dashboard;
-        const IconComponent = config.Icon;
-
-        return {
-          headerShown: false,
-          tabBarShowLabel: true,
-          tabBarLabelPosition: "below-icon",
-          tabBarHideOnKeyboard: true,
-          tabBarActiveTintColor: "#2563EB",
-          tabBarInactiveTintColor: "#64748B",
-
-          tabBarLabel: config.label,
-
-          tabBarLabelStyle: {
-            fontSize: 10.5,
-            fontWeight: "500",
-            marginTop: 3,
-            marginBottom: Platform.OS === "ios" ? 0 : 2,
-            letterSpacing: -0.2,
-            textAlign: "center",
-          },
-
-          tabBarItemStyle: {
-            justifyContent: "center",
-            alignItems: "center",
-            paddingVertical: 2,
-            paddingHorizontal: 2,
-          },
-
-          tabBarStyle: {
-            backgroundColor: "#FFFFFF",
-            borderTopWidth: 1,
-            borderTopColor: "#EEF2F6",
-            height: 60 + bottomInset,
-            paddingTop: 8,
-            paddingBottom: 8 + bottomInset,
-            paddingHorizontal: 12,
-            shadowColor: "#000000",
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.04,
-            shadowRadius: 6,
-            elevation: 8,
-          },
-
-          tabBarIcon: ({ color, focused }) => (
-            <IconComponent
-              size={22}
-              color={color}
-              strokeWidth={focused ? 2.4 : 1.8}
-            />
-          ),
-        };
-      }}
+      screenOptions={({ route }) =>
+        roleTabScreenOptions(agentTabConfig[route.name] || agentTabConfig.Dashboard, bottomInset)
+      }
     >
+      <Tab.Screen
+        name="HomeLink"
+        component={HomeScreen}
+        initialParams={{ modeRole: agentPlan?.isDealer ? "dealer" : "agent" }}
+      />
       <Tab.Screen name="Dashboard" component={AgentDashboardScreen} />
       <Tab.Screen name="Properties" component={AgentPropertiesScreen} />
       <Tab.Screen name="Activity" component={AgentActivityScreen} />

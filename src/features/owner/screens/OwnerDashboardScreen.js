@@ -207,7 +207,7 @@ export default function OwnerDashboardScreen({ navigation, route }) {
   };
 
   const handleManagePlan = () => {
-    if (isDealer) navigation.navigate("MainTabs", { screen: "Menu", params: { initialTab: "dealer" } });
+    if (isDealer) navigation.navigate("RolePlans", { lockedTab: "dealer" });
     else navigation.navigate("OwnerPlans");
   };
 

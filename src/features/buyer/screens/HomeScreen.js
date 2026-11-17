@@ -41,7 +41,7 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import RestampWordmark from "../../../shared/components/RestampWordmark.js";
-import SwitchProfileButton from "../../../shared/components/SwitchProfileButton.js";
+import { RoleBadge } from "../../../shared/components/AppBrandHeader.js";
 import TYPOGRAPHY from "../../../shared/constants/typography.js";
 import {
   PROPERTY_TYPES,
@@ -170,7 +170,9 @@ const renderCategoryIcon = (iconName, isSelected) => {
   }
 };
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation, route }) {
+  // Set when Home is opened from the Owner / Dealer / Agent navbar.
+  const modeRole = route?.params?.modeRole;
   const [dealType, setDealType] = useState("Buy");
   const [selectedType, setSelectedType] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -499,6 +501,7 @@ export default function HomeScreen({ navigation }) {
           {/* Left Side Restamp Logotype */}
           <View style={styles.logoContainer}>
             <RestampWordmark height={20} />
+            <RoleBadge role={modeRole} />
           </View>
 
           {/* Right Side Header Actions: Login + Notification Bell. Owner mode
@@ -517,10 +520,6 @@ export default function HomeScreen({ navigation }) {
               >
                 <Text style={styles.loginPillText}>Login</Text>
               </TouchableOpacity>
-            ) : null}
-
-            {!auth.isLoading && auth.isAuthenticated ? (
-              <SwitchProfileButton currentRole="buyer" />
             ) : null}
 
             <TouchableOpacity
