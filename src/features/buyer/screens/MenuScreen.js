@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -26,7 +26,9 @@ import {
   ChevronDown,
   ArrowUpRight,
   MapPin,
+  Building2,
 } from "../../../shared/components/HugeIcon.js";
+import { DEALER_PLANS_LIST } from "../../dealer/data/dealerPlans.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { enterOwnerFlow, ensureOwnerRole } from "../../../shared/api/users.js";
@@ -39,6 +41,7 @@ import { OWNER_PLANS_LIST } from "../../owner/data/ownerPlans.js";
 
 const VERTICAL_TABS = [
   { id: "owner", label: "Owner Plan", icon: Crown },
+  { id: "dealer", label: "Dealer Plan", icon: Building2 },
   ...(AGENT_MODULE_ENABLED ? [{ id: "agent", label: "Agent Plan", icon: Briefcase }] : []),
 ];
 
@@ -176,7 +179,7 @@ export default function MenuScreen({ navigation, route }) {
   const auth = useAuth();
   // Guests log in first; the plan checkout resumes after login.
   const requireAuth = useRequireAuth(navigation);
-  const { setSelectedPlanForCheckout } = useOwner();
+  const { setSelectedPlanForCheckout, hasDealerPlan, dealerSubscription } = useOwner();
   const [ownerSwitching, setOwnerSwitching] = useState(false);
 
   // P0 fix: backend requires the OWNER role for /owner/* endpoints.
@@ -201,6 +204,11 @@ export default function MenuScreen({ navigation, route }) {
   const [activeVerticalTab, setActiveVerticalTab] = useState(
     VERTICAL_TABS.some((t) => t.id === requestedTab) ? requestedTab : "owner"
   );
+  // Follow later links (e.g. "Manage plan" from the Dealer page) when the
+  // Menu tab is already mounted.
+  useEffect(() => {
+    if (VERTICAL_TABS.some((t) => t.id === requestedTab)) setActiveVerticalTab(requestedTab);
+  }, [requestedTab]);
 
   // Category: 'residential' | 'commercial'
   const [propertyCategory, setPropertyCategory] = useState("residential");
@@ -229,7 +237,32 @@ export default function MenuScreen({ navigation, route }) {
     });
   };
 
+  const openDealerPage = () =>
+    requireAuth(async () => {
+      try {
+        await ensureOwnerRole(auth);
+        navigation.navigate("DealerNavigator");
+      } catch {
+        Alert.alert("Could not open Dealer page", "The server did not confirm the switch. Please try again.");
+      }
+    });
+
   const handleSelectPlan = (plan, planRole) => {
+    if (planRole === "Dealer") {
+      const planPayload = {
+        id: plan.id,
+        kind: "dealer",
+        name: plan.name,
+        price: plan.price,
+        priceNumeric: plan.priceNumeric,
+        validity: plan.validity,
+        listingLimit: plan.listingLimit,
+        features: plan.features,
+      };
+      const rootNav = navigation?.getParent?.() || navigation;
+      rootNav.navigate("OwnerPlanConfirm", { plan: planPayload });
+      return;
+    }
     if (planRole === "Owner") {
       const priceNumeric =
         plan.priceNumeric !== undefined
@@ -308,8 +341,11 @@ export default function MenuScreen({ navigation, route }) {
 
   // Determine current active plans array
   const isAgentTab = activeVerticalTab === "agent";
+  const isDealerTab = activeVerticalTab === "dealer";
   const currentPlans = isAgentTab
     ? AGENT_PLANS
+    : isDealerTab
+    ? DEALER_PLANS_LIST
     : propertyCategory === "residential"
       ? OWNER_PLANS.residential
       : OWNER_PLANS.commercial;
@@ -377,13 +413,13 @@ export default function MenuScreen({ navigation, route }) {
           showsVerticalScrollIndicator={false}
         >
           {/* ================= OWNER PLAN / AGENT PLAN ================= */}
-          {(activeVerticalTab === "owner" || isAgentTab) && (
+          {(activeVerticalTab === "owner" || isAgentTab || isDealerTab) && (
             <View>
               {/* Header Info */}
               <View style={styles.paneHeader}>
                 <View style={styles.headerRoleRow}>
                   <Text style={styles.paneMainTitle}>
-                    {isAgentTab ? "Agent Plans" : "Owner Plans"}
+                    {isAgentTab ? "Agent Plans" : isDealerTab ? "Dealer Plans" : "Owner Plans"}
                   </Text>
                   <View
                     style={[
@@ -397,7 +433,7 @@ export default function MenuScreen({ navigation, route }) {
                         isAgentTab ? styles.roleBadgeTextAgent : styles.roleBadgeTextOwner,
                       ]}
                     >
-                      {isAgentTab ? "Partner" : "Individual"}
+                      {isAgentTab ? "Partner" : isDealerTab ? "Business" : "Individual"}
                     </Text>
                   </View>
                 </View>
@@ -444,6 +480,30 @@ export default function MenuScreen({ navigation, route }) {
                   <TouchableOpacity
                     style={styles.ownerTestBtn}
                     onPress={() => navigation.navigate("AgentNavigator")}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.ownerTestBtnText}>Dashboard</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Active dealer plan: jump straight to the Dealer page */}
+              {isDealerTab && hasDealerPlan && (
+                <View style={styles.ownerTestBanner}>
+                  <View style={styles.ownerTestLeft}>
+                    <Crown size={17} color="#2563EB" style={{ marginRight: 8 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ownerTestTitle}>
+                        {dealerSubscription?.name || "Dealer plan"} active
+                      </Text>
+                      <Text style={styles.ownerTestSub}>
+                        Valid until {dealerSubscription?.expiryDate || "—"}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.ownerTestBtn}
+                    onPress={openDealerPage}
                     activeOpacity={0.85}
                   >
                     <Text style={styles.ownerTestBtnText}>Dashboard</Text>
@@ -520,7 +580,7 @@ export default function MenuScreen({ navigation, route }) {
                     onPress={() =>
                       handleSelectPlan(
                         plan,
-                        isAgentTab ? "Agent" : "Owner",
+                        isAgentTab ? "Agent" : isDealerTab ? "Dealer" : "Owner",
                       )
                     }
                   >

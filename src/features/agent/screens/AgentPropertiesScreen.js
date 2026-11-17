@@ -40,7 +40,7 @@ const BUDGET_OPTIONS = [
   "₹1.5 Cr – ₹3 Cr",
 ];
 
-export default function AgentPropertiesScreen({ navigation }) {
+export default function AgentPropertiesScreen({ navigation, headerAccessory = null }) {
   const {
     selectedLocalities,
     localityProperties,
@@ -105,6 +105,7 @@ export default function AgentPropertiesScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+      {headerAccessory}
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* TOP BRAND HEADER */}

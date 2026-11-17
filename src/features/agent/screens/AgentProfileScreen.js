@@ -149,7 +149,7 @@ export default function AgentProfileScreen({ navigation }) {
           <View style={styles.planCardItem}>
             <View style={styles.planCardTop}>
               <View style={styles.planTitleCol}>
-                <Text style={styles.planTitleText}>{agentPlan?.name || "Agent Plan"}</Text>
+                <Text style={styles.planTitleText}>{agentPlan?.name || (agentPlan?.isDealer ? "Dealer Plan" : "Agent Plan")}</Text>
                 <Text style={styles.planLimitSub}>
                   {selectedLocalities.length}/{agentPlan?.locationLimit || selectedLocalities.length} Locations
                   {allowance.remaining > 0 ? ` · ${allowance.remaining} remaining` : ""}
@@ -371,7 +371,7 @@ export default function AgentProfileScreen({ navigation }) {
           >
             <View style={styles.menuLeft}>
               <HelpCircle size={18} color="#334155" style={styles.menuIcon} />
-              <Text style={styles.menuLabel}>Agent Support Desk</Text>
+              <Text style={styles.menuLabel}>{agentPlan?.isDealer ? "Dealer Support Desk" : "Agent Support Desk"}</Text>
             </View>
             <ChevronRight size={16} color="#94A3B8" />
           </TouchableOpacity>
@@ -439,7 +439,7 @@ export default function AgentProfileScreen({ navigation }) {
       {/* LOGOUT CONFIRMATION MODAL */}
       <ConfirmationModal
         visible={showLogoutModal}
-        title="Logout of Agent Studio"
+        title={agentPlan?.isDealer ? "Logout" : "Logout of Agent Studio"}
         message="Are you sure you want to log out? Your active subscription and leads will remain securely saved."
         confirmText="Log Out"
         cancelText="Cancel"

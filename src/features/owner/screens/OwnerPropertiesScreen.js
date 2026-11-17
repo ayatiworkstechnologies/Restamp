@@ -46,7 +46,7 @@ const STATUS_TABS = [
   "Draft",
 ];
 
-export default function OwnerPropertiesScreen({ route, navigation }) {
+export default function OwnerPropertiesScreen({ route, navigation, headerAccessory = null }) {
   const {
     properties: localProperties,
     updatePropertyStatus,
@@ -496,6 +496,7 @@ export default function OwnerPropertiesScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+      {headerAccessory}
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
 

@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Image,
   Platform,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -26,6 +27,7 @@ import {
   MoreHorizontal,
   ArrowUpRight,
   User,
+  MapPin,
 } from "../../../shared/components/HugeIcon.js";
 
 import COLORS from "../../../shared/constants/colors.js";
@@ -37,16 +39,22 @@ import { fetchAllOwnerListings, toOwnerProperty, freshAddParams, sumOwnerMetrics
 import { fetchOwnerVisits } from "../../../shared/api/visits.js";
 import RestampLogo from "../../../shared/components/RestampLogo.js";
 import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
+import DealerSpaceTabs from "../../dealer/components/DealerSpaceTabs.js";
+import { useAgent } from "../../agent/context/AgentContext.js";
+import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 import { formatListingLimit } from "../data/ownerPlans.js";
 
-export default function OwnerDashboardScreen({ navigation }) {
+export default function OwnerDashboardScreen({ navigation, route }) {
+  // Shared with the Dealer page: same listings and leads, dealer plan card.
+  const isDealer = route?.params?.mode === "dealer";
   const insets = useSafeAreaInsets();
   const topInset = Math.max(
     insets.top,
     Platform.OS === "android" ? (StatusBar.currentHeight || 28) : 0
   );
 
-  const { properties: localProperties, leads, subscription, ownerProfile } = useOwner();
+  const { properties: localProperties, leads, subscription: ownerSubscription, dealerSubscription, ownerProfile } = useOwner();
+  const subscription = isDealer ? dealerSubscription : ownerSubscription;
   const { user: authUser } = useAuth();
   // The owning account of this dashboard. The backend scopes the API
   // response; the locally cached rows are filtered by the same owner id so
@@ -167,8 +175,40 @@ export default function OwnerDashboardScreen({ navigation }) {
     navigation.navigate("Leads");
   };
 
+  // Dealer area access (included with the Dealer plan; agent-style
+  // browsing of owner properties in chosen areas, shown as "Dealer").
+  const {
+    agentPlan: areaPlan,
+    hasActivePlan: hasAreaAccess,
+    selectedLocalities: dealerAreas = [],
+    localityProperties: areaProperties = [],
+  } = useAgent();
+  const [openingAreas, setOpeningAreas] = useState(false);
+  const areaLimit = areaPlan?.locationLimit || 0;
+  // Area features ride on the agent module: hidden while it is switched off.
+  const showDealerAreas = isDealer && AGENT_MODULE_ENABLED;
+  const [dealerTab, setDealerTab] = useState(AGENT_MODULE_ENABLED ? "sales" : "space");
+  const openDealerAreas = async (screen) => {
+    if (openingAreas) return;
+    setOpeningAreas(true);
+    try {
+      if (screen === "choose") {
+        navigation.navigate("AgentLocationSelect");
+        return;
+      }
+      // Dealers browse their areas as OWNER (the server accepts dealer
+      // area access), so no role switch is needed.
+      navigation.navigate("AreaProperties");
+    } catch {
+      Alert.alert("Could not open your areas", "The server did not confirm the switch. Please try again.");
+    } finally {
+      setOpeningAreas(false);
+    }
+  };
+
   const handleManagePlan = () => {
-    navigation.navigate("OwnerPlans");
+    if (isDealer) navigation.navigate("MainTabs", { screen: "Menu", params: { initialTab: "dealer" } });
+    else navigation.navigate("OwnerPlans");
   };
 
   const handleSwitchToBuyer = () => {
@@ -184,7 +224,7 @@ export default function OwnerDashboardScreen({ navigation }) {
 
       {/* ================= FIXED BRAND HEADER (Matching Buyer Page) ================= */}
       <View style={[styles.headerWrapper, { paddingTop: topInset }]}>
-        <AppBrandHeader currentRole="owner" />
+        <AppBrandHeader currentRole={isDealer ? "dealer" : "owner"} />
       </View>
 
       <ScrollView
@@ -199,6 +239,109 @@ export default function OwnerDashboardScreen({ navigation }) {
           <Text style={styles.greetingSubName}>{ownerName},</Text>
         </View>
 
+        {/* DEALER: two spaces — Sales Hub (area properties, leads) and
+            My Property Space (own listings) */}
+        {isDealer && (
+          <DealerSpaceTabs value={dealerTab} onChange={setDealerTab} />
+        )}
+
+        {(!isDealer || dealerTab === "sales") && (
+          <>
+        {/* DEALER: properties available in the chosen areas + new leads */}
+        {showDealerAreas && (
+          <View style={[styles.metricsGrid, { marginBottom: 12 }]}>
+            <TouchableOpacity
+              style={styles.metricCard}
+              onPress={() => navigation.navigate(dealerAreas.length ? "AreaProperties" : "AgentLocationSelect")}
+              activeOpacity={0.85}
+            >
+              <View style={styles.metricCardTop}>
+                <View style={styles.metricIconWrap}>
+                  <MapPin size={17} color="#1E293B" strokeWidth={1.8} />
+                </View>
+                <ArrowRight size={14} color="#94A3B8" />
+              </View>
+              <Text style={styles.metricNumber}>
+                {String(areaProperties.length).padStart(2, "0")}
+              </Text>
+              <Text style={styles.metricLabel}>Available Properties</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.metricCard}
+              onPress={handleViewLeads}
+              activeOpacity={0.85}
+            >
+              <View style={styles.metricCardTop}>
+                <View style={styles.metricIconWrap}>
+                  <MessageSquare size={17} color="#1E293B" strokeWidth={1.8} />
+                </View>
+                <ArrowRight size={14} color="#94A3B8" />
+              </View>
+              <Text style={styles.metricNumber}>
+                {String(recentLeadsTotal || 0).padStart(2, "0")}
+              </Text>
+              <Text style={styles.metricLabel}>New Leads</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* DEALER AREAS: included with the Dealer plan */}
+        {showDealerAreas && hasAreaAccess && (
+          <View style={styles.minimalSection}>
+            <View style={styles.sectionHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <MapPin size={18} color="#2563EB" style={{ marginRight: 6 }} />
+                <Text style={styles.sectionTitle}>Your Areas</Text>
+              </View>
+              <Text style={styles.planKey}>{dealerAreas.length}/{areaLimit}</Text>
+            </View>
+            <View style={[styles.minimalListCard, styles.areasCard]}>
+              {dealerAreas.length ? (
+                <View style={styles.areaChips}>
+                  {dealerAreas.map((name) => (
+                    <View key={name} style={styles.areaChip}>
+                      <MapPin size={12} color="#2563EB" style={{ marginRight: 4 }} />
+                      <Text style={styles.areaChipText} numberOfLines={1}>{name}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.areasEmpty}>
+                  Choose up to {areaLimit} areas to browse owner properties and get owner numbers.
+                </Text>
+              )}
+              <View style={styles.areaBtnRow}>
+                {dealerAreas.length < areaLimit && (
+                  <TouchableOpacity
+                    style={[styles.areaBtn, !dealerAreas.length && styles.areaBtnPrimary]}
+                    onPress={() => openDealerAreas("choose")}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.areaBtnText, !dealerAreas.length && styles.areaBtnTextPrimary]}>
+                      {dealerAreas.length ? "Add areas" : "Choose areas"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {dealerAreas.length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.areaBtn, styles.areaBtnPrimary]}
+                    onPress={() => openDealerAreas("browse")}
+                    activeOpacity={0.85}
+                    disabled={openingAreas}
+                  >
+                    <Text style={[styles.areaBtnText, styles.areaBtnTextPrimary]}>Browse properties</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
+
+          </>
+        )}
+
+        {(!isDealer || dealerTab === "space") && (
+          <>
         {/* 2. TOP FEATURE / STATUS CARD: Primary Active Listing */}
         <TouchableOpacity
           style={styles.featureCard}
@@ -439,12 +582,15 @@ export default function OwnerDashboardScreen({ navigation }) {
           </View>
         </View>
 
+          </>
+        )}
+
         {/* 6. OWNER PLAN & QUOTA (Minimal Card) */}
         <View style={styles.minimalSection}>
           <View style={styles.sectionHeader}>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <ShieldCheck size={18} color="#16A34A" style={{ marginRight: 6 }} />
-              <Text style={styles.sectionTitle}>Owner Plan</Text>
+              <Text style={styles.sectionTitle}>{isDealer ? "Dealer Plan" : "Owner Plan"}</Text>
             </View>
             <View style={styles.planStatusPill}>
               <Text style={styles.planStatusText}>Active</Text>
@@ -921,6 +1067,32 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  areasCard: { padding: 14 },
+  areaChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  areaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  areaChipText: { fontSize: 12.5, fontWeight: "600", color: "#1E40AF" },
+  areasEmpty: { fontSize: 13, color: "#64748B", lineHeight: 19 },
+  areaBtnRow: { flexDirection: "row", gap: 10, marginTop: 14 },
+  areaBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  areaBtnPrimary: { backgroundColor: "#2563EB", borderColor: "#2563EB" },
+  areaBtnText: { fontSize: 13.5, fontWeight: "600", color: "#0F172A" },
+  areaBtnTextPrimary: { color: "#FFFFFF" },
   minimalListCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,

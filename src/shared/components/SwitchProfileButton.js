@@ -5,7 +5,7 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Alert, ActivityIndicator } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { HugeSearch, HugeBuilding, Check } from "./HugeIcon.js";
+import { HugeSearch, HugeBuilding, Check, Building2 } from "./HugeIcon.js";
 import { Briefcase } from "./HugeIcon.js";
 import COLORS from "../constants/colors.js";
 import { useAuth } from "../../features/auth/context/AuthContext.js";
@@ -19,8 +19,11 @@ export default function SwitchProfileButton({ currentRole = "buyer" }) {
   const navigation = useNavigation();
   const auth = useAuth();
   const requireAuth = useRequireAuth(navigation);
-  const { hasOwnerPlan } = useOwner();
-  const { hasActivePlan: hasAgentPlan } = useAgent();
+  const { hasOwnerPlan, hasDealerPlan } = useOwner();
+  const { hasActivePlan: hasAreaPlan, agentPlan } = useAgent();
+  // Area access that came with a Dealer plan is shown as Dealer only.
+  const dealerAreas = !!agentPlan?.isDealer;
+  const hasAgentPlan = hasAreaPlan && !dealerAreas;
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(null);
 
@@ -54,6 +57,14 @@ export default function SwitchProfileButton({ currentRole = "buyer" }) {
           setOpen(false);
           navigation.navigate("OwnerPlans");
         }
+      } else if (key === "dealer") {
+        // Dealers post through the owner listing system (OWNER role).
+        if (hasDealerPlan) {
+          if (await enterDashboard("OWNER", "DealerNavigator", "Dealer profile")) setOpen(false);
+        } else {
+          setOpen(false);
+          navigation.navigate("MainTabs", { screen: "Menu", params: { initialTab: "dealer" } });
+        }
       } else if (key === "agent") {
         if (hasAgentPlan) {
           if (await enterDashboard("BROKER", "AgentNavigator", "Agent profile")) setOpen(false);
@@ -69,8 +80,15 @@ export default function SwitchProfileButton({ currentRole = "buyer" }) {
 
   const options = [
     { key: "buyer", title: "Buyer", sub: "Find a property", Icon: HugeSearch, ready: true },
-    { key: "owner", title: "Owner", sub: hasOwnerPlan ? "Manage your listings" : "Needs an Owner plan", Icon: HugeBuilding, ready: hasOwnerPlan },
-    { key: "agent", title: "Agent", sub: hasAgentPlan ? "Your areas and leads" : "Needs an Agent plan", Icon: Briefcase, ready: hasAgentPlan },
+    // A Dealer plan already covers posting properties, so Owner is hidden
+    // for dealers (unless they are currently in Owner mode).
+    ...(hasDealerPlan && currentRole !== "owner"
+      ? []
+      : [{ key: "owner", title: "Owner", sub: hasOwnerPlan ? "Manage your listings" : "Needs an Owner plan", Icon: HugeBuilding, ready: hasOwnerPlan }]),
+    { key: "dealer", title: "Dealer", sub: hasDealerPlan ? "Post and manage properties" : "Needs a Dealer plan", Icon: Building2, ready: hasDealerPlan },
+    // A Dealer plan includes the agent features, so Agent is hidden for
+    // dealers (unless they are currently in Agent mode).
+    ...(dealerAreas || (hasDealerPlan && currentRole !== "agent") ? [] : [{ key: "agent", title: "Agent", sub: hasAgentPlan ? "Your areas and leads" : "Needs an Agent plan", Icon: Briefcase, ready: hasAgentPlan }]),
   ];
 
   return (

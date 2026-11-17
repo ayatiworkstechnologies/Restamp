@@ -26,13 +26,16 @@ import {
 import COLORS from "../../../shared/constants/colors.js";
 import StatusSheet from "../../../shared/components/StatusSheet.js";
 import { useOwner } from "../context/OwnerContext.js";
+import { useAgent } from "../../agent/context/AgentContext.js";
+import { fetchAgentPlan } from "../../../shared/api/agentPlans.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { ensureOwnerRole } from "../../../shared/api/users.js";
-import { subscribeOwnerPlan } from "../../../shared/api/ownerPlans.js";
+import { subscribeOwnerPlan, subscribeDealerPlan } from "../../../shared/api/ownerPlans.js";
 
 export default function OwnerPaymentScreen({ route, navigation }) {
   const auth = useAuth();
-  const { activateSubscription } = useOwner();
+  const { activateSubscription, activateDealerSubscription } = useOwner();
+  const { applyServerPlan } = useAgent();
   const plan = route?.params?.plan || {
     id: "owner-startup",
     name: "Startup Plan",
@@ -99,15 +102,30 @@ export default function OwnerPaymentScreen({ route, navigation }) {
         return;
       }
       const txnId = `SIM-${Date.now().toString().slice(-8)}`;
-      activateSubscription({ ...plan, amountPaid: formattedAmount, txnId });
+      const isDealer = plan?.kind === "dealer";
       // Save the plan on the server so it survives logout and role switches.
-      // If this backend has no owner-plan endpoint yet, the plan stays active
-      // for this session only.
-      subscribeOwnerPlan(plan.id).catch((e) => {
-        console.warn("[owner-plan] not saved on server:", e?.status || e?.message);
-      });
+      // If this backend has no plan endpoint yet, the plan stays active for
+      // this session only.
+      if (isDealer) {
+        activateDealerSubscription({ ...plan, amountPaid: formattedAmount, txnId });
+        subscribeDealerPlan(plan.id)
+          // The dealer plan includes area access: load it into the app.
+          .then(() => fetchAgentPlan())
+          .then((server) => {
+            if (server) applyServerPlan?.(server);
+          })
+          .catch((e) => {
+            console.warn("[dealer-plan] not saved on server:", e?.status || e?.message);
+          });
+      } else {
+        activateSubscription({ ...plan, amountPaid: formattedAmount, txnId });
+        subscribeOwnerPlan(plan.id).catch((e) => {
+          console.warn("[owner-plan] not saved on server:", e?.status || e?.message);
+        });
+      }
       ensureOwnerRole(auth).catch(() => {});
       pendingSuccess.current = ["OwnerPaymentSuccess", {
+        kind: isDealer ? "dealer" : "owner",
         planName: plan.name,
         planValidity: plan.validity || "30 Days",
         listingLimit: `Up to ${plan.listingLimit || 1} Active Listing${(plan.listingLimit || 1) > 1 ? "s" : ""}`,

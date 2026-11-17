@@ -45,6 +45,7 @@ import {
   Maximize2,
   Car,
   Edit,
+  MessageCircle,
 } from "../../../shared/components/HugeIcon.js";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import COLORS from "../../../shared/constants/colors.js";
@@ -63,7 +64,7 @@ import PropertyGalleryModal from "./PropertyGalleryModal.js";
 import ScheduleVisitModal from "./ScheduleVisitModal.js";
 import { createEnquiry } from "../api/enquiries.js";
 import { getRevealedContact, revealContact } from "../../../shared/api/contact.js";
-import { ownerDialUrl, ownerNameFor, visitErrorCopy } from "../utils/ownerContact.js";
+import { ownerDialUrl, ownerWhatsAppUrl, ownerNameFor, visitErrorCopy } from "../utils/ownerContact.js";
 import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
 import { isAgentAreaRequired } from "../../../shared/api/agentPlans.js";
 import { promptAgentUpgrade } from "../../agent/utils/agentUpgrade.js";
@@ -750,12 +751,18 @@ function PropertyDetailModal({
     });
   };
 
-  const handleCallOwner = () => {
+  // WhatsApp the owner: same login + authorized reveal as calling, then
+  // opens WhatsApp with a short message about this property.
+  const handleWhatsAppOwner = () => handleCallOwner("whatsapp");
+
+  const handleCallOwner = (via = "call") => {
     const backendId = property && property.backendId;
     if (typeof backendId !== "number" || !getAuthTokenSync()) {
       handleLoginRequired(
-        "Log in to call the owner of this property. The number is only shared after a successful login.",
-        () => handleCallOwner()
+        via === "whatsapp"
+          ? "Log in to WhatsApp the owner of this property. The number is only shared after a successful login."
+          : "Log in to call the owner of this property. The number is only shared after a successful login.",
+        () => handleCallOwner(via)
       );
       return;
     }
@@ -770,6 +777,15 @@ function PropertyDetailModal({
             "Contact Number Unavailable",
             "The owner's contact number is not available for this property."
           );
+          return;
+        }
+        if (via === "whatsapp") {
+          const title = property?.title ? ` "${property.title}"` : "";
+          Linking.openURL(
+            ownerWhatsAppUrl(phone, `Hi, I'm interested in your property${title} on RESTAMP.`)
+          ).catch(() => {
+            Alert.alert("WhatsApp Not Available", "Could not open WhatsApp for this contact.");
+          });
           return;
         }
         // Show the call popup; the dialler opens only on "Call now".
@@ -1347,10 +1363,10 @@ function PropertyDetailModal({
                 </View>
                 <TouchableOpacity
                   style={styles.ownerCallBtn}
-                  onPress={() => handleCallOwner()}
-                  accessibilityLabel="Call owner"
+                  onPress={handleWhatsAppOwner}
+                  accessibilityLabel="WhatsApp owner"
                 >
-                  <Phone size={18} color="#16A34A" />
+                  <MessageCircle size={18} color="#16A34A" />
                 </TouchableOpacity>
               </View>
               <View style={styles.ownerDivider} />

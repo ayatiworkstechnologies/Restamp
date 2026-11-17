@@ -16,6 +16,8 @@ import OwnerPropertiesScreen from "../screens/OwnerPropertiesScreen.js";
 import OwnerAddPropertyScreen from "../screens/OwnerAddPropertyScreen.js";
 import OwnerLeadsScreen from "../screens/OwnerLeadsScreen.js";
 import OwnerProfileScreen from "../screens/OwnerProfileScreen.js";
+import DealerPropertiesScreen from "../../dealer/screens/DealerPropertiesScreen.js";
+import DealerLeadsScreen from "../../dealer/screens/DealerLeadsScreen.js";
 
 const Tab = createBottomTabNavigator();
 
@@ -46,7 +48,17 @@ const ownerTabConfig = {
   },
 };
 
-export default function OwnerNavigator() {
+// Dealer page: Dashboard · Add Property · Activity · Profile. Properties and
+// Visits stay registered (hidden) so links from the shared screens still work.
+const dealerTabConfig = {
+  AreaProperties: { label: "Properties", Icon: HugeBuilding },
+  Add: { label: "Add Property", Icon: HugePlus },
+  Leads: { label: "Buyer Leads", Icon: HugeUsers },
+};
+const HIDDEN_TAB = { tabBarItemStyle: { display: "none" }, tabBarButton: () => null };
+
+export default function OwnerNavigator({ mode = "owner" }) {
+  const isDealer = mode === "dealer";
   // Lift the tab bar above the phone's gesture/nav bar (edge-to-edge Android).
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === "ios" ? 16 : 0);
@@ -56,7 +68,7 @@ export default function OwnerNavigator() {
       detachInactiveScreens={true}
       freezeOnBlur={true}
       screenOptions={({ route }) => {
-        const config = ownerTabConfig[route.name] || ownerTabConfig.Dashboard;
+        const config = (isDealer && dealerTabConfig[route.name]) || ownerTabConfig[route.name] || ownerTabConfig.Dashboard;
         const IconComponent = config.Icon;
 
         return {
@@ -110,8 +122,20 @@ export default function OwnerNavigator() {
         };
       }}
     >
-      <Tab.Screen name="Dashboard" component={OwnerDashboardScreen} />
-      <Tab.Screen name="Properties" component={OwnerPropertiesScreen} />
+      <Tab.Screen
+        name="Dashboard"
+        component={OwnerDashboardScreen}
+        initialParams={isDealer ? { mode: "dealer" } : undefined}
+      />
+      {isDealer && (
+        // Sales Hub (area properties) + My Property Space (own listings).
+        <Tab.Screen name="AreaProperties" component={DealerPropertiesScreen} />
+      )}
+      <Tab.Screen
+        name="Properties"
+        component={OwnerPropertiesScreen}
+        options={isDealer ? HIDDEN_TAB : undefined}
+      />
       <Tab.Screen
         name="Add"
         component={OwnerAddPropertyScreen}
@@ -119,7 +143,7 @@ export default function OwnerNavigator() {
           tabBarStyle: { display: "none" },
         }}
       />
-      <Tab.Screen name="Leads" component={OwnerLeadsScreen} />
+      <Tab.Screen name="Leads" component={isDealer ? DealerLeadsScreen : OwnerLeadsScreen} />
       <Tab.Screen name="Profile" component={OwnerProfileScreen} />
     </Tab.Navigator>
   );

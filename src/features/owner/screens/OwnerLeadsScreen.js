@@ -69,7 +69,7 @@ const LEAD_FILTERS = [
   "Closed",
 ];
 
-export default function OwnerLeadsScreen({ navigation, route }) {
+export default function OwnerLeadsScreen({ navigation, route, headerAccessory = null }) {
   const { properties: localProperties, leads, updateLeadStatus } = useOwner();
   const { user: authUser } = useAuth();
   // The owning account: local rows are only used when they belong to the
@@ -451,6 +451,7 @@ export default function OwnerLeadsScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+      {headerAccessory}
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
 

@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { shouldResetAccountScope, selectOwnerScopedProperties } from "../../auth/session.js";
-import { fetchOwnerPlan } from "../../../shared/api/ownerPlans.js";
+import { fetchOwnerPlan, fetchDealerPlan } from "../../../shared/api/ownerPlans.js";
+import { DEALER_PLANS_LIST } from "../../dealer/data/dealerPlans.js";
 import { OWNER_PLANS_LIST } from "../data/ownerPlans.js";
 
 // Server owner plan -> the subscription shape the Owner screens use.
 function subscriptionFromServer(server) {
-  const local = OWNER_PLANS_LIST.find((p) => p.id === server.plan_id);
+  const local = [...OWNER_PLANS_LIST, ...DEALER_PLANS_LIST].find((p) => p.id === server.plan_id);
   const fmt = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : null;
   const end = server.end_date ? new Date(server.end_date) : null;
@@ -113,6 +114,42 @@ export function OwnerProvider({ children }) {
   // Load the saved owner plan from the server whenever the account changes,
   // so a purchase survives logout, restart and switching roles.
   const [ownerPlanLoaded, setOwnerPlanLoaded] = useState(false);
+  // Dealer plan: separate from the owner plan (a user can hold both).
+  const [dealerSubscription, setDealerSubscription] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setDealerSubscription(null);
+    if (authUserId == null) return undefined;
+    fetchDealerPlan().then((server) => {
+      if (alive && server) setDealerSubscription(subscriptionFromServer(server));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [authUserId]);
+
+  const activateDealerSubscription = (plan) => {
+    const days = parseInt(String(plan?.validity || "30"), 10) || 30;
+    const now = new Date();
+    const fmt = (d) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    setDealerSubscription({
+      id: plan?.id,
+      name: plan?.name,
+      planName: plan?.name,
+      validity: plan?.validity,
+      daysRemaining: days,
+      listingLimit: plan?.listingLimit ?? 10,
+      price: plan?.amountPaid || plan?.price,
+      amountPaid: plan?.amountPaid || plan?.price,
+      active: true,
+      hasPurchased: true,
+      simulated: true,
+      status: "Active",
+      startDate: fmt(now),
+      expiryDate: fmt(new Date(now.getTime() + days * 86400000)),
+      txnId: plan?.txnId || null,
+    });
+  };
   useEffect(() => {
     let alive = true;
     setOwnerPlanLoaded(false);
@@ -236,11 +273,15 @@ export function OwnerProvider({ children }) {
   // touches any listing status.
 
   const hasOwnerPlan = !!(subscription && subscription.hasPurchased && subscription.active);
+  const hasDealerPlan = !!(dealerSubscription && dealerSubscription.active);
 
   const contextValue = useMemo(() => ({
     subscription,
     hasOwnerPlan,
     ownerPlanLoaded,
+    dealerSubscription,
+    hasDealerPlan,
+    activateDealerSubscription,
     setSubscription,
     activateSubscription,
     ownerProfile,
@@ -258,6 +299,8 @@ export function OwnerProvider({ children }) {
     setSelectedPlanForCheckout,
   }), [
     subscription,
+    dealerSubscription,
+    hasDealerPlan,
     hasOwnerPlan,
     ownerPlanLoaded,
     ownerProfile,

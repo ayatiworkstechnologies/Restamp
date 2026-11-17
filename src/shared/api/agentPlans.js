@@ -95,5 +95,8 @@ export function toUiAgentPlan(server) {
     localitiesRemaining:
       typeof server.localities_remaining === "number" ? server.localities_remaining : undefined,
     isTrial: server.is_trial === true,
+    // Area access included with a Dealer plan: shown as Dealer, never Agent.
+    isDealer: server.is_dealer === true,
+    localities: Array.isArray(server.localities) ? server.localities : [],
   };
 }

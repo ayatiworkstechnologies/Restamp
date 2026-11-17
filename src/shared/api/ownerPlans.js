@@ -23,3 +23,18 @@ export async function fetchOwnerPlan() {
 export async function subscribeOwnerPlan(planId) {
   return apiPost(`/users/me/owner-plan/${encodeURIComponent(planId)}/subscribe`, {});
 }
+
+/** The caller's active dealer plan, or null (none / not logged in / error). */
+export async function fetchDealerPlan() {
+  try {
+    const data = await apiGetAuth("/users/me/dealer-plan");
+    return data && data.active ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Save a purchased dealer plan on the server. Rejects on failure. */
+export async function subscribeDealerPlan(planId) {
+  return apiPost(`/users/me/dealer-plan/${encodeURIComponent(planId)}/subscribe`, {});
+}

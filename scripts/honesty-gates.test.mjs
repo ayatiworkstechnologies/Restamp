@@ -126,7 +126,9 @@ check(
 // Outside the agent feature and the gated screens above, nothing navigates to an agent route.
 const { readdirSync, statSync } = await import("node:fs");
 const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : f.endsWith(".js") ? [join(d, f)] : []));
-const gated = ["MenuScreen.js", "ProfileScreen.js", "ActiveMembershipsScreen.js", "LoginScreen.js"];
+// OwnerDashboardScreen: the Dealer dashboard's area links render only when
+// AGENT_MODULE_ENABLED is on (showDealerAreas).
+const gated = ["MenuScreen.js", "ProfileScreen.js", "ActiveMembershipsScreen.js", "LoginScreen.js", "OwnerDashboardScreen.js"];
 // Login opens the Agent dashboard only for a server-confirmed agent plan,
 // and only while the flag is on.
 const loginSrc = src("features/auth/screens/LoginScreen.js");

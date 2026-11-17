@@ -543,6 +543,20 @@ export default function LoginScreen({ navigation }) {
   // After the name: Buyer enters the app; Owner / Agent open their existing
   // plan screens with Buyer Home underneath (no access is granted here).
   const enterIntendedRole = () => {
+    if (intendedRole === "dealer") {
+      // Dealer: open the Menu's Dealer Plan tab (no access is granted here).
+      loginSucceededRef.current = true;
+      try {
+        clearPendingAction();
+      } catch {
+        // ignore
+      }
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "MainTabs", params: { screen: "Menu", params: { initialTab: "dealer" } } }],
+      });
+      return;
+    }
     if (intendedRole === "owner" || (intendedRole === "agent" && AGENT_MODULE_ENABLED)) {
       loginSucceededRef.current = true;
       try {
@@ -1040,11 +1054,12 @@ export default function LoginScreen({ navigation }) {
 
               <Text style={[styles.lgLabel, { marginTop: 26 }]}>What brings you to RESTAMP?</Text>
               {[
-                { key: "buyer", title: "Find a property", sub: "Buyer · free" },
-                { key: "owner", title: "List my property", sub: "Owner · needs Owner Plan" },
+                { key: "buyer", title: "Buyer", sub: "Find a property · free" },
+                { key: "owner", title: "Owner", sub: "List my property · needs Owner Plan" },
                 ...(AGENT_MODULE_ENABLED
-                  ? [{ key: "agent", title: "I'm an agent", sub: "Agent · needs Agent Plan, 1 area free" }]
+                  ? [{ key: "agent", title: "Agent", sub: "Broker properties · needs Agent Plan, 1 area free" }]
                   : []),
+                { key: "dealer", title: "Dealer", sub: "Post and manage properties · needs Dealer Plan" },
               ].map((r) => {
                 const on = intendedRole === r.key;
                 return (

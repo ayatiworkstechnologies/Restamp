@@ -26,6 +26,7 @@ import { ensureOwnerRole } from "../../../shared/api/users.js";
 
 export default function OwnerPaymentSuccessScreen({ route, navigation }) {
   const auth = useAuth();
+  const isDealer = route?.params?.kind === "dealer";
   const planName = route?.params?.planName || "Startup Plan";
   const planValidity = route?.params?.planValidity || "30 Days";
   const listingLimit = route?.params?.listingLimit || "Up to 1 Active Listing";
@@ -45,10 +46,10 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
       redirectTimerRef.current = null;
     }
     ensureOwnerRole(auth).catch(() => {});
-    // Navigate strictly to OwnerNavigator, never to Buyer Home!
+    // Dealer purchases land on the Dealer page; owner purchases on Owner.
     navigation.reset({
       index: 0,
-      routes: [{ name: "OwnerNavigator" }],
+      routes: [{ name: isDealer ? "DealerNavigator" : "OwnerNavigator" }],
     });
   };
 
@@ -187,7 +188,7 @@ export default function OwnerPaymentSuccessScreen({ route, navigation }) {
           onPress={handleGoToDashboard}
           activeOpacity={0.88}
         >
-          <Text style={styles.ctaButtonText}>Go to Owner Dashboard</Text>
+          <Text style={styles.ctaButtonText}>{isDealer ? "Go to Dealer Dashboard" : "Go to Owner Dashboard"}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

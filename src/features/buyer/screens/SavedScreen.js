@@ -104,7 +104,7 @@ const ACTIVITY_TABS = ["wishlist", "call", "messages", "visits", "viewed"];
 
 // Shared by the buyer Activity tab and the agent Activity tab (agent
 // navigation passes browseRoute="Properties", its own listings tab).
-export default function SavedScreen({ navigation, route, browseRoute = "Home" }) {
+export default function SavedScreen({ navigation, route, browseRoute = "Home", headerAccessory = null }) {
   const { wishlist, removeFromWishlist, isWishlisted, toggleWishlist, refreshWishlist } = useWishlist();
   // Protected modal actions resume here after a guest logs in (Change 2).
   const requireAuth = useRequireAuth(navigation);
@@ -652,6 +652,7 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home" })
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+      {headerAccessory}
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       <ScrollView

@@ -129,7 +129,7 @@ export default function AgentDashboardScreen({ navigation }) {
 
       {/* ================= FIXED BRAND HEADER (Matching Owner Page) ================= */}
       <View style={[styles.headerWrapper, { paddingTop: topInset }]}>
-        <AppBrandHeader currentRole="agent" />
+        <AppBrandHeader currentRole={agentPlan?.isDealer ? "dealer" : "agent"} />
       </View>
 
       <ScrollView
@@ -150,7 +150,7 @@ export default function AgentDashboardScreen({ navigation }) {
             <View style={styles.expiredLeft}>
               <AlertTriangle size={20} color="#DC2626" style={{ marginRight: 10 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.expiredTitle}>Your Agent Plan has expired.</Text>
+                <Text style={styles.expiredTitle}>Your {agentPlan?.isDealer ? "Dealer" : "Agent"} Plan has expired.</Text>
                 <Text style={styles.expiredSub}>
                   Renew to unlock new property listings and fresh customer enquiries.
                 </Text>
@@ -417,7 +417,7 @@ export default function AgentDashboardScreen({ navigation }) {
               <ShieldCheck size={18} color={COLORS.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.subLabel}>Agent Subscription</Text>
+              <Text style={styles.subLabel}>{agentPlan?.isDealer ? "Dealer Subscription" : "Agent Subscription"}</Text>
               <Text style={styles.subTitle} numberOfLines={1}>
                 {agentPlan?.name || "No active plan"}
               </Text>

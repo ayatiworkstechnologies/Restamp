@@ -47,6 +47,7 @@ import { getAuthTokenSync } from "../../../shared/api/client.js";
 import { enterOwnerFlow } from "../../../shared/api/users.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import { fetchMyEnquiries } from "../api/enquiries.js";
+import { fetchMyBuyerPlan, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
 import { linkGoogleAccount } from "../../auth/api/auth.js";
 // No ".js" extension so Metro picks GoogleSignInButton.web.js on web.
 import GoogleSignInButton from "../../auth/components/GoogleSignInButton";
@@ -105,6 +106,9 @@ export default function ProfileScreen({ navigation }) {
   // stale JWT claim) so the badge below always reflects the live role.
   const [authed, setAuthed] = useState(false);
   const [enquiriesTotal, setEnquiriesTotal] = useState(null);
+  // View Number balance from the server's buyer plan (free 3, or the paid
+  // plan's quota). Refreshed on focus so a purchase or reveal shows at once.
+  const [buyerPlan, setBuyerPlan] = useState(null);
   const isBuyerRole = authUser?.role === "BUYER";
   useFocusEffect(
     useCallback(() => {
@@ -117,6 +121,12 @@ export default function ProfileScreen({ navigation }) {
       refreshMe().catch(() => {});
       if (isBuyerRole) {
         refreshWishlist().catch(() => {});
+        fetchMyBuyerPlan().then(
+          (plan) => {
+            if (!cancelled) setBuyerPlan(plan || null);
+          },
+          () => {}
+        );
         fetchMyEnquiries(1, 1).then(
           (data) => {
             if (!cancelled) setEnquiriesTotal(data.total);
@@ -126,6 +136,7 @@ export default function ProfileScreen({ navigation }) {
       } else if (!cancelled) {
         // Non-buyer role: drop any stale buyer count instead of showing it.
         setEnquiriesTotal(null);
+        setBuyerPlan(null);
       }
       return () => {
         cancelled = true;
@@ -398,6 +409,48 @@ export default function ProfileScreen({ navigation }) {
             <ArrowRight size={16} color={COLORS.primary} />
           </View>
         </TouchableOpacity>
+
+        {/* VIEW NUMBER BALANCE (buyer plan) */}
+        {authed && isBuyerRole && buyerPlan ? (() => {
+          const unlimited = buyerPlan.lead_limit == null;
+          const remaining = unlimited ? null : buyerPlan.leads_remaining ?? 0;
+          const limit = buyerPlan.lead_limit;
+          const used = buyerPlan.leads_used ?? 0;
+          const pct = unlimited || !limit ? 1 : Math.max(0, Math.min(1, remaining / limit));
+          const until = buyerPlan.valid_until
+            ? new Date(buyerPlan.valid_until).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+            : null;
+          return (
+            <View style={styles.menuGroup}>
+              <Text style={styles.groupHeading}>VIEW NUMBER BALANCE</Text>
+              <View style={styles.balanceRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.balanceBig}>
+                    {unlimited ? "Unlimited" : `${remaining} of ${limit}`}
+                  </Text>
+                  <Text style={styles.balanceSub}>
+                    {unlimited ? "owner numbers" : "owner numbers left"} · {buyerPlan.plan_name}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.balanceBtn}
+                  onPress={() => nav.navigate(BUYER_PLANS_ROUTE)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.balanceBtnText}>
+                    {buyerPlan.is_free || (!unlimited && remaining === 0) ? "Get more" : "Plans"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.balanceTrack}>
+                <View style={[styles.balanceFill, { width: `${Math.round(pct * 100)}%` }, !unlimited && remaining === 0 && styles.balanceFillEmpty]} />
+              </View>
+              <Text style={styles.balanceMeta}>
+                {used} used{until ? ` · ${buyerPlan.is_free ? "resets" : "valid until"} ${until}` : ""}
+              </Text>
+            </View>
+          );
+        })() : null}
 
         {/* 1. ACCOUNT */}
         <View style={styles.menuGroup}>
@@ -1009,6 +1062,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 16,
   },
+  balanceRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
+  balanceBig: { fontSize: 22, fontWeight: "700", color: "#0F172A", letterSpacing: -0.4 },
+  balanceSub: { fontSize: 12.5, color: "#64748B", marginTop: 2 },
+  balanceBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  balanceBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "600" },
+  balanceTrack: { height: 6, borderRadius: 3, backgroundColor: "#E2E8F0", marginTop: 12, overflow: "hidden" },
+  balanceFill: { height: 6, borderRadius: 3, backgroundColor: COLORS.primary },
+  balanceFillEmpty: { backgroundColor: "#DC2626" },
+  balanceMeta: { fontSize: 12, color: "#64748B", marginTop: 8, marginBottom: 6 },
   groupHeading: {
     fontSize: 11,
     fontWeight: "500",

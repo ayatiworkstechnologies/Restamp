@@ -24,6 +24,7 @@ import ActiveMembershipsScreen from "../../features/buyer/screens/ActiveMembersh
 import BuyerPlansScreen from "../../features/buyer/screens/BuyerPlansScreen.js";
 
 import OwnerNavigator from "../../features/owner/navigation/OwnerNavigator.js";
+import DealerNavigator from "../../features/dealer/navigation/DealerNavigator.js";
 import OwnerPlansScreen from "../../features/owner/screens/OwnerPlansScreen.js";
 import OwnerPlanConfirmScreen from "../../features/owner/screens/OwnerPlanConfirmScreen.js";
 import OwnerPaymentScreen from "../../features/owner/screens/OwnerPaymentScreen.js";
@@ -191,6 +192,7 @@ const GuardedActiveMemberships = guarded(ActiveMembershipsScreen);
 const GuardedBuyerPlans = guarded(BuyerPlansScreen);
 const GuardedNotifications = guarded(NotificationScreen);
 const GuardedOwnerNavigator = guarded(OwnerNavigator);
+const GuardedDealerNavigator = guarded(DealerNavigator);
 const GuardedOwnerPlans = guarded(OwnerPlansScreen);
 const GuardedOwnerPlanConfirm = guarded(OwnerPlanConfirmScreen);
 const GuardedOwnerPayment = guarded(OwnerPaymentScreen);
@@ -275,6 +277,7 @@ export default function AppNavigator() {
         <Stack.Screen name="OwnerPaymentSuccess" component={GuardedOwnerPaymentSuccess} />
         <Stack.Screen name="OwnerPaymentFailed" component={GuardedOwnerPaymentFailed} />
         <Stack.Screen name="OwnerNavigator" component={GuardedOwnerNavigator} />
+        <Stack.Screen name="DealerNavigator" component={GuardedDealerNavigator} />
         <Stack.Screen name="OwnerPublishSuccess" component={GuardedOwnerPublishSuccess} />
         <Stack.Screen name="OwnerLeadDetail" component={GuardedOwnerLeadDetail} />
         <Stack.Screen name="OwnerPropertyLeads" component={GuardedOwnerPropertyLeads} />
