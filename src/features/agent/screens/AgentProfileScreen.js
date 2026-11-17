@@ -122,7 +122,7 @@ export default function AgentProfileScreen({ navigation }) {
           <View style={styles.planCardItem}>
             <View style={styles.planCardTop}>
               <View style={styles.planTitleCol}>
-                <Text style={styles.planTitleText}>{agentPlan?.name || (agentPlan?.isDealer ? "Dealer Plan" : "Agent Plan")}</Text>
+                <Text style={styles.planTitleText}>{agentPlan?.name || "No active plan"}</Text>
                 <Text style={styles.planLimitSub}>
                   {selectedLocalities.length}/{agentPlan?.locationLimit || selectedLocalities.length} Locations
                   {allowance.remaining > 0 ? ` · ${allowance.remaining} remaining` : ""}

@@ -600,7 +600,7 @@ export default function OwnerDashboardScreen({ navigation, route }) {
           <View style={styles.minimalListCard}>
             <View style={styles.planRowItem}>
               <Text style={styles.planKey}>Current Plan</Text>
-              <Text style={styles.planVal}>{subscription?.planName || "Standard"}</Text>
+              <Text style={styles.planVal}>{subscription?.hasPurchased ? subscription.planName || subscription.name : "No active plan"}</Text>
             </View>
             <View style={styles.planRowDivider} />
             <View style={styles.planRowItem}>

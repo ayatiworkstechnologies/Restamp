@@ -185,7 +185,7 @@ export default function OwnerProfileScreen({ navigation, route }) {
             <View style={styles.planCardTop}>
               <View style={styles.planTitleCol}>
                 <Text style={styles.planTitleText}>
-                  {plan?.planName || (isDealerMode ? "Dealer Plan" : "Owner Plan")}
+                  {plan?.hasPurchased ? plan.planName || plan.name : "No active plan"}
                 </Text>
                 <Text style={styles.planLimitSub}>
                   {planLimit == null
@@ -194,9 +194,9 @@ export default function OwnerProfileScreen({ navigation, route }) {
                 </Text>
               </View>
 
-              <View style={[styles.planActivePill, !plan?.active && { backgroundColor: "#FEE2E2" }]}>
-                <Text style={[styles.planActivePillText, !plan?.active && { color: "#991B1B" }]}>
-                  {plan?.active ? "Active" : "Expired"}
+              <View style={[styles.planActivePill, !(plan?.hasPurchased && plan?.active) && { backgroundColor: "#FEE2E2" }]}>
+                <Text style={[styles.planActivePillText, !(plan?.hasPurchased && plan?.active) && { color: "#991B1B" }]}>
+                  {!plan?.hasPurchased ? "No plan" : plan?.active ? "Active" : "Expired"}
                 </Text>
               </View>
             </View>
