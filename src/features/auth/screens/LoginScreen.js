@@ -65,7 +65,7 @@ const OTP_BOX_WIDTH = Math.min(46, Math.max(38, Math.floor((ACTUAL_WIDTH - 84) /
 const OTP_BOX_SIZE = Math.min(56, Math.floor((ACTUAL_WIDTH - 48 - 50) / 6));
 // Welcome slides (shown before the mobile number step when the app opens
 // on Login). Copy describes the three real RESTAMP journeys.
-const GET_STARTED_IMAGE = require("../../../../assets/agent-welcome-building-clean.png");
+const GET_STARTED_IMAGE = require("../../../../assets/get-started-building.jpg");
 const WELCOME_SLIDES = [
   {
     key: "buyer",
