@@ -1357,6 +1357,7 @@ export function toEditForm(detail) {
     overlooking: detail.overlooking || "",
     powerBackup: powerMap[detail.power_backup] || "",
     propertyFacing: detail.facing || "",
+    propertyName: detail.title || "",
     photosList: photos.map((p, idx) => ({
       id: p && p.id !== undefined && p.id !== null ? `remote-${p.id}` : `remote-idx-${idx}`,
       mediaId: p && p.id !== undefined && p.id !== null ? p.id : null,

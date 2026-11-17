@@ -367,6 +367,8 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   const [overlooking, setOverlooking] = useState("Park");
   const [powerBackup, setPowerBackup] = useState("Full");
   const [propertyFacing, setPropertyFacing] = useState("East");
+  // Optional display name for the listing; empty = auto "2 BHK Apartment".
+  const [propertyName, setPropertyName] = useState("");
 
   // Errors state
   const [errors, setErrors] = useState({});
@@ -498,7 +500,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     })),
     otherRooms, furnishing, coveredParking, openParking, description,
     ownership, propertyFeatures, selectedAmenities, openSides, overlooking,
-    powerBackup, propertyFacing, currentStep,
+    powerBackup, propertyFacing, propertyName, currentStep,
   });
 
   const FORM_DEFAULTS = {
@@ -516,7 +518,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     photosList: [], otherRooms: [], furnishing: "Semi-Furnished",
     coveredParking: 1, openParking: 1, description: "", ownership: "Freehold",
     propertyFeatures: [], selectedAmenities: [], openSides: "2",
-    overlooking: "Park", powerBackup: "Full", propertyFacing: "East",
+    overlooking: "Park", powerBackup: "Full", propertyFacing: "East", propertyName: "",
     currentStep: 1,
   };
 
@@ -593,13 +595,15 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     setOverlooking(snapshot.overlooking);
     setPowerBackup(snapshot.powerBackup);
     setPropertyFacing(snapshot.propertyFacing);
+    setPropertyName(snapshot.propertyName || "");
     setCurrentStep(snapshot.currentStep);
   };
 
   const buildDraftTitle = () =>
-    category === "Residential" && !isLandType(propertyType)
+    propertyName.trim() ||
+    (category === "Residential" && !isLandType(propertyType)
       ? `${bhk} ${propertyType}`
-      : `${category} ${propertyType}`;
+      : `${category} ${propertyType}`);
 
   const draftTransactionType = () => {
     if (lookingTo === "Resale") return "RESALE";
@@ -673,6 +677,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     setOverlooking(form.overlooking);
     setPowerBackup(form.powerBackup);
     setPropertyFacing(form.propertyFacing);
+    setPropertyName(form.propertyName || "");
     setErrors({});
     setSubmitError(null);
     // Fresh upload context for this listing (same rule as drafts: transient
@@ -716,7 +721,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     propertyFeatures: form.propertyFeatures,
     selectedAmenities: form.selectedAmenities, openSides: form.openSides,
     overlooking: form.overlooking, powerBackup: form.powerBackup,
-    propertyFacing: form.propertyFacing, currentStep: step,
+    propertyFacing: form.propertyFacing, propertyName: form.propertyName || "", currentStep: step,
   });
 
   // Existing listings screen (Edit exit destination; the list refetches on
@@ -1238,10 +1243,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
       return;
     }
 
-    const calculatedTitle =
-      category === "Residential" && !isLandType(propertyType)
-        ? `${bhk} ${propertyType}`
-        : `${category} ${propertyType}`;
+    const calculatedTitle = buildDraftTitle();
 
     const coverPhotoObj = photosList.find((p) => p.isCover) || photosList[0];
     const rentAmount = parseInt(monthlyRent) || 25000;
@@ -1438,10 +1440,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
   };
 
   const coverPhoto = photosList.find((p) => p.isCover) || photosList[0];
-  const propertyTitle =
-    category === "Residential" && !isLandType(propertyType)
-      ? `${bhk} ${propertyType}`
-      : `${category} ${propertyType}`;
+  const propertyTitle = buildDraftTitle();
 
   // Retry/upload button state, re-derived from CURRENT photosList on every
   // render so the count/action can never go stale (deletes/adds included).
@@ -1468,7 +1467,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     tenantPreference, lockInPeriod, preferredAgreementDuration,
     photosList, otherRooms, furnishing, coveredParking, openParking, description,
     ownership, propertyFeatures, selectedAmenities, openSides, overlooking,
-    powerBackup, propertyFacing, currentStep,
+    powerBackup, propertyFacing, propertyName, currentStep,
   ]);
   const isDraftDirtyOrSaving = savingDraft || isDraftDirty;
 
@@ -1492,7 +1491,7 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
     tenantPreference, lockInPeriod, preferredAgreementDuration,
     photosList, otherRooms, furnishing, coveredParking, openParking, description,
     ownership, propertyFeatures, selectedAmenities, openSides, overlooking,
-    powerBackup, propertyFacing, currentStep,
+    powerBackup, propertyFacing, propertyName, currentStep,
   ]);
 
   return (
@@ -1812,6 +1811,15 @@ export default function OwnerAddPropertyScreen({ route, navigation }) {
             <Text style={styles.cardHeaderSub}>
               Specify room configurations, areas, floor level, furnishing, facing and readiness.
             </Text>
+
+            <FormInput
+              label="Property Name"
+              value={propertyName}
+              onChangeText={setPropertyName}
+              placeholder="e.g. Sunrise Residency"
+              maxLength={120}
+              helperText="Shown as the title of your ad. Leave empty to use the BHK and property type."
+            />
 
             {/* Section 1: Room Details */}
             <Text style={styles.sectionHeading}>Room Details</Text>

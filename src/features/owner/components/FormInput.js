@@ -17,6 +17,7 @@ function FormInput({
   error,
   style,
   inputStyle,
+  maxLength,
 }) {
   const [isFocused, setIsFocused] = useState(false);
 
@@ -49,6 +50,7 @@ function FormInput({
           multiline={multiline}
           numberOfLines={numberOfLines}
           editable={editable}
+          maxLength={maxLength}
           underlineColorAndroid="transparent"
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
