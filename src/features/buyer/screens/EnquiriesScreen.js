@@ -878,7 +878,7 @@ const styles = StyleSheet.create({
   sheetCallBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: "#2563EB",
     flexDirection: "row",
     alignItems: "center",
@@ -892,7 +892,7 @@ const styles = StyleSheet.create({
   sheetWhatsappBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 100,
     backgroundColor: "#16A34A",
     flexDirection: "row",
     alignItems: "center",

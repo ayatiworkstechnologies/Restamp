@@ -84,8 +84,23 @@ export default function OwnerPropertiesScreen({ route, navigation, headerAccesso
     return [...withoutMockDrafts(liveProperties), ...withoutMockDrafts(localOnly)];
   }, [liveProperties, localProperties, ownerUserId]);
 
+  const [listingsRetrying, setListingsRetrying] = useState(false);
+
+  // The backend host sleeps when idle; its first request can outlast the
+  // client timeout. Retry once (after a short pause) on timeout / network /
+  // 5xx before showing the error, so a cold start doesn't look like a failure.
   const loadLiveListings = useCallback(() => {
-    return fetchAllOwnerListings()
+    const isAuthError = (e) => e && (e.status === 401 || e.kind === "login");
+    const isRetryable = (e) =>
+      !e || e.kind === "timeout" || e.kind === "offline" || e.kind === "network" ||
+      !e.status || e.status >= 500;
+    const attempt = () => fetchAllOwnerListings();
+
+    return attempt()
+      .catch((e) => {
+        if (isAuthError(e) || !isRetryable(e)) throw e;
+        return new Promise((r) => setTimeout(r, 3000)).then(attempt);
+      })
       .then((resp) => {
         setLiveProperties((resp.items || []).map(toOwnerProperty));
         setLoadError(null);
@@ -93,17 +108,26 @@ export default function OwnerPropertiesScreen({ route, navigation, headerAccesso
       .catch((e) => {
         // An expired session must not keep showing the previous account's
         // rows: drop the cached list and return to the auth entry route.
-        if (e && (e.status === 401 || e.kind === "login")) {
+        if (isAuthError(e)) {
           setLiveProperties(null);
           setLoadError(null);
           resetToLogin();
           return;
         }
+        if (__DEV__) console.warn("[OwnerProperties] listings load failed:", e?.status, e?.kind, e?.message);
         setLoadError(
-          "Couldn't load your listings. Check your connection and pull to refresh."
+          e?.kind === "timeout"
+            ? "The server is taking too long to respond. It may be waking up — try again in a moment."
+            : "Couldn't load your listings. Check your connection and try again."
         );
       });
   }, []);
+
+  const retryListings = useCallback(() => {
+    setListingsRetrying(true);
+    setLoadError(null);
+    Promise.resolve(loadLiveListings()).finally(() => setListingsRetrying(false));
+  }, [loadLiveListings]);
 
   const loadDrafts = useCallback(() => {
     fetchDrafts().then(setServerDrafts, () => {});
@@ -559,6 +583,15 @@ export default function OwnerPropertiesScreen({ route, navigation, headerAccesso
         {loadError ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{loadError}</Text>
+            <TouchableOpacity
+              style={styles.errorRetryBtn}
+              onPress={retryListings}
+              disabled={listingsRetrying}
+              activeOpacity={0.8}
+              accessibilityLabel="Retry loading listings"
+            >
+              <Text style={styles.errorRetryText}>{listingsRetrying ? "Retrying…" : "Retry"}</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -576,7 +609,7 @@ export default function OwnerPropertiesScreen({ route, navigation, headerAccesso
               onPress={() => setShowFilterSheet(true)}
               accessibilityLabel="Open property filters"
             >
-              <SlidersHorizontal size={15} color={showFilterSheet ? COLORS.primary : "#334155"} />
+              <SlidersHorizontal size={15} color={showFilterSheet ? COLORS.primary : COLORS.textSecondary} />
             </TouchableOpacity>
 
             {STATUS_TABS.map((tab) => {
@@ -911,66 +944,67 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
 
+  // Filter chips — same design as the Agent Properties deal chips
+  // (grey pill, solid primary when selected).
   filterIconPill: {
-    width: 36,
+    width: 38,
     height: 34,
-    borderRadius: 8,
+    borderRadius: 100,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#FFFFFF",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
     justifyContent: "center",
     alignItems: "center",
   },
   filterIconPillActive: {
     borderColor: COLORS.primary,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: COLORS.primaryLight,
   },
   filterDropdownPill: {
     height: 34,
-    paddingHorizontal: 12,
-    borderRadius: 17,
+    paddingHorizontal: 14,
+    borderRadius: 100,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#FFFFFF",
+    borderColor: COLORS.border,
+    backgroundColor: "#F1F5F9",
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 6,
   },
   filterDropdownPillActive: {
     borderColor: COLORS.primary,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: COLORS.primary,
   },
   filterDropdownText: {
     fontSize: 13,
-    color: "#334155",
-    fontWeight: "500",
+    color: COLORS.textSecondary,
+    fontWeight: "600",
   },
   filterDropdownTextActive: {
-    color: COLORS.primary,
+    color: COLORS.white,
     fontWeight: "700",
   },
   tabCountBadge: {
     minWidth: 18,
     height: 18,
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
     borderRadius: 9,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: COLORS.white,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 2,
   },
   tabCountBadgeActive: {
-    backgroundColor: "#DBEAFE",
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
   tabCountText: {
     fontSize: 10.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: COLORS.muted,
     textAlign: "center",
     includeFontPadding: false,
   },
   tabCountTextActive: {
-    color: COLORS.primary,
+    color: COLORS.white,
     fontWeight: "700",
   },
   container: {
@@ -978,6 +1012,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
     marginHorizontal: 20,
     marginBottom: 12,
     padding: 12,
@@ -987,9 +1023,24 @@ const styles = StyleSheet.create({
     borderColor: "#FCA5A5",
   },
   errorBannerText: {
+    flex: 1,
     fontSize: 12,
     color: "#991B1B",
     lineHeight: 17,
+  },
+  errorRetryBtn: {
+    marginLeft: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 100,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+  errorRetryText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.danger,
   },
   scrollContent: {
     paddingHorizontal: 20,

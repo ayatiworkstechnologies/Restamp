@@ -134,13 +134,14 @@ check("O1 source_role maps to agent / buyer / unknown",
 const row = (extra) => ({ id: 1, property_listing_id: 2, buyer_user_id: 77, status: "NEW", listing: null, ...extra });
 check("O2 toOwnerLead carries the source role; nameless agents are not called buyers",
   owner.toOwnerLead(row({ source_role: "BROKER" })).sourceRole === "agent" &&
-  owner.toOwnerLead(row({ source_role: "BROKER" })).customerName === "Agent #77" &&
+  // BROKER leads are labelled with PARTNER_LABEL ("Dealer" while the Agent role is hidden).
+  /^(Agent|Dealer) #77$/.test(owner.toOwnerLead(row({ source_role: "BROKER" })).customerName) &&
   owner.toOwnerLead(row({ source_role: "BUYER" })).customerName === "Buyer #77" &&
   owner.toOwnerLead(row({})).sourceRole === undefined);
 const badge = src("features/owner/components/LeadSourceBadge.js");
 check("O3 the badge shows Buyer/Agent only for a known role (never a guess)",
   badge.includes('if (sourceRole !== "buyer" && sourceRole !== "agent") return null;') &&
-  badge.includes('{isAgent ? "Agent" : "Buyer"}'));
+  badge.includes('{isAgent ? PARTNER_LABEL : "Buyer"}'));
 for (const screen of ["OwnerLeadsScreen.js", "OwnerPropertyLeadsScreen.js"]) {
   const s = src(`features/owner/screens/${screen}`);
   check(`O4 ${screen} puts the badge on every lead card`,
@@ -187,8 +188,9 @@ check("T2 the upgrade message is the server's (or the trial default)",
   agentPlans.agentAreaMessage(areaErr).includes("one area") &&
   agentPlans.agentAreaMessage({ status: 402, data: {} }) === agentPlans.AGENT_TRIAL_AREA_MESSAGE);
 const upgrade = src("features/agent/utils/agentUpgrade.js");
-check("T3 Upgrade opens the agent plans (Menu -> Agent Plan), not the buyer plans",
-  upgrade.includes('export const AGENT_UPGRADE_ROUTE = "Menu";') && upgrade.includes('{ initialTab: "agent" }') &&
+check("T3 Upgrade opens the agent plans (Menu -> Agent Plan) or, with the Agent role hidden, the Dealer plans; never the buyer plans",
+  upgrade.includes('AGENT_ROLE_VISIBLE ? "Menu" : "RolePlans"') && upgrade.includes('{ initialTab: "agent" }') &&
+  upgrade.includes('{ lockedTab: "dealer" }') &&
   !upgrade.includes("BuyerPlans") && !upgrade.includes("BUYER_PLANS_ROUTE"));
 const props2 = src("features/agent/screens/AgentPropertiesScreen.js");
 check("T4 agent cards are the buyer search card with the wishlist heart; Match Lead is gone",

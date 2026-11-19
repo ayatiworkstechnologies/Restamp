@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, memo } from "react";
+import WhatsAppIcon from "../../../shared/components/WhatsAppIcon.js";
 import {
   View,
   Text,
@@ -821,7 +822,7 @@ function PropertyDetailModal({
         if (e && (e.status === 403 || e.kind === "denied")) {
           Alert.alert(
             "Buyer Mode Required",
-            "Your account is currently in Owner/Agent mode. Switch back to Buyer mode to call the owner.",
+            "Your account is currently in Owner/Dealer mode. Switch back to Buyer mode to call the owner.",
             [{ text: "OK" }]
           );
           return;
@@ -1361,21 +1362,25 @@ function PropertyDetailModal({
                     </Text>
                   </View>
                 </View>
+              </View>
+              <View style={styles.ownerActionsRow}>
+                <ViewNumberButton
+                  property={property}
+                  navigation={navigation}
+                  onLoginRequired={(resume) => onLoginRequired && onLoginRequired(resume)}
+                  style={styles.ownerViewNumber}
+                />
                 <TouchableOpacity
-                  style={styles.ownerCallBtn}
+                  style={styles.ownerWhatsAppBtn}
                   onPress={handleWhatsAppOwner}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
                   accessibilityLabel="WhatsApp owner"
                 >
-                  <MessageCircle size={18} color="#16A34A" />
+                  <WhatsAppIcon size={18} color="#FFFFFF" />
+                  <Text style={styles.ownerWhatsAppText}>WhatsApp</Text>
                 </TouchableOpacity>
               </View>
-              <View style={styles.ownerDivider} />
-              <ViewNumberButton
-                property={property}
-                navigation={navigation}
-                onLoginRequired={(resume) => onLoginRequired && onLoginRequired(resume)}
-                style={{ marginTop: 0 }}
-              />
             </View>
           </View>
 
@@ -2518,17 +2523,12 @@ const styles = StyleSheet.create({
 
   /* OWNER CARD */
   ownerCard: {
-    backgroundColor: "#FFFFFF",
-    padding: 16,
-    borderRadius: 16,
+    backgroundColor: "#F8FAFC",
+    padding: 14,
+    borderRadius: 18,
     marginTop: 4,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderColor: "#EEF2F6",
   },
   ownerRolePill: {
     alignSelf: "flex-start",
@@ -2542,6 +2542,32 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "#F1F5F9",
     marginVertical: 14,
+  },
+  ownerActionsRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    marginTop: 14,
+    gap: 10,
+  },
+  ownerViewNumber: {
+    flex: 1,
+    marginTop: 0,
+    minHeight: 44,
+  },
+  ownerWhatsAppBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#25D366",
+    borderRadius: 100,
+    paddingHorizontal: 16,
+    minHeight: 44,
+  },
+  ownerWhatsAppText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+    marginLeft: 6,
   },
   ownerAvatar: {
     width: 48,
@@ -2623,7 +2649,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: "100%",
     backgroundColor: "#16A34A",
-    borderRadius: 12,
+    borderRadius: 100,
     paddingVertical: 14,
   },
   callPopupCallText: {
@@ -2645,7 +2671,7 @@ const styles = StyleSheet.create({
   ownerCallBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 100,
     backgroundColor: "#F0FDF4",
     borderWidth: 1,
     borderColor: "#BBF7D0",

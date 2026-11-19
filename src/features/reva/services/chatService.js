@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../../../shared/api/client.js";
+import { AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 
 export const QUICK_ACTIONS = {
   en: {
@@ -153,6 +154,8 @@ export function getLocalAiReply(question, role = "Buyer", language = "en") {
   const kb = isTamil ? KNOWLEDGE_BASE_TA : KNOWLEDGE_BASE_EN;
 
   for (const item of kb) {
+    // Agent role hidden: skip the agent-plan answers.
+    if (!AGENT_ROLE_VISIBLE && item.action?.route === "AgentPlans") continue;
     if (item.keywords.some((kw) => query.includes(kw))) {
       return {
         text: item.reply,

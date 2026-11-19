@@ -240,7 +240,7 @@ export default function OwnerDashboardScreen({ navigation, route }) {
         </View>
 
         {/* DEALER: two spaces — Sales Hub (area properties, leads) and
-            My Property Space (own listings) */}
+            My Property (own listings) */}
         {isDealer && (
           <DealerSpaceTabs value={dealerTab} onChange={setDealerTab} />
         )}

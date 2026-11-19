@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
+import { AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 
 const RevaContext = createContext(null);
@@ -12,7 +13,8 @@ export function RevaProvider({ children }) {
   const defaultRole = useMemo(() => {
     const rawRole = String(user?.role || "").toUpperCase();
     if (rawRole === "OWNER") return "Owner";
-    if (rawRole === "BROKER" || rawRole === "AGENT") return "Agent";
+    // Agent role hidden: the BROKER (dealer area) side gets the Owner help.
+    if (rawRole === "BROKER" || rawRole === "AGENT") return AGENT_ROLE_VISIBLE ? "Agent" : "Owner";
     return "Buyer";
   }, [user?.role]);
 

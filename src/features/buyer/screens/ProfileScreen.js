@@ -52,7 +52,7 @@ import { linkGoogleAccount } from "../../auth/api/auth.js";
 // No ".js" extension so Metro picks GoogleSignInButton.web.js on web.
 import GoogleSignInButton from "../../auth/components/GoogleSignInButton";
 import ConfirmationModal from "../../owner/components/ConfirmationModal.js";
-import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
+import { AGENT_MODULE_ENABLED, AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 
 export default function ProfileScreen({ navigation }) {
   const nav = useNavigation() || navigation;
@@ -72,6 +72,7 @@ export default function ProfileScreen({ navigation }) {
   );
   const hasAgentPlan =
     AGENT_MODULE_ENABLED &&
+    AGENT_ROLE_VISIBLE &&
     Boolean(
       hasActivePlan &&
       (agentPlan?.hasPurchased ||

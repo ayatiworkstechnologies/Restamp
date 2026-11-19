@@ -1,10 +1,12 @@
 import { Alert } from "react-native";
 import { agentAreaMessage } from "../../../shared/api/agentPlans.js";
+import { AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 
 // The existing agent subscription flow: Menu -> Agent Plan tab (plan cards ->
 // AgentLocationSelect -> confirm -> payment). Never the buyer plans.
-export const AGENT_UPGRADE_ROUTE = "Menu";
-export const AGENT_UPGRADE_PARAMS = { initialTab: "agent" };
+// Agent role hidden: area upgrades open the Dealer plans page instead.
+export const AGENT_UPGRADE_ROUTE = AGENT_ROLE_VISIBLE ? "Menu" : "RolePlans";
+export const AGENT_UPGRADE_PARAMS = AGENT_ROLE_VISIBLE ? { initialTab: "agent" } : { lockedTab: "dealer" };
 
 /**
  * Explain the agent's area limit and offer the Upgrade button. `error` may be

@@ -78,7 +78,7 @@ export default function OwnerProfileScreen({ navigation, route }) {
       },
     });
   };
-  const { logout, saveProfileName } = useAuth();
+  const { logout, saveProfileName, saveProfileEmail } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Name editor (PATCH /users/me via AuthContext.saveProfileName). The
@@ -86,11 +86,13 @@ export default function OwnerProfileScreen({ navigation, route }) {
   // editor stays open with an honest error — success is never shown early.
   const [nameEditorOpen, setNameEditorOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [emailDraft, setEmailDraft] = useState("");
   const [nameError, setNameError] = useState(null);
   const [savingName, setSavingName] = useState(false);
 
   const openNameEditor = () => {
     setNameDraft(initialOwnerNameDraft(ownerProfile.name, ownerProfile.phone));
+    setEmailDraft(ownerProfile.email || "");
     setNameError(null);
     setNameEditorOpen(true);
   };
@@ -101,16 +103,23 @@ export default function OwnerProfileScreen({ navigation, route }) {
       setNameError(result.error);
       return;
     }
+    const typedEmail = emailDraft.trim();
+    const emailChanged = typedEmail !== (ownerProfile.email || "");
+    if (emailChanged && typedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(typedEmail)) {
+      setNameError("Please enter a valid email address.");
+      return;
+    }
     setSavingName(true);
     setNameError(null);
     try {
       await saveProfileName(result.firstName, result.lastName);
+      if (emailChanged && saveProfileEmail) await saveProfileEmail(typedEmail);
       setNameEditorOpen(false);
     } catch (e) {
       setNameError(
         e && (e.status === 401 || e.kind === "login")
           ? "Your session has expired. Please log in again."
-          : "Couldn't save your name. Please check your connection and try again."
+          : "Couldn't save your details. Please check your connection and try again."
       );
     } finally {
       setSavingName(false);
@@ -221,7 +230,8 @@ export default function OwnerProfileScreen({ navigation, route }) {
 
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 0 }]}
-            onPress={() => Alert.alert("Personal Information", "View or update your contact details.")}
+            onPress={openNameEditor}
+            accessibilityLabel="Edit personal information"
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -410,7 +420,8 @@ export default function OwnerProfileScreen({ navigation, route }) {
       >
         <View style={styles.nameModalBackdrop}>
           <View style={styles.nameModalCard}>
-            <Text style={styles.nameModalTitle}>Edit Name</Text>
+            <Text style={styles.nameModalTitle}>Personal Information</Text>
+            <Text style={styles.nameModalLabel}>Full Name</Text>
             <TextInput
               style={styles.nameModalInput}
               value={nameDraft}
@@ -422,6 +433,32 @@ export default function OwnerProfileScreen({ navigation, route }) {
               placeholderTextColor="#94A3B8"
               maxLength={OWNER_NAME_MAX_LENGTH}
               autoFocus
+              editable={!savingName}
+              returnKeyType="done"
+              onSubmitEditing={handleSaveName}
+            />
+            <Text style={styles.nameModalLabel}>Phone Number</Text>
+            <TextInput
+              style={[styles.nameModalInput, styles.nameModalInputLocked]}
+              value={ownerProfile.phone || ""}
+              editable={false}
+              placeholder="No phone number"
+              placeholderTextColor={COLORS.lightText}
+            />
+            <Text style={styles.nameModalHint}>Your login number can't be changed here.</Text>
+            <Text style={styles.nameModalLabel}>Email Address</Text>
+            <TextInput
+              style={styles.nameModalInput}
+              value={emailDraft}
+              onChangeText={(t) => {
+                setEmailDraft(t);
+                if (nameError) setNameError(null);
+              }}
+              placeholder="Enter your email address"
+              placeholderTextColor={COLORS.lightText}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
               editable={!savingName}
               returnKeyType="done"
               onSubmitEditing={handleSaveName}
@@ -556,6 +593,22 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.textPrimary,
     marginBottom: 14,
+  },
+  nameModalLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.muted,
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  nameModalInputLocked: {
+    backgroundColor: COLORS.pillGray,
+    color: COLORS.muted,
+  },
+  nameModalHint: {
+    fontSize: 11,
+    color: COLORS.lightText,
+    marginTop: 4,
   },
   nameModalInput: {
     borderWidth: 1,

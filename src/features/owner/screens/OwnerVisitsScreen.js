@@ -305,6 +305,7 @@ export default function OwnerVisitsScreen({ navigation }) {
           </View>
         ) : loadError && visits.length === 0 ? (
           <EmptyState
+            tone="error"
             icon={Calendar}
             title="Couldn't load visits"
             description="Check your connection and try again."

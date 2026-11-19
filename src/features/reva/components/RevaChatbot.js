@@ -1,4 +1,5 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -471,7 +472,8 @@ export default function RevaChatbot() {
       } else if (action.route === "Activity") {
         navigationRef.navigate("MainTabs", { screen: "Activity" });
       } else if (action.route === "AgentPlans") {
-        navigationRef.navigate("Menu", { initialTab: "agent" });
+        // Agent role hidden: area plans are sold as Dealer plans.
+        navigationRef.navigate("RolePlans", { lockedTab: AGENT_ROLE_VISIBLE ? "agent" : "dealer" });
       } else {
         navigationRef.navigate(action.route, action.params);
       }

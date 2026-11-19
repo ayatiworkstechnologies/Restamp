@@ -497,6 +497,7 @@ export default function OwnerPropertyLeadsScreen({ route, navigation }) {
           </View>
         ) : leadsError && projectLeads.length === 0 ? (
           <EmptyState
+            tone="error"
             icon={Building2}
             title="Couldn't load leads"
             description="Please check your connection and try again."

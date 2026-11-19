@@ -24,6 +24,7 @@ import {
   MessageSquare,
   Check,
   X,
+  Search,
   ArrowRight,
   Copy,
   Building,
@@ -104,7 +105,23 @@ const ACTIVITY_TABS = ["wishlist", "call", "messages", "visits", "viewed"];
 
 // Shared by the buyer Activity tab and the agent Activity tab (agent
 // navigation passes browseRoute="Properties", its own listings tab).
-export default function SavedScreen({ navigation, route, browseRoute = "Home", headerAccessory = null }) {
+// Empty-state illustration: the tab's own icon, large, on soft layered
+// circles with a few floating accent dots.
+function EmptyArt({ children, tone = "default" }) {
+  const isError = tone === "error";
+  return (
+    <View style={styles.emptyArt}>
+      <View style={[styles.emptyArtHalo, isError && styles.emptyArtHaloError]} />
+      <View style={[styles.emptyArtRing, isError && styles.emptyArtRingError]} />
+      <View style={styles.emptyArtCore}>{children}</View>
+      <View style={[styles.emptyArtDot, styles.emptyArtDotA, isError && styles.emptyArtDotError]} />
+      <View style={[styles.emptyArtDot, styles.emptyArtDotB, isError && styles.emptyArtDotError]} />
+      <View style={[styles.emptyArtDot, styles.emptyArtDotC, isError && styles.emptyArtDotError]} />
+    </View>
+  );
+}
+
+export default function SavedScreen({ navigation, route, browseRoute = "Home", headerAccessory = null, hideProfileCard = false, screenTitle = null }) {
   const { wishlist, removeFromWishlist, isWishlisted, toggleWishlist, refreshWishlist } = useWishlist();
   // Protected modal actions resume here after a guest logs in (Change 2).
   const requireAuth = useRequireAuth(navigation);
@@ -122,6 +139,26 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
   // Active tab state: "wishlist" | "call" | "messages" | "visits" | "viewed"
   const requestedTab = ACTIVITY_TABS.includes(route?.params?.initialTab) ? route.params.initialTab : null;
   const [activeTab, setActiveTab] = useState(requestedTab || "wishlist");
+
+  // Search box: filters the open tab by title, place, name or message text.
+  const [activitySearch, setActivitySearch] = useState("");
+  const searchQuery = activitySearch.trim().toLowerCase();
+  const matchesSearch = (item) => {
+    if (!searchQuery) return true;
+    const parts = [];
+    const collect = (v, depth) => {
+      if (v == null || depth > 2) return;
+      if (typeof v === "string" || typeof v === "number") { parts.push(String(v)); return; }
+      if (typeof v === "object") {
+        for (const [k, val] of Object.entries(v)) {
+          if (/url|image|photo|cover|^id$|_id$|Id$/i.test(k)) continue;
+          collect(val, depth + 1);
+        }
+      }
+    };
+    collect(item, 0);
+    return parts.join(" ").toLowerCase().includes(searchQuery);
+  };
 
   useEffect(() => {
     if (requestedTab) {
@@ -550,7 +587,7 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
         if (e && (e.status === 403 || e.kind === "denied")) {
           Alert.alert(
             "Buyer Mode Required",
-            "Your account is currently in Owner/Agent mode. Switch back to Buyer mode and try again.",
+            "Your account is currently in Owner/Dealer mode. Switch back to Buyer mode and try again.",
             [{ text: "OK" }]
           );
           return;
@@ -630,7 +667,7 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
         if (e && (e.status === 403 || e.kind === "denied")) {
           Alert.alert(
             "Buyer Mode Required",
-            "Your account is currently in Owner/Agent mode. Switch back to Buyer mode and try again.",
+            "Your account is currently in Owner/Dealer mode. Switch back to Buyer mode and try again.",
             [{ text: "OK" }]
           );
           return;
@@ -660,7 +697,12 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ================= 1. USER PROFILE SECTION WITH EDIT ICON ================= */}
+        {screenTitle ? (
+          <Text style={styles.screenTitle}>{screenTitle}</Text>
+        ) : null}
+
+        {/* ================= 1. USER PROFILE SECTION WITH EDIT ICON (hidden on the dealer screen) ================= */}
+        {!hideProfileCard && (
         <View style={styles.profileCard}>
           <View style={styles.avatarWrap}>
             <InitialsAvatar
@@ -696,6 +738,26 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
           >
             <Pencil size={16} color="#0F172A" />
           </TouchableOpacity>
+        </View>
+        )}
+
+        {/* Activity search */}
+        <View style={styles.activitySearchBox}>
+          <Search size={17} color={COLORS.lightText} />
+          <TextInput
+            style={styles.activitySearchInput}
+            value={activitySearch}
+            onChangeText={setActivitySearch}
+            placeholder="Search properties, places or names"
+            placeholderTextColor={COLORS.lightText}
+            returnKeyType="search"
+            underlineColorAndroid="transparent"
+          />
+          {activitySearch ? (
+            <TouchableOpacity onPress={() => setActivitySearch("")} hitSlop={8} accessibilityLabel="Clear search">
+              <X size={16} color={COLORS.lightText} />
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* ================= 2. ACTIVITY UNDERLINE TABS (Airbnb Style with Generous Breathing Space) ================= */}
@@ -798,11 +860,14 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
         {/* TAB 1: WISHLIST */}
         {activeTab === "wishlist" && (
           <View style={styles.tabContentArea}>
+            <View style={styles.listHeaderRow}>
+              <Text style={styles.listSectionTitle}>Wishlist ({wishlist.length})</Text>
+            </View>
             {wishlist.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <Heart size={32} color="#CBD5E1" strokeWidth={1.5} />
-                </View>
+                <EmptyArt>
+                  <Heart size={44} color={COLORS.primary} strokeWidth={1.6} />
+                </EmptyArt>
                 <Text style={styles.emptyTitle}>Your wishlist is empty</Text>
                 <Text style={styles.emptyText}>
                   Tap the heart icon on any property card to save it here for quick access.
@@ -818,7 +883,7 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               </View>
             ) : (
               <View style={styles.cardsList}>
-                {wishlist.map((property) => {
+                {wishlist.filter(matchesSearch).map((property) => {
                   const { perSqft, statusText, specsText } = getCardSpecs(property);
 
                   return (
@@ -931,9 +996,9 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
 
             {viewedProperties.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <Eye size={32} color="#CBD5E1" strokeWidth={1.5} />
-                </View>
+                <EmptyArt>
+                  <Eye size={44} color={COLORS.primary} strokeWidth={1.6} />
+                </EmptyArt>
                 <Text style={styles.emptyTitle}>No recently viewed properties</Text>
                 <Text style={styles.emptyText}>
                   Properties you inspect will automatically appear here for easy comparison.
@@ -949,7 +1014,7 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               </View>
             ) : (
               <View style={styles.cardsList}>
-                {viewedProperties.map((property) => {
+                {viewedProperties.filter(matchesSearch).map((property) => {
                   const { perSqft, specsText } = getCardSpecs(property);
                   const isSaved = isWishlisted(property.id);
 
@@ -1079,9 +1144,9 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               </View>
             ) : callsError ? (
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <AlertCircle size={32} color="#EF4444" strokeWidth={1.5} />
-                </View>
+                <EmptyArt tone="error">
+                  <AlertCircle size={44} color="#EF4444" strokeWidth={1.6} />
+                </EmptyArt>
                 <Text style={styles.emptyTitle}>Couldn't load call activity</Text>
                 <Text style={styles.emptyText}>
                   Please check your connection and try again.
@@ -1097,9 +1162,9 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               </View>
             ) : callHistory.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <Phone size={32} color="#CBD5E1" strokeWidth={1.5} />
-                </View>
+                <EmptyArt>
+                  <Phone size={44} color={COLORS.primary} strokeWidth={1.6} />
+                </EmptyArt>
                 <Text style={styles.emptyTitle}>No call activity yet</Text>
                 <Text style={styles.emptyText}>
                   {isAuthenticated
@@ -1117,7 +1182,7 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               </View>
             ) : (
               <View style={styles.callList}>
-                {callHistory.map((item) => (
+                {callHistory.filter(matchesSearch).map((item) => (
                   <View key={item.id} style={styles.callCard}>
                     <View style={styles.callHeaderRow}>
                       <View style={styles.callAgentInfo}>
@@ -1206,9 +1271,9 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               </View>
             ) : enquiriesError ? (
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <AlertCircle size={32} color="#EF4444" strokeWidth={1.5} />
-                </View>
+                <EmptyArt tone="error">
+                  <AlertCircle size={44} color="#EF4444" strokeWidth={1.6} />
+                </EmptyArt>
                 <Text style={styles.emptyTitle}>Couldn't load messages</Text>
                 <Text style={styles.emptyText}>
                   Please check your connection and try again.
@@ -1224,9 +1289,9 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               </View>
             ) : enquiries.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <MessageSquare size={32} color="#CBD5E1" strokeWidth={1.5} />
-                </View>
+                <EmptyArt>
+                  <MessageSquare size={44} color={COLORS.primary} strokeWidth={1.6} />
+                </EmptyArt>
                 <Text style={styles.emptyTitle}>No messages yet</Text>
                 <Text style={styles.emptyText}>
                   {isAuthenticated
@@ -1244,7 +1309,7 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               </View>
             ) : (
               <View style={styles.messagesList}>
-                {enquiries.map((row) => {
+                {enquiries.filter(matchesSearch).map((row) => {
                   const item = toUiEnquiry(row);
                   const expanded = expandedEnquiryId === item.id;
                   const thread = threads[item.id];
@@ -1413,9 +1478,9 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               </View>
             ) : visitsError && siteVisits.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <AlertCircle size={32} color="#EF4444" strokeWidth={1.5} />
-                </View>
+                <EmptyArt tone="error">
+                  <AlertCircle size={44} color="#EF4444" strokeWidth={1.6} />
+                </EmptyArt>
                 <Text style={styles.emptyTitle}>Couldn't load site visits</Text>
                 <Text style={styles.emptyText}>Please check your connection and try again.</Text>
                 <TouchableOpacity
@@ -1429,9 +1494,9 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               </View>
             ) : siteVisits.filter((v) => v.status === visitFilter).length === 0 ? (
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <Calendar size={32} color="#CBD5E1" strokeWidth={1.5} />
-                </View>
+                <EmptyArt>
+                  <Calendar size={44} color={COLORS.primary} strokeWidth={1.6} />
+                </EmptyArt>
                 <Text style={styles.emptyTitle}>No {visitFilter} site visits</Text>
                 <Text style={styles.emptyText}>
                   Site visits you request or receive from an owner will appear here.
@@ -1441,6 +1506,7 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
               <View style={styles.visitsList}>
                 {siteVisits
                   .filter((v) => v.status === visitFilter)
+                  .filter(matchesSearch)
                   .map((item) => (
                     <View key={item.id} style={styles.visitCard}>
                       {/* Card Header: owner's chosen name & shared status (CONTRACT §C) */}
@@ -2116,6 +2182,36 @@ const styles = StyleSheet.create({
   },
 
   /* 3. Tab Content Area */
+  activitySearchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 44,
+    paddingHorizontal: 14,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
+  },
+  activitySearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.textDark,
+    paddingVertical: 0,
+    outlineStyle: "none",
+  },
+  // Screen title (same look as the "Buyer Leads" title on My Property)
+  screenTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.textDark,
+    letterSpacing: -0.4,
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 12,
+  },
   tabContentArea: {
     paddingHorizontal: 16,
   },
@@ -2147,16 +2243,26 @@ const styles = StyleSheet.create({
 
   /* Cards List (Airbnb Full-Width Minimalist Style) */
   cardsList: {
-    gap: 22,
+    gap: 14,
     paddingBottom: 24,
   },
+  // Same card shell as the My Property lead cards (white, border, soft shadow)
   propertyCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    shadowColor: COLORS.textDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
   imageWrap: {
     width: "100%",
-    height: 220,
-    borderRadius: 16,
+    height: 200,
+    borderRadius: 14,
     overflow: "hidden",
     position: "relative",
     backgroundColor: "#F1F5F9",
@@ -2361,7 +2467,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#0F172A",
-    borderRadius: 10,
+    borderRadius: 100,
   },
   callActionTextDark: {
     fontSize: 13,
@@ -2375,7 +2481,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F1F5F9",
-    borderRadius: 10,
+    borderRadius: 100,
   },
   callActionTextLight: {
     fontSize: 13,
@@ -2385,26 +2491,60 @@ const styles = StyleSheet.create({
 
   /* Empty State */
   emptyContainer: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F4F6FA",
     borderRadius: 18,
-    paddingVertical: 36,
+    paddingTop: 32,
+    paddingBottom: 32,
     paddingHorizontal: 24,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
     marginTop: 6,
   },
-  emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#F8FAFC",
+  emptyArt: {
+    width: 180,
+    height: 150,
+    marginBottom: 20,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
   },
+  emptyArtHalo: {
+    position: "absolute",
+    width: 148,
+    height: 148,
+    borderRadius: 74,
+    backgroundColor: "#E8EDFB",
+  },
+  emptyArtHaloError: { backgroundColor: "#FDECEC" },
+  emptyArtRing: {
+    position: "absolute",
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: "#DCE4FA",
+  },
+  emptyArtRingError: { backgroundColor: "#FBDADA" },
+  emptyArtCore: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    transform: [{ rotate: "-6deg" }],
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  emptyArtDot: {
+    position: "absolute",
+    borderRadius: 999,
+    backgroundColor: "#B9C7F5",
+  },
+  emptyArtDotError: { backgroundColor: "#F5B5B5" },
+  emptyArtDotA: { width: 12, height: 12, top: 10, right: 22 },
+  emptyArtDotB: { width: 8, height: 8, bottom: 18, left: 20 },
+  emptyArtDotC: { width: 6, height: 6, top: 34, left: 12 },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "600",
@@ -2611,7 +2751,7 @@ const styles = StyleSheet.create({
   sheetCallBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
@@ -2625,7 +2765,7 @@ const styles = StyleSheet.create({
   sheetWhatsappBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 12,
+    borderRadius: 100,
     backgroundColor: "#16A34A",
     flexDirection: "row",
     alignItems: "center",
@@ -2657,7 +2797,7 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 100,
   },
   contactBtnCallText: {
     fontSize: 12,
@@ -2672,7 +2812,7 @@ const styles = StyleSheet.create({
     borderColor: "#DCFCE7",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 100,
   },
   contactBtnWhatsAppText: {
     fontSize: 12,
@@ -2835,7 +2975,7 @@ const styles = StyleSheet.create({
   callCustomerBtn: {
     flex: 1,
     height: 38,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -2851,7 +2991,7 @@ const styles = StyleSheet.create({
   whatsappActionBtn: {
     flex: 1,
     height: 38,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: "#F0FDF4",
     borderWidth: 1,
     borderColor: "#BBF7D0",
@@ -3026,7 +3166,7 @@ const styles = StyleSheet.create({
   visitCallBtn: {
     flex: 1,
     height: 38,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -3042,7 +3182,7 @@ const styles = StyleSheet.create({
   visitWhatsAppBtn: {
     flex: 1,
     height: 38,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: "#F0FDF4",
     borderWidth: 1,
     borderColor: "#BBF7D0",
@@ -3185,7 +3325,7 @@ const styles = StyleSheet.create({
   callActionBtnAgent: {
     flex: 1,
     height: 36,
-    borderRadius: 8,
+    borderRadius: 100,
     backgroundColor: "#EFF6FF",
     borderWidth: 1,
     borderColor: "#DBEAFE",
@@ -3274,7 +3414,7 @@ const styles = StyleSheet.create({
   modalAgentCallBtn: {
     flex: 1,
     height: 34,
-    borderRadius: 8,
+    borderRadius: 100,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",

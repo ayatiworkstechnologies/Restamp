@@ -28,6 +28,7 @@
  * colors live in src/utils/visitStatus.js.
  */
 import { apiGetAuth, apiPatchAuth, apiPost } from "./client.js";
+import { PARTNER_LABEL } from "../constants/features.js";
 import { withBuyerMode } from "../../features/buyer/api/buyerMode.js";
 
 const MONTHS = {
@@ -141,8 +142,8 @@ export function toUiVisit(row) {
     buyerLabel:
       buyerName ||
       (row?.buyer_user_id != null
-        ? `${requesterRole === "agent" ? "Agent" : "Buyer"} #${row.buyer_user_id}`
-        : requesterRole === "agent" ? "Agent" : "Buyer"),
+        ? `${requesterRole === "agent" ? PARTNER_LABEL : "Buyer"} #${row.buyer_user_id}`
+        : requesterRole === "agent" ? PARTNER_LABEL : "Buyer"),
     ownerLabel: ownerName || "Owner",
     note: row?.note || "",
     date: valid ? `${pad(valid.getDate())} ${MONTH_NAMES[valid.getMonth()]} ${valid.getFullYear()}` : "",

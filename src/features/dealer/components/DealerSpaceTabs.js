@@ -1,5 +1,5 @@
 // Dealer segmented tabs: Sales Hub (area properties + leads, agent side)
-// and My Property Space (own listings, owner side).
+// and My Property (own listings, owner side).
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Briefcase, Building2 } from "../../../shared/components/HugeIcon.js";
@@ -7,7 +7,7 @@ import COLORS from "../../../shared/constants/colors.js";
 
 const TABS = [
   { key: "sales", label: "Sales Hub", Icon: Briefcase },
-  { key: "space", label: "My Property Space", Icon: Building2 },
+  { key: "space", label: "My Property", Icon: Building2 },
 ];
 
 export default function DealerSpaceTabs({ value, onChange, style }) {
@@ -24,7 +24,9 @@ export default function DealerSpaceTabs({ value, onChange, style }) {
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
           >
-            <Icon size={15} color={on ? COLORS.primary : "#64748B"} style={{ marginRight: 6 }} />
+            <View style={[styles.iconTile, on && styles.iconTileOn]}>
+              <Icon size={16} color={on ? COLORS.primary : "#64748B"} strokeWidth={1.8} />
+            </View>
             <Text style={[styles.label, on && styles.labelOn]} numberOfLines={1}>
               {label}
             </Text>
@@ -39,7 +41,7 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: "row",
     backgroundColor: "#F1F5F9",
-    borderRadius: 14,
+    borderRadius: 100,
     padding: 4,
     marginBottom: 14,
   },
@@ -48,8 +50,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
-    borderRadius: 11,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    borderRadius: 100,
   },
   tabOn: {
     backgroundColor: "#FFFFFF",
@@ -59,6 +62,16 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  label: { fontSize: 13, fontWeight: "600", color: "#64748B" },
+  iconTile: {
+    width: 30,
+    height: 30,
+    borderRadius: 100,
+    backgroundColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+  iconTileOn: { backgroundColor: "#E8EDFB" },
+  label: {flexShrink: 1,  fontSize: 13, fontWeight: "600", color: "#64748B" },
   labelOn: { color: COLORS.primary },
 });

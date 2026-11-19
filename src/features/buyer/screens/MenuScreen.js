@@ -37,13 +37,13 @@ import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import { useOwner } from "../../owner/context/OwnerContext.js";
 import { useAgent } from "../../agent/context/AgentContext.js";
 import { planAllowance } from "../../agent/utils/agentCore.js";
-import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
+import { AGENT_MODULE_ENABLED, AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 import { OWNER_PLANS_LIST } from "../../owner/data/ownerPlans.js";
 
 const VERTICAL_TABS = [
   { id: "owner", label: "Owner Plan", icon: Crown },
   { id: "dealer", label: "Dealer Plan", icon: Building2 },
-  ...(AGENT_MODULE_ENABLED ? [{ id: "agent", label: "Agent Plan", icon: Briefcase }] : []),
+  ...(AGENT_MODULE_ENABLED && AGENT_ROLE_VISIBLE ? [{ id: "agent", label: "Agent Plan", icon: Briefcase }] : []),
 ];
 
 /* 3 Agent Plans — 5 / 10 / 15 Chennai localities. Names, prices and limits

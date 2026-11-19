@@ -462,7 +462,7 @@ export default function OwnerLeadsScreen({ navigation, route, headerAccessory = 
       >
         {/* Screen Title */}
         <View style={{ marginBottom: 12 }}>
-          <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A", letterSpacing: -0.4 }}>
+          <Text style={{ fontSize: 20, fontWeight: "700", color: COLORS.textDark, letterSpacing: -0.4 }}>
             Buyer Leads
           </Text>
         </View>
@@ -544,63 +544,52 @@ export default function OwnerLeadsScreen({ navigation, route, headerAccessory = 
           </TouchableOpacity>
         ) : null}
 
-        {/* ================= LEAD FILTERS (HORIZONTAL CHIPS) ================= */}
-        <View style={styles.filtersWrapper}>
+        {/* ================= LEAD STATUS UNDERLINE TABS (same design as Sales Hub tabs) ================= */}
+        <View style={styles.leadTabBarWrapper}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filtersScroll}
+            contentContainerStyle={styles.leadTabBarScroll}
           >
-            {/* Filter icon: opens the pop-up with all lead filters. */}
-            <TouchableOpacity
-              style={styles.filterIconBtn}
-              onPress={() => setShowFilterSheet(true)}
-              activeOpacity={0.8}
-              accessibilityLabel="Open lead filters"
-            >
-              <SlidersHorizontal size={16} color="#475569" strokeWidth={2} />
-            </TouchableOpacity>
             {LEAD_FILTERS.map((filter) => {
               const isActive = activeFilter === filter;
-              const filterCount = countForFilter(filter);
-
               return (
                 <TouchableOpacity
                   key={filter}
-                  style={[
-                    styles.filterChip,
-                    isActive && styles.filterChipActive,
-                  ]}
+                  style={styles.leadTabButton}
                   onPress={() => setActiveFilter(filter)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.75}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
                 >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      isActive && styles.filterChipTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.leadTabText, isActive && styles.leadTabTextActive]}>
                     {filter}
                   </Text>
-                  <View
-                    style={[
-                      styles.filterCountBadge,
-                      isActive && styles.filterCountBadgeActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.filterCountText,
-                        isActive && styles.filterCountTextActive,
-                      ]}
-                    >
-                      {filterCount}
+                  <View style={[styles.leadTabBadge, isActive && styles.leadTabBadgeActive]}>
+                    <Text style={[styles.leadTabBadgeText, isActive && styles.leadTabBadgeTextActive]}>
+                      {countForFilter(filter)}
                     </Text>
                   </View>
+                  {isActive && <View style={styles.leadTabIndicator} />}
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
+        </View>
+
+        {/* Section title row, e.g. "All Leads (3)", with the filter pop-up on the right */}
+        <View style={styles.leadListHeaderRow}>
+          <Text style={styles.leadListTitle}>
+            {activeFilter === "All" ? "All Leads" : `${activeFilter} Leads`} ({filteredLeads.length})
+          </Text>
+          <TouchableOpacity
+            style={styles.filterIconBtn}
+            onPress={() => setShowFilterSheet(true)}
+            activeOpacity={0.8}
+            accessibilityLabel="Open lead filters"
+          >
+            <SlidersHorizontal size={16} color={COLORS.textSecondary} strokeWidth={2} />
+          </TouchableOpacity>
         </View>
 
         {/* ================= LEAD CARDS LIST (loading / error / empty / real rows) ================= */}
@@ -610,6 +599,7 @@ export default function OwnerLeadsScreen({ navigation, route, headerAccessory = 
           </View>
         ) : propsError && properties.length === 0 ? (
           <EmptyState
+            tone="error"
             icon={Building2}
             title="Couldn't load properties"
             description="Your properties could not be loaded. Please check your connection and try again."
@@ -621,6 +611,7 @@ export default function OwnerLeadsScreen({ navigation, route, headerAccessory = 
           />
         ) : leadsError && propertyLeads.length === 0 ? (
           <EmptyState
+            tone="error"
             icon={Users}
             title="Couldn't load leads"
             description="Please check your connection and try again."
@@ -1074,8 +1065,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 30,
   },
 
@@ -1153,16 +1144,11 @@ const styles = StyleSheet.create({
   /* PROPERTY CARD */
   propertyCard: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 12,
+    backgroundColor: COLORS.card,
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: COLORS.cardBorder,
     marginBottom: 10,
   },
   propertyThumb: {
@@ -1260,15 +1246,82 @@ const styles = StyleSheet.create({
   /* LEAD FILTERS (HORIZONTAL CHIPS) */
   // marginTop keeps the chips clear of "SELECTED PROPERTY" when no property
   // card is shown; with a card the total gap stays ~18.
-  filtersWrapper: {
-    marginHorizontal: -20,
-    marginTop: 8,
+  /* Lead status tabs — mirrors SavedScreen's underline tabs, app colour tokens */
+  leadTabBarWrapper: {
+    marginHorizontal: -16,
+    marginTop: 4,
     marginBottom: 16,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
   },
-  filtersScroll: {
-    paddingHorizontal: 20,
-    gap: 8,
+  leadTabBarScroll: {
+    paddingHorizontal: 12,
+    gap: 4,
+  },
+  leadTabButton: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    position: "relative",
+    gap: 8,
+  },
+  leadTabText: {
+    fontSize: 16,
+    fontWeight: "400",
+    color: COLORS.muted,
+    letterSpacing: -0.2,
+  },
+  leadTabTextActive: {
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  leadTabBadge: {
+    minWidth: 22,
+    height: 20,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    backgroundColor: COLORS.pillGray,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  leadTabBadgeActive: {
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+  },
+  leadTabBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.muted,
+    lineHeight: 14,
+  },
+  leadTabBadgeTextActive: {
+    color: COLORS.primary,
+    fontWeight: "700",
+  },
+  leadTabIndicator: {
+    position: "absolute",
+    bottom: -1,
+    left: 4,
+    right: 4,
+    height: 2.5,
+    backgroundColor: COLORS.primary,
+    borderRadius: 2,
+  },
+  leadListHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  leadListTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.textDark,
   },
   leadSearchBox: {
     flexDirection: "row",
@@ -1279,14 +1332,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 100,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
   },
 
   leadSearchInput: {
     flex: 1,
     fontSize: 14,
-    color: "#0F172A",
+    color: COLORS.textDark,
     paddingVertical: 0,
     outlineStyle: "none",
   },

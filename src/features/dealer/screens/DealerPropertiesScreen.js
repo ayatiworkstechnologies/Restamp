@@ -1,5 +1,5 @@
 // Dealer Properties tab: Sales Hub = owner properties in the dealer's chosen
-// areas; My Property Space = the dealer's own listings.
+// areas; My Property = the dealer's own listings.
 import React, { useState } from "react";
 import { View } from "react-native";
 import AgentPropertiesScreen from "../../agent/screens/AgentPropertiesScreen.js";

@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import COLORS from "../../../shared/constants/colors.js";
+import { PARTNER_LABEL } from "../../../shared/constants/features.js";
 
 /**
  * Small corner tag on an owner lead card: "Buyer" or "Agent", from the
@@ -16,10 +17,10 @@ export default function LeadSourceBadge({ sourceRole, inset = 16 }) {
   return (
     <View
       style={[styles.badge, { left: inset }, isAgent ? styles.agent : styles.buyer]}
-      accessibilityLabel={isAgent ? "Lead from an agent" : "Lead from a buyer"}
+      accessibilityLabel={isAgent ? `Lead from a ${PARTNER_LABEL.toLowerCase()}` : "Lead from a buyer"}
     >
       <Text style={[styles.text, isAgent ? styles.agentText : styles.buyerText]}>
-        {isAgent ? "Agent" : "Buyer"}
+        {isAgent ? PARTNER_LABEL : "Buyer"}
       </Text>
     </View>
   );

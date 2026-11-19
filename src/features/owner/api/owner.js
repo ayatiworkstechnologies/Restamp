@@ -5,14 +5,50 @@
  * Errors thrown as ApiError (see client.js).
  */
 import {
-  apiPost,
-  apiGetAuth,
-  apiPutAuth,
-  apiPatchAuth,
-  apiDelete,
+  apiPost as rawApiPost,
+  apiGetAuth as rawApiGetAuth,
+  apiPutAuth as rawApiPutAuth,
+  apiPatchAuth as rawApiPatchAuth,
+  apiDelete as rawApiDelete,
   getAuthTokenSync,
   API_BASE_URL,
 } from "../../../shared/api/client.js";
+import { setMyRole } from "../../../shared/api/users.js";
+
+// Owner-mode recovery. The server keeps ONE current role per account; buyer
+// screens (e.g. a dealer's Sales Hub) switch it to BUYER, after which every
+// /owner/* call answers 403 "OWNER role required". When that exact refusal
+// comes back, switch the account back to OWNER (self-serve, same call the
+// role menu makes) and retry the request once. Any other error passes through.
+let ownerSwitchInFlight = null;
+function isOwnerRoleRefusal(e) {
+  return !!e && e.status === 403 && /OWNER role required/i.test(String(e.detail || e.message || ""));
+}
+function ensureOwnerRole() {
+  if (!ownerSwitchInFlight) {
+    ownerSwitchInFlight = setMyRole("OWNER").finally(() => {
+      ownerSwitchInFlight = null;
+    });
+  }
+  return ownerSwitchInFlight;
+}
+function withOwnerRole(fn) {
+  return async (...args) => {
+    try {
+      return await fn(...args);
+    } catch (e) {
+      if (!isOwnerRoleRefusal(e)) throw e;
+      await ensureOwnerRole();
+      return fn(...args);
+    }
+  };
+}
+const apiPost = withOwnerRole(rawApiPost);
+const apiGetAuth = withOwnerRole(rawApiGetAuth);
+const apiPutAuth = withOwnerRole(rawApiPutAuth);
+const apiPatchAuth = withOwnerRole(rawApiPatchAuth);
+const apiDelete = withOwnerRole(rawApiDelete);
+import { PARTNER_LABEL } from "../../../shared/constants/features.js";
 import { getCleanImageUrl } from "../../../shared/api/mappers.js";
 
 /**
@@ -1018,9 +1054,9 @@ export function toOwnerLead(row) {
       typeof row.buyer_display_name === "string" && row.buyer_display_name.trim()
         ? row.buyer_display_name.trim()
         : row.buyer_user_id != null
-        ? `${sourceRole === "agent" ? "Agent" : "Buyer"} #${row.buyer_user_id}`
+        ? `${sourceRole === "agent" ? PARTNER_LABEL : "Buyer"} #${row.buyer_user_id}`
         : sourceRole === "agent"
-        ? "Agent enquiry"
+        ? `${PARTNER_LABEL} enquiry`
         : "Buyer enquiry",
     phone: undefined,
     avatar: undefined,

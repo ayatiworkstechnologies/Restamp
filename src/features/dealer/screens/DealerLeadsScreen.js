@@ -1,5 +1,5 @@
 // Dealer "Buyer Leads" tab: Sales Hub = the dealer's own activity with owners
-// in their areas (saved, viewed, calls/messages); My Property Space = buyer
+// in their areas (saved, viewed, calls/messages); My Property = buyer
 // leads on the dealer's own listings.
 import React, { useState } from "react";
 import { View } from "react-native";
@@ -16,7 +16,7 @@ export default function DealerLeadsScreen(props) {
     </View>
   );
   return tab === "sales" && AGENT_MODULE_ENABLED ? (
-    <SavedScreen {...props} browseRoute="AreaProperties" headerAccessory={tabs} />
+    <SavedScreen {...props} browseRoute="AreaProperties" headerAccessory={tabs} hideProfileCard screenTitle="Buyer Leads" />
   ) : (
     <OwnerLeadsScreen {...props} headerAccessory={tabs} />
   );

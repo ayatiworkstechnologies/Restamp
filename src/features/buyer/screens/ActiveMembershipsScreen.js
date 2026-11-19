@@ -21,7 +21,7 @@ import {
 import { useOwner } from "../../owner/context/OwnerContext.js";
 import { useAgent } from "../../agent/context/AgentContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
-import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
+import { AGENT_MODULE_ENABLED, AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 import COLORS from "../../../shared/constants/colors.js";
 
 export default function ActiveMembershipsScreen({ navigation }) {
@@ -36,6 +36,7 @@ export default function ActiveMembershipsScreen({ navigation }) {
   );
   const hasAgentPlan =
     AGENT_MODULE_ENABLED &&
+    AGENT_ROLE_VISIBLE &&
     Boolean(
       hasActivePlan &&
       (agentPlan?.hasPurchased ||
@@ -254,7 +255,7 @@ export default function ActiveMembershipsScreen({ navigation }) {
           </View>
 
           {/* Quick Partner Options below Ticket Card */}
-          {AGENT_MODULE_ENABLED && hasOwnerPlan && !hasAgentPlan ? (
+          {AGENT_MODULE_ENABLED && AGENT_ROLE_VISIBLE && hasOwnerPlan && !hasAgentPlan ? (
             <TouchableOpacity
               style={styles.addOtherPlanRow}
               onPress={handleExploreAgentPlans}

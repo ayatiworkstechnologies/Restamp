@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import WhatsAppIcon from "../../../shared/components/WhatsAppIcon.js";
 import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Linking, Alert, Platform } from "react-native";
 import {
   Heart,
@@ -236,7 +237,7 @@ export default function PropertySearchCard({
               onWhatsApp?.(property);
             }}
           >
-            <MessageCircle size={16} color="#16A34A" />
+            <WhatsAppIcon size={16} color="#16A34A" />
           </TouchableOpacity>
 
           {/* Call Button */}
@@ -1010,7 +1011,7 @@ const styles = StyleSheet.create({
   callNowBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 10,
+    borderRadius: 100,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     justifyContent: "center",

@@ -42,7 +42,7 @@ import {
 } from "../phone.js";
 import { planLoginResume } from "../requireAuth.js";
 import { fetchAgentPlan } from "../../../shared/api/agentPlans.js";
-import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
+import { AGENT_MODULE_ENABLED, AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 import { AGENT_UPGRADE_ROUTE, AGENT_UPGRADE_PARAMS } from "../../agent/utils/agentUpgrade.js";
 import RestampLoginLogo from "../../../shared/components/RestampLoginLogo.js";
 
@@ -79,12 +79,17 @@ const WELCOME_SLIDES = [
     title: "List your property",
     body: "Post your property and connect with interested buyers.",
   },
-  {
-    key: "agent",
-    image: require("../../../../assets/welcome-agent.jpg"),
-    title: "Work as an agent",
-    body: "Access properties in your chosen areas and manage your leads.",
-  },
+  // Agent slide hidden (AGENT_ROLE_VISIBLE); kept for when it returns.
+  ...(AGENT_ROLE_VISIBLE
+    ? [
+        {
+          key: "agent",
+          image: require("../../../../assets/welcome-agent.jpg"),
+          title: "Work as an agent",
+          body: "Access properties in your chosen areas and manage your leads.",
+        },
+      ]
+    : []),
 ];
 
 const OTP_BOX_HEIGHT = Math.round(OTP_BOX_WIDTH * 1.18);
@@ -259,11 +264,16 @@ export default function LoginScreen({ navigation }) {
   // True when the account has an active, server-saved agent plan: it then
   // lands on the Agent dashboard (checked after every successful login).
   const hasAgentPlanRef = useRef(false);
+  // Agent role hidden: an area plan that comes with a Dealer plan lands on
+  // the Dealer page instead; a pure agent plan is ignored.
+  const hasDealerAreaPlanRef = useRef(false);
   const loadAgentPlanFlag = async () => {
     hasAgentPlanRef.current = false;
+    hasDealerAreaPlanRef.current = false;
     if (!AGENT_MODULE_ENABLED) return;
     const plan = await fetchAgentPlan();
-    hasAgentPlanRef.current = !!plan;
+    hasAgentPlanRef.current = !!plan && AGENT_ROLE_VISIBLE;
+    hasDealerAreaPlanRef.current = !!plan && plan.is_dealer === true && !AGENT_ROLE_VISIBLE;
   };
 
   const enterAfterLogin = () => {
@@ -291,6 +301,14 @@ export default function LoginScreen({ navigation }) {
         navigation?.navigate("MainTabs");
       }
       plan.action();
+      return;
+    }
+    if (hasDealerAreaPlanRef.current) {
+      if (navigation?.reset) {
+        navigation.reset({ index: 1, routes: [{ name: "MainTabs" }, { name: "DealerNavigator" }] });
+      } else {
+        navigation?.navigate("DealerNavigator");
+      }
       return;
     }
     if (hasAgentPlanRef.current) {
@@ -557,7 +575,7 @@ export default function LoginScreen({ navigation }) {
       });
       return;
     }
-    if (intendedRole === "owner" || (intendedRole === "agent" && AGENT_MODULE_ENABLED)) {
+    if (intendedRole === "owner" || (intendedRole === "agent" && AGENT_MODULE_ENABLED && AGENT_ROLE_VISIBLE)) {
       loginSucceededRef.current = true;
       try {
         clearPendingAction();
@@ -1056,7 +1074,7 @@ export default function LoginScreen({ navigation }) {
               {[
                 { key: "buyer", title: "Buyer", sub: "Find a property · free" },
                 { key: "owner", title: "Owner", sub: "List my property · needs Owner Plan" },
-                ...(AGENT_MODULE_ENABLED
+                ...(AGENT_MODULE_ENABLED && AGENT_ROLE_VISIBLE
                   ? [{ key: "agent", title: "Agent", sub: "Broker properties · needs Agent Plan, 1 area free" }]
                   : []),
                 { key: "dealer", title: "Dealer", sub: "Post and manage properties · needs Dealer Plan" },
@@ -1170,7 +1188,7 @@ const styles = StyleSheet.create({
   wcContainer: { flex: 1, backgroundColor: "#FFFFFF" },
   wcImageWrap: { height: "68%", backgroundColor: "#FFFFFF", overflow: "hidden" },
   wcImage: { width: "100%", height: "100%" },
-  wcFade: { position: "absolute", left: 0, right: 0, bottom: 0, height: "22%" },
+  wcFade: { position: "absolute", left: 0, right: 0, bottom: 0, width: "100%", height: "8%" },
   wcTextBlock: { flex: 1, alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 40, paddingBottom: 4 },
   wcTitle: { fontSize: 28, fontWeight: "700", color: "#111827", letterSpacing: -0.6, textAlign: "center" },
   wcBody: { fontSize: 17, lineHeight: 25, color: "#6B7280", textAlign: "center", marginTop: 10 },
