@@ -58,7 +58,7 @@ import { enterOwnerFlow } from "../../../shared/api/users.js";
 import PropertyDetailModal from "../components/PropertyDetailModal.js";
 import CategoryFilledIcon from "../components/CategoryFilledIcon.js";
 import SearchPropertyModal from "../components/SearchPropertyModal.js";
-import { apiGet } from "../../../shared/api/client.js";
+import { apiGet, describeLoadError } from "../../../shared/api/client.js";
 import { toUiProperty } from "../../../shared/api/mappers.js";
 import SafeImage from "../../../shared/components/SafeImage.js";
 import { getUnreadCount, subscribeNotifications } from "../../../shared/data/notificationsStore.js";
@@ -390,12 +390,10 @@ export default function HomeScreen({ navigation, route }) {
           setLiveListings([]);
         }
       })
-      .catch(() => {
+      .catch((e) => {
         if (cancelled) return;
         setLiveListings([]);
-        setListingsError(
-          "Couldn't load properties. Check your connection and try again."
-        );
+        setListingsError(describeLoadError(e, "properties"));
       });
     return () => {
       cancelled = true;

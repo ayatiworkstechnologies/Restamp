@@ -173,7 +173,35 @@ function mapStatus(status) {
   return "retry";
 }
 
+// ---- One automatic retry for read-only GET requests -------------------------
+// The production API host sleeps when idle; its first request after a sleep can
+// time out or fail to connect, and the user then saw "check your connection"
+// although the server was fine a few seconds later. GETs are idempotent, so a
+// single retry after a short pause is safe. Only timeout / offline / 5xx are
+// retried — 4xx (auth, validation, missing) is final and surfaces at once.
+let getRetryDelayMs = 2000;
+export function __setGetRetryDelayMs(ms) {
+  getRetryDelayMs = ms;
+}
+function isTransientError(e) {
+  if (!(e instanceof ApiError)) return false;
+  return e.kind === "timeout" || e.kind === "offline" || (e.status >= 500 && e.status < 600);
+}
+async function withGetRetry(run) {
+  try {
+    return await run();
+  } catch (e) {
+    if (!isTransientError(e)) throw e;
+    await new Promise((r) => setTimeout(r, getRetryDelayMs));
+    return run();
+  }
+}
+
 export async function apiGet(path, params = {}) {
+  return withGetRetry(() => apiGetOnce(path, params));
+}
+
+async function apiGetOnce(path, params = {}) {
   const qs = Object.entries(params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(
@@ -193,6 +221,22 @@ export async function apiGet(path, params = {}) {
     response.status,
     `Request failed (${response.status}).`,
   );
+}
+
+/**
+ * Honest, user-facing text for a failed load. Only a genuine connectivity
+ * failure (offline) mentions the connection; a timeout, a server error and
+ * an auth problem each say what actually happened. `what` is e.g. "properties".
+ */
+export function describeLoadError(e, what = "data") {
+  const kind = e && e.kind;
+  const status = e && e.status;
+  if (kind === "offline") return `Couldn't load ${what}. Check your connection and try again.`;
+  if (kind === "timeout") return `The server is taking too long to respond. It may be waking up — try again in a moment.`;
+  if (kind === "login") return `Your session has expired. Please log in again.`;
+  if (status >= 500) return `The server had a problem loading ${what} (HTTP ${status}). Please try again.`;
+  if (status) return `Couldn't load ${what} (HTTP ${status}). Please try again.`;
+  return `Couldn't load ${what}. Please try again.`;
 }
 
 export function isApiError(e, kind) {
@@ -336,5 +380,5 @@ export async function apiGetAuth(path, params = {}) {
     )
     .join("&");
   const url = `${API_BASE_URL}${path}${qs ? `?${qs}` : ""}`;
-  return authedFetch(url, { method: "GET" });
+  return withGetRetry(() => authedFetch(url, { method: "GET" }));
 }
