@@ -17,9 +17,9 @@ export const QUICK_ACTIONS = {
       { label: "🛡️ Verification", question: "How does property verification work?" },
     ],
     Agent: [
-      { label: "🏘️ Locality leads", question: "How do Chennai locality packages work for agents?" },
-      { label: "📈 Agent dashboard", question: "What features are included in the Agent Dashboard?" },
-      { label: "💼 Partner pricing", question: "What are the Agent Starter, Pro and Elite plans?" },
+      { label: "🏘️ Locality leads", question: "How do Chennai locality packages work for dealers?" },
+      { label: "📈 Dealer dashboard", question: "What features are included in the Dealer Dashboard?" },
+      { label: "💼 Partner pricing", question: "What are the Dealer Starter, Pro and Elite plans?" },
       { label: "❓ General help", question: "What can Reva AI assist me with?" },
     ],
   },
@@ -68,7 +68,7 @@ const KNOWLEDGE_BASE_EN = [
   {
     keywords: ["plan", "pricing", "subscription", "starter", "plus", "gold", "premium", "cost", "charge", "fee"],
     reply:
-      "Restamp offers 4 official Owner Plans:\n• RESTAMP STARTER (₹599) — 1 Listing, 30 Days, Unlimited Leads\n• RESTAMP PLUS (₹999) — 2 Listings, 30 Days, Unlimited Leads\n• RESTAMP GOLD (₹1,999) — 5 Listings, 60 Days, Relationship Manager [POPULAR]\n• RESTAMP PREMIUM (₹4,999) — 10 Listings, 90 Days, RM + Social Media Promo",
+      "Restamp Owner (Seller) Plans:\n• Super ₹999 — 3 posts, 45 days\n• Premium ₹1,799 — 5 posts, 60 days\n• Elite ₹2,499 — 20 posts, 90 days, RM + Social Media\n• Special ₹3,499 — 50 posts, 90 days, RM + Social Media\n• Business ₹49,999 — 250 posts, 90 days, RM + Social Media\n• Unlimited Business ₹99,999 — unlimited posts, 180 days, RM + Social Media\nDealer: ₹200 per pincode (30 days) or ₹300 per pincode (60 days).\nBuyer: 0–3 leads free (15 days), 4–10 leads ₹1,499 (30 days), 11–30 leads ₹2,499 (60 days), unlimited ₹4,999 (90 days).",
     action: { label: "View Owner Plans", route: "OwnerPlans" },
   },
   {
@@ -90,10 +90,10 @@ const KNOWLEDGE_BASE_EN = [
     action: { label: "Owner Dashboard", route: "OwnerDashboard" },
   },
   {
-    keywords: ["agent", "broker", "partner", "localities", "elite", "agent plan"],
+    keywords: ["agent", "broker", "partner", "localities", "elite", "dealer plan"],
     reply:
-      "Restamp Agent Partner plans empower local brokers with direct buyer leads mapped to chosen Chennai localities (5, 10, or 15 areas), plus a dedicated Agent Dashboard.",
-    action: { label: "Agent Plans", route: "AgentPlans" },
+      "Restamp Dealer Partner plans empower local brokers with direct buyer leads mapped to chosen Chennai localities (5, 10, or 15 areas), plus a dedicated Dealer Dashboard.",
+    action: { label: "Dealer Plans", route: "AgentPlans" },
   },
   {
     keywords: ["verify", "verification", "authentic", "trust", "safety"],
@@ -125,7 +125,7 @@ const KNOWLEDGE_BASE_TA = [
   {
     keywords: ["திட்டம்", "விலை", "ஸ்டார்ட்டர்", "பிளஸ்", "கோல்ட்", "பிரீமியம்", "கட்டணம்"],
     reply:
-      "Restamp உரிமையாளர்களுக்கான 4 அதிகாரப்பூர்வ திட்டங்கள்:\n• RESTAMP STARTER (₹599) — 1 சொத்து பதிவு, 30 நாட்கள், வரம்பற்ற வாடிக்கையாளர் தொடர்புகள்\n• RESTAMP PLUS (₹999) — 2 சொத்து பதிவுகள், 30 நாட்கள்\n• RESTAMP GOLD (₹1,999) — 5 சொத்து பதிவுகள், 60 நாட்கள், தனி உதவியாளர் [பிரபலமானது]\n• RESTAMP PREMIUM (₹4,999) — 10 பதிவுகள், 90 நாட்கள், சமூக ஊடக விளம்பரம்",
+      "Restamp உரிமையாளர் திட்டங்கள்:\n• Super ₹999 — 3 சொத்து பதிவுகள், 45 நாட்கள்\n• Premium ₹1,799 — 5 சொத்து பதிவுகள், 60 நாட்கள்\n• Elite ₹2,499 — 20 சொத்து பதிவுகள், 90 நாட்கள், தனி உதவியாளர் + சமூக ஊடக விளம்பரம்\n• Special ₹3,499 — 50 சொத்து பதிவுகள், 90 நாட்கள், தனி உதவியாளர் + சமூக ஊடக விளம்பரம்\n• Business ₹49,999 — 250 சொத்து பதிவுகள், 90 நாட்கள், தனி உதவியாளர் + சமூக ஊடக விளம்பரம்\n• Unlimited Business ₹99,999 — வரம்பற்ற பதிவுகள், 180 நாட்கள், தனி உதவியாளர் + சமூக ஊடக விளம்பரம்\nDealer: ஒவ்வொரு pincode-க்கும் ₹200 (30 நாட்கள்) அல்லது ₹300 (60 நாட்கள்).",
     action: { label: "திட்டங்களைக் காண்க", route: "OwnerPlans" },
   },
   {
@@ -216,8 +216,8 @@ export function getLocalAiReply(question, role = "Buyer", language = "en") {
 
   if (role === "Agent") {
     return {
-      text: "I can assist you with agent locality packages, buyer leads, and the agent dashboard. How can I help your real estate business today?",
-      action: { label: "Agent Locality Select", route: "AgentPlans" },
+      text: "I can assist you with dealer locality packages, buyer leads, and the dealer dashboard. How can I help your real estate business today?",
+      action: { label: "Dealer Locality Select", route: "AgentPlans" },
       language: "en",
       demo: true,
     };

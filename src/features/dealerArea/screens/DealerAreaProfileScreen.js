@@ -35,8 +35,8 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
 import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
-import { useAgent } from "../context/AgentContext.js";
-import { planAllowance } from "../utils/agentCore.js";
+import { useAgent } from "../context/DealerAreaContext.js";
+import { planAllowance } from "../utils/dealerAreaCore.js";
 import ConfirmationModal from "../../owner/components/ConfirmationModal.js";
 
 export default function AgentProfileScreen({ navigation }) {
@@ -71,7 +71,7 @@ export default function AgentProfileScreen({ navigation }) {
       index: 0,
       routes: [{ name: "MainTabs" }],
     });
-    Alert.alert("Logged Out", "You have been signed out of your agent account.");
+    Alert.alert("Logged Out", "You have been signed out of your dealer account.");
   };
 
   return (
@@ -98,7 +98,7 @@ export default function AgentProfileScreen({ navigation }) {
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
               <Text style={styles.agentName}>
-                {agentProfile ? agentProfile.name || "Add your name" : "Agent profile unavailable"}
+                {agentProfile ? agentProfile.name || "Add your name" : "Dealer profile unavailable"}
               </Text>
               <Pencil size={14} color="#475569" style={styles.pencilIcon} />
             </View>
@@ -275,7 +275,7 @@ export default function AgentProfileScreen({ navigation }) {
             onPress={() =>
               Alert.alert(
                 "KYC Status",
-                `Agent RERA ID: ${agentProfile?.reraNumber || "Not provided"}\nStatus: VERIFIED & ACTIVE`
+                `Dealer RERA ID: ${agentProfile?.reraNumber || "Not provided"}\nStatus: VERIFIED & ACTIVE`
               )
             }
             activeOpacity={0.7}
@@ -300,7 +300,7 @@ export default function AgentProfileScreen({ navigation }) {
             onPress={() =>
               Alert.alert(
                 "Payment History",
-                "Transactions:\n• 06 Sep 2026 - ₹6,999 (Agent Pro 10 Loc) - Success\n• 06 Aug 2026 - ₹6,999 - Success"
+                "Transactions:\n• 06 Sep 2026 - ₹6,999 (Dealer Pro 10 Loc) - Success\n• 06 Aug 2026 - ₹6,999 - Success"
               )
             }
             activeOpacity={0.7}
@@ -350,20 +350,20 @@ export default function AgentProfileScreen({ navigation }) {
           <TouchableOpacity
             style={styles.menuRow}
             onPress={() =>
-              Alert.alert("Agent Concierge", "Contact RESTAMP Agent Relationship Manager at 1800-420-RESTAMP")
+              Alert.alert("Dealer Concierge", "Contact RESTAMP Dealer Relationship Manager at 1800-420-RESTAMP")
             }
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
               <HelpCircle size={18} color="#334155" style={styles.menuIcon} />
-              <Text style={styles.menuLabel}>{agentPlan?.isDealer ? "Dealer Support Desk" : "Agent Support Desk"}</Text>
+              <Text style={styles.menuLabel}>{agentPlan?.isDealer ? "Dealer Support Desk" : "Dealer Support Desk"}</Text>
             </View>
             <ChevronRight size={16} color="#94A3B8" />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 0 }]}
-            onPress={() => Alert.alert("FAQs", "Agent platform rules, lead SLAs & commission guidelines.")}
+            onPress={() => Alert.alert("FAQs", "Dealer platform rules, lead SLAs & commission guidelines.")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -380,7 +380,7 @@ export default function AgentProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => Alert.alert("Settings", "Agent studio preferences.")}
+            onPress={() => Alert.alert("Settings", "Dealer studio preferences.")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -392,7 +392,7 @@ export default function AgentProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 0 }]}
-            onPress={() => Alert.alert("Legal", "Terms of Service and Privacy Policy for RESTAMP Agents.")}
+            onPress={() => Alert.alert("Legal", "Terms of Service and Privacy Policy for RESTAMP Dealers.")}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -424,7 +424,7 @@ export default function AgentProfileScreen({ navigation }) {
       {/* LOGOUT CONFIRMATION MODAL */}
       <ConfirmationModal
         visible={showLogoutModal}
-        title={agentPlan?.isDealer ? "Logout" : "Logout of Agent Studio"}
+        title={agentPlan?.isDealer ? "Logout" : "Logout of Dealer Studio"}
         message="Are you sure you want to log out? Your active subscription and leads will remain securely saved."
         confirmText="Log Out"
         cancelText="Cancel"

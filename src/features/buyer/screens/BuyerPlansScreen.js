@@ -4,6 +4,10 @@
  *
  * Payment is SIMULATED: "Pay" records a simulated payment on the server and
  * activates the plan. No money is charged.
+ *
+ * Built from the shared RESTAMP plan/payment components (PlanCard,
+ * PaymentHeader, PaymentInvoice, PaymentFooter) so it matches Owner, Dealer
+ * and Agent plan screens.
  */
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -15,8 +19,13 @@ import {
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, Check, CheckCircle2, Phone } from "../../../shared/components/HugeIcon.js";
+import { Phone } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import PlanCard from "../../../shared/components/PlanCard.js";
+import PaymentHeader from "../../../shared/components/PaymentHeader.js";
+import PaymentInvoice from "../../../shared/components/PaymentInvoice.js";
+import PaymentFooter from "../../../shared/components/PaymentFooter.js";
+import { useAuth } from "../../auth/context/AuthContext.js";
 import {
   fetchBuyerPlans,
   fetchMyBuyerPlan,
@@ -24,7 +33,12 @@ import {
   formatPlanPrice,
 } from "../../../shared/api/buyerPlans.js";
 
-export default function BuyerPlansScreen({ navigation, route }) {
+// `embedded`: rendered as the Buyer tab inside the Plans menu (MenuScreen),
+// without its own safe area or header.
+export default function BuyerPlansScreen({ navigation, route, embedded = false }) {
+  const Shell = embedded ? View : SafeAreaView;
+  const shellProps = embedded ? { style: styles.safe } : { style: styles.safe, edges: ["top", "bottom"] };
+  const auth = useAuth();
   const fromQuota = route?.params?.reason === "quota";
   const [plans, setPlans] = useState([]);
   const [mine, setMine] = useState(null);
@@ -79,54 +93,49 @@ export default function BuyerPlansScreen({ navigation, route }) {
   const leadsText = (p) =>
     p.lead_limit == null ? "Unlimited owner contacts" : `Up to ${p.lead_limit} owner contacts`;
 
-  // ── Success ──
+  // ── Success (same invoice layout as Owner / Dealer / Agent) ──
   if (success) {
+    const invoiceDate = new Date().toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
     return (
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <View style={styles.header}>
-          <View style={styles.headerBtn} />
-          <Text style={styles.headerTitle}>Payment Successful</Text>
-          <View style={styles.headerBtn} />
-        </View>
-        <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.successIcon}>
-            <CheckCircle2 size={44} color={COLORS.success} />
-          </View>
-          <Text style={styles.successTitle}>{success.plan_name} is active</Text>
-          <Text style={styles.successSub}>
-            You can view owner phone numbers again.
-          </Text>
-          <View style={styles.summaryCard}>
-            <Row k="Plan" v={success.plan_name} />
-            <Row
-              k="Leads"
-              v={success.lead_limit == null ? "Unlimited" : `${success.leads_used} of ${success.lead_limit} used`}
-            />
-            <Row k="Amount" v={formatPlanPrice(success.amount_paise)} />
-            <Row k="Transaction" v={success.transaction_id} />
-          </View>
-          <Text style={styles.simNote}>Simulated payment — no real money was charged.</Text>
+      <Shell {...shellProps}>
+        {!embedded && <PaymentHeader title="Invoice" onBack={goBack} />}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <PaymentInvoice
+            invoiceNo={success.transaction_id}
+            date={invoiceDate}
+            billedName={auth?.user?.name || auth?.user?.full_name || "Restamp Buyer"}
+            billedPhone={auth?.user?.phone || auth?.user?.phone_number || ""}
+            itemTitle={success.plan_name}
+            itemSub="Buyer plan · You can view owner phone numbers again"
+            amount={formatPlanPrice(success.amount_paise)}
+            rows={[
+              {
+                label: "Leads",
+                value:
+                  success.lead_limit == null
+                    ? "Unlimited"
+                    : `${success.leads_used} of ${success.lead_limit} used`,
+              },
+            ]}
+          />
         </ScrollView>
-        <View style={styles.footer}>
-          <TouchableOpacity style={styles.primaryBtn} onPress={goBack} activeOpacity={0.85}>
-            <Text style={styles.primaryBtnText}>Back to Properties</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+        <PaymentFooter primaryLabel={embedded ? "Done" : "Back to Properties"} onPrimary={embedded ? () => setSuccess(null) : goBack} />
+      </Shell>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBtn} onPress={goBack} accessibilityLabel="Back">
-          <ArrowLeft size={20} color={COLORS.textDark} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Buyer Plans</Text>
-        <View style={styles.headerBtn} />
-      </View>
+    <Shell {...shellProps}>
+      {!embedded && <PaymentHeader title="Buyer Plans" onBack={goBack} />}
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {fromQuota && (
           <View style={styles.quotaBanner}>
             <Phone size={18} color={COLORS.primary} style={{ marginRight: 10 }} />
@@ -162,35 +171,17 @@ export default function BuyerPlansScreen({ navigation, route }) {
             const isCurrent = mine?.plan_code === p.code;
             const isSelected = selected?.code === p.code;
             return (
-              <TouchableOpacity
+              <PlanCard
                 key={p.code}
-                style={[styles.planCard, isSelected && styles.planCardSelected]}
+                name={p.name}
+                price={formatPlanPrice(p.price_paise)}
+                currentLabel={isCurrent ? "Current" : undefined}
+                features={[p.leads_label, leadsText(p), `${p.duration_days} days validity`]}
+                buttonText={isSelected ? "Selected" : p.is_free ? "Free plan" : "Select Plan"}
+                selected={isSelected}
                 disabled={p.is_free}
                 onPress={() => setSelected(p)}
-                activeOpacity={0.85}
-              >
-                <View style={styles.planTop}>
-                  <Text style={styles.planName}>{p.name}</Text>
-                  {isCurrent && (
-                    <View style={styles.currentPill}>
-                      <Text style={styles.currentPillText}>Current</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.planPrice}>{formatPlanPrice(p.price_paise)}</Text>
-                <View style={styles.featureRow}>
-                  <Check size={14} color={COLORS.success} style={{ marginRight: 8 }} />
-                  <Text style={styles.featureText}>{p.leads_label}</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <Check size={14} color={COLORS.success} style={{ marginRight: 8 }} />
-                  <Text style={styles.featureText}>{leadsText(p)}</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <Check size={14} color={COLORS.success} style={{ marginRight: 8 }} />
-                  <Text style={styles.featureText}>{p.duration_days} days validity</Text>
-                </View>
-              </TouchableOpacity>
+              />
             );
           })
         )}
@@ -198,51 +189,20 @@ export default function BuyerPlansScreen({ navigation, route }) {
       </ScrollView>
 
       {selected && !selected.is_free && (
-        <View style={styles.footer}>
-          <Text style={styles.footerNote}>Simulated payment — no real money is charged.</Text>
-          <TouchableOpacity
-            style={[styles.primaryBtn, paying && { opacity: 0.7 }]}
-            onPress={handlePay}
-            disabled={paying}
-            activeOpacity={0.85}
-          >
-            {paying ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.primaryBtnText}>
-                Pay {formatPlanPrice(selected.price_paise)} · {selected.name}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <PaymentFooter
+          note="Simulated payment — no real money is charged."
+          primaryLabel={`Pay ${formatPlanPrice(selected.price_paise)} · ${selected.name}`}
+          onPrimary={handlePay}
+          loading={paying}
+        />
       )}
-    </SafeAreaView>
-  );
-}
-
-function Row({ k, v }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowKey}>{k}</Text>
-      <Text style={styles.rowVal}>{v}</Text>
-    </View>
+    </Shell>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#FFFFFF" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
-  headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 17, fontWeight: "600", color: COLORS.textDark },
-  content: { padding: 16, paddingBottom: 32 },
+  content: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 },
   quotaBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -256,65 +216,16 @@ const styles = StyleSheet.create({
   quotaText: { flex: 1, fontSize: 14, color: COLORS.textDark, lineHeight: 20 },
   usageCard: {
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
+    borderColor: COLORS.borderLight,
+    borderRadius: 18,
+    padding: 15,
+    marginBottom: 10,
   },
-  usageLabel: { fontSize: 12, color: "#64748B" },
+  usageLabel: { fontSize: 12, color: COLORS.muted },
   usageValue: { fontSize: 16, fontWeight: "700", color: COLORS.textDark, marginTop: 2 },
   usageSub: { fontSize: 13, color: COLORS.textSecondary, marginTop: 4 },
-  planCard: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    backgroundColor: "#FFFFFF",
-  },
-  planCardSelected: { borderColor: COLORS.primary, borderWidth: 2, backgroundColor: COLORS.primaryLight },
-  planTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  planName: { fontSize: 16, fontWeight: "700", color: COLORS.textDark },
-  currentPill: {
-    backgroundColor: COLORS.successBg,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  currentPillText: { fontSize: 12, fontWeight: "600", color: COLORS.success },
-  planPrice: { fontSize: 24, fontWeight: "700", color: COLORS.textDark, marginTop: 6, marginBottom: 10 },
-  featureRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
-  featureText: { fontSize: 14, color: COLORS.textSecondary },
   errorBox: { alignItems: "center", marginTop: 32 },
   errorText: { fontSize: 14, color: COLORS.textSecondary, textAlign: "center" },
   retryText: { fontSize: 14, fontWeight: "600", color: COLORS.primary, marginTop: 10 },
-  payError: { fontSize: 14, color: "#DC2626", textAlign: "center", marginTop: 8 },
-  footer: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    backgroundColor: "#FFFFFF",
-  },
-  footerNote: { fontSize: 12, color: "#64748B", textAlign: "center", marginBottom: 8 },
-  primaryBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 999,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  primaryBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
-  successIcon: { alignItems: "center", marginTop: 24, marginBottom: 12 },
-  successTitle: { fontSize: 20, fontWeight: "700", color: COLORS.textDark, textAlign: "center" },
-  successSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: "center", marginTop: 6 },
-  summaryCard: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 20,
-  },
-  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8 },
-  rowKey: { fontSize: 14, color: "#64748B" },
-  rowVal: { fontSize: 14, fontWeight: "600", color: COLORS.textDark, flexShrink: 1, textAlign: "right" },
-  simNote: { fontSize: 12, color: "#64748B", textAlign: "center", marginTop: 14 },
+  payError: { fontSize: 14, color: COLORS.danger, textAlign: "center", marginTop: 8 },
 });

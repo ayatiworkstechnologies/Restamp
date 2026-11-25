@@ -16,4 +16,4 @@ export const AGENT_MODULE_ENABLED = true;
 // Set to true to bring the Agent role back.
 export const AGENT_ROLE_VISIBLE = false;
 // Label for leads/visits that come from the BROKER (area) side.
-export const PARTNER_LABEL = AGENT_ROLE_VISIBLE ? "Agent" : "Dealer";
+export const PARTNER_LABEL = AGENT_ROLE_VISIBLE ? "Dealer" : "Dealer";

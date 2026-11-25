@@ -33,7 +33,7 @@ import {
   SlidersHorizontal,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
-import { useAgent } from "../context/AgentContext.js";
+import { useAgent } from "../context/DealerAreaContext.js";
 import PropertyDetailModal from "../../buyer/components/PropertyDetailModal.js";
 import StatusBadge from "../../owner/components/StatusBadge.js";
 import ScheduleVisitModal from "../../buyer/components/ScheduleVisitModal.js";
@@ -105,7 +105,7 @@ export default function AgentLeadDetailScreen({ route, navigation }) {
       return;
     }
     const text = encodeURIComponent(
-      `Hello ${lead?.customerName}! I am your RESTAMP agent regarding your inquiry for ${lead?.requirement} in ${lead?.preferredLocality}. When would be a convenient time for a brief discussion?`
+      `Hello ${lead?.customerName}! I am your RESTAMP dealer regarding your inquiry for ${lead?.requirement} in ${lead?.preferredLocality}. When would be a convenient time for a brief discussion?`
     );
     Linking.openURL(`https://wa.me/${digits}?text=${text}`).catch(() => {
       Alert.alert("WhatsApp Unavailable", "Could not launch WhatsApp.");
@@ -133,7 +133,7 @@ export default function AgentLeadDetailScreen({ route, navigation }) {
     const finalDate = visitDetails?.date || visitDate || "12 Oct 2026";
     const finalFullDate = visitDetails?.fullDate || finalDate;
     const finalTime = visitDetails?.time || visitTime || "10:00 am";
-    const finalNotes = visitDetails?.notes || visitNotes || "Site visit coordinated via RESTAMP Agent";
+    const finalNotes = visitDetails?.notes || visitNotes || "Site visit coordinated via RESTAMP Dealer";
 
     scheduleVisit({
       leadId: lead.id,

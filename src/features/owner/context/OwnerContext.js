@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { shouldResetAccountScope, selectOwnerScopedProperties } from "../../auth/session.js";
-import { fetchOwnerPlan, fetchDealerPlan } from "../../../shared/api/ownerPlans.js";
+import { fetchOwnerPlan, fetchDealerPlan, fetchCapabilities } from "../../../shared/api/ownerPlans.js";
 import { DEALER_PLANS_LIST } from "../../dealer/data/dealerPlans.js";
 import { OWNER_PLANS_LIST } from "../data/ownerPlans.js";
 
@@ -19,6 +19,9 @@ function subscriptionFromServer(server) {
     validity: `${server.duration_days} Days`,
     daysRemaining,
     listingLimit: server.listing_limit == null ? Infinity : server.listing_limit,
+    // Dealer plans: the chosen Sales Hub areas; trial = Sales Hub only.
+    pincodes: Array.isArray(server.pincodes) ? server.pincodes : [],
+    isTrial: !!server.is_trial,
     usedListings: 0,
     price: local?.price || null,
     amountPaid: local?.price || null,
@@ -135,19 +138,27 @@ export function OwnerProvider({ children }) {
   // Load the saved owner plan from the server whenever the account changes,
   // so a purchase survives logout, restart and switching roles.
   const [ownerPlanLoaded, setOwnerPlanLoaded] = useState(false);
-  // Dealer plan: separate from the owner plan (a user can hold both).
+  // Dealer plan. A Dealer account may also add an Owner plan (My
+  // Properties); an Owner account cannot become a Dealer.
   const [dealerSubscription, setDealerSubscription] = useState(null);
+  const [capabilities, setCapabilities] = useState(null);
+  const [plansVersion, setPlansVersion] = useState(0);
+  const refreshPlans = () => setPlansVersion((v) => v + 1);
   useEffect(() => {
     let alive = true;
     setDealerSubscription(null);
+    setCapabilities(null);
     if (authUserId == null) return undefined;
     fetchDealerPlan().then((server) => {
       if (alive && server) setDealerSubscription(subscriptionFromServer(server));
     });
+    fetchCapabilities().then((caps) => {
+      if (alive) setCapabilities(caps);
+    });
     return () => {
       alive = false;
     };
-  }, [authUserId]);
+  }, [authUserId, plansVersion]);
 
   const activateDealerSubscription = (plan) => {
     const days = parseInt(String(plan?.validity || "30"), 10) || 30;
@@ -160,7 +171,8 @@ export function OwnerProvider({ children }) {
       planName: plan?.name,
       validity: plan?.validity,
       daysRemaining: days,
-      listingLimit: plan?.listingLimit ?? 10,
+      listingLimit: plan?.listingLimit ?? 0,
+      pincodes: Array.isArray(plan?.pincodes) ? plan.pincodes : [],
       price: plan?.amountPaid || plan?.price,
       amountPaid: plan?.amountPaid || plan?.price,
       active: true,
@@ -189,7 +201,7 @@ export function OwnerProvider({ children }) {
     return () => {
       alive = false;
     };
-  }, [authUserId]);
+  }, [authUserId, plansVersion]);
 
   // NOTE: drafts are server-backed (src/api/owner.js draft helpers +
   // listing_drafts table). The old in-memory rentDraft system was removed so
@@ -297,6 +309,9 @@ export function OwnerProvider({ children }) {
 
   const hasOwnerPlan = !!(subscription && subscription.hasPurchased && subscription.active);
   const hasDealerPlan = !!(dealerSubscription && dealerSubscription.active);
+  // Dealers post with a PAID dealer plan (the backend refuses a trial).
+  const dealerCanPost = hasDealerPlan && !dealerSubscription?.isTrial;
+  const posterType = capabilities?.poster_type ?? null; // "OWNER" | "BROKER" | null
 
   const contextValue = useMemo(() => ({
     subscription,
@@ -304,6 +319,9 @@ export function OwnerProvider({ children }) {
     ownerPlanLoaded,
     dealerSubscription,
     hasDealerPlan,
+    dealerCanPost,
+    posterType,
+    refreshPlans,
     activateDealerSubscription,
     setSubscription,
     activateSubscription,
@@ -325,6 +343,8 @@ export function OwnerProvider({ children }) {
     subscription,
     dealerSubscription,
     hasDealerPlan,
+    dealerCanPost,
+    posterType,
     hasOwnerPlan,
     ownerPlanLoaded,
     ownerProfile,

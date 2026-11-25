@@ -478,12 +478,12 @@ export default function SavedScreen({ navigation, route, browseRoute = "Home", h
   // right before the dialer opens. Recording is best effort and never awaited,
   // so a logging failure can never block the call; recordCallTap itself skips
   // guests and non-buyer roles.
-  const handleCall = (phone, name = "Agent", listingId = null) => {
+  const handleCall = (phone, name = "Dealer", listingId = null) => {
     const digits = cleanPhoneOrNull(phone);
     if (!digits) {
       Alert.alert(
         "Phone Number Unavailable",
-        `The contact number${name && name !== "Agent" ? ` for ${name}` : ""} is not available.`
+        `The contact number${name && name !== "Dealer" ? ` for ${name}` : ""} is not available.`
       );
       return;
     }

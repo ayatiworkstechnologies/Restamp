@@ -18,7 +18,6 @@ import {
   Briefcase,
   Calculator,
   ChevronRight,
-  Check,
   Search,
   Layers,
   Sparkles,
@@ -28,22 +27,29 @@ import {
   MapPin,
   Building2,
   HugeChevronLeft,
+  User,
 } from "../../../shared/components/HugeIcon.js";
-import { DEALER_PLANS_LIST } from "../../dealer/data/dealerPlans.js";
+import DealerPincodePlanPicker from "../../dealer/components/DealerPincodePlanPicker.js";
 import COLORS from "../../../shared/constants/colors.js";
+import PlanCard from "../../../shared/components/PlanCard.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
-import { enterOwnerFlow, ensureOwnerRole } from "../../../shared/api/users.js";
+import { enterOwnerFlow, ensureRole } from "../../../shared/api/users.js";
+import { isPosterTypeConflict, posterTypeConflictMessage } from "../../../shared/api/subscriptions.js";
 import { useRequireAuth } from "../../auth/useRequireAuth.js";
 import { useOwner } from "../../owner/context/OwnerContext.js";
-import { useAgent } from "../../agent/context/AgentContext.js";
-import { planAllowance } from "../../agent/utils/agentCore.js";
+import { useAgent } from "../../dealerArea/context/DealerAreaContext.js";
+import { planAllowance } from "../../dealerArea/utils/dealerAreaCore.js";
 import { AGENT_MODULE_ENABLED, AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 import { OWNER_PLANS_LIST } from "../../owner/data/ownerPlans.js";
+import BuyerPlansScreen from "./BuyerPlansScreen.js";
 
+// One Plans menu for every role: Buyer, Owner and Dealer plans are all
+// bought here (owners and dealers can buy a buyer plan too).
 const VERTICAL_TABS = [
+  { id: "buyer", label: "Buyer Plan", icon: User },
   { id: "owner", label: "Owner Plan", icon: Crown },
   { id: "dealer", label: "Dealer Plan", icon: Building2 },
-  ...(AGENT_MODULE_ENABLED && AGENT_ROLE_VISIBLE ? [{ id: "agent", label: "Agent Plan", icon: Briefcase }] : []),
+  ...(AGENT_MODULE_ENABLED && AGENT_ROLE_VISIBLE ? [{ id: "agent", label: "Dealer Plan", icon: Briefcase }] : []),
 ];
 
 /* 3 Agent Plans — 5 / 10 / 15 Chennai localities. Names, prices and limits
@@ -51,7 +57,7 @@ const VERTICAL_TABS = [
 const AGENT_PLANS = [
   {
     id: "agent-starter",
-    name: "Agent Starter Plan",
+    name: "Dealer Starter Plan",
     titlePrefix: "Starter ",
     titlePrefixColor: "#2563EB",
     titleColor: "#0F172A",
@@ -64,12 +70,12 @@ const AGENT_PLANS = [
     features: [
       "Choose 5 Chennai localities",
       "Buyer enquiries from your areas",
-      "Agent dashboard, leads & visits",
+      "Dealer dashboard, leads & visits",
     ],
   },
   {
     id: "agent-pro",
-    name: "Agent Pro Plan",
+    name: "Dealer Pro Plan",
     titlePrefix: "Pro ",
     titlePrefixColor: "#2563EB",
     titleColor: "#0F172A",
@@ -82,12 +88,12 @@ const AGENT_PLANS = [
     features: [
       "Choose 10 Chennai localities",
       "Buyer enquiries from your areas",
-      "Agent dashboard, leads & visits",
+      "Dealer dashboard, leads & visits",
     ],
   },
   {
     id: "agent-elite",
-    name: "Agent Elite Plan",
+    name: "Dealer Elite Plan",
     titlePrefix: "Elite ",
     titlePrefixColor: "#2563EB",
     titleColor: "#0F172A",
@@ -100,7 +106,7 @@ const AGENT_PLANS = [
     features: [
       "Choose 15 Chennai localities",
       "Buyer enquiries from your areas",
-      "Agent dashboard, leads & visits",
+      "Dealer dashboard, leads & visits",
     ],
   },
 ];
@@ -244,10 +250,14 @@ export default function MenuScreen({ navigation, route }) {
   const openDealerPage = () =>
     requireAuth(async () => {
       try {
-        await ensureOwnerRole(auth);
+        // Dealers work in BROKER mode on the current backend.
+        await ensureRole(auth, "BROKER");
         navigation.navigate("DealerNavigator");
-      } catch {
-        Alert.alert("Could not open Dealer page", "The server did not confirm the switch. Please try again.");
+      } catch (e) {
+        Alert.alert(
+          "Could not open Dealer page",
+          isPosterTypeConflict(e) ? posterTypeConflictMessage(e) : "The server did not confirm the switch. Please try again.",
+        );
       }
     });
 
@@ -259,8 +269,10 @@ export default function MenuScreen({ navigation, route }) {
         name: plan.name,
         price: plan.price,
         priceNumeric: plan.priceNumeric,
+        ratePerPincode: plan.ratePerPincode,
+        pincodes: plan.pincodes,
         validity: plan.validity,
-        listingLimit: plan.listingLimit,
+        listingLimit: 0,
         features: plan.features,
       };
       const rootNav = navigation?.getParent?.() || navigation;
@@ -288,6 +300,9 @@ export default function MenuScreen({ navigation, route }) {
         validity: plan.validity || planValidityLabel(plan.priceSub1),
         listingLimit: plan.listingLimit ?? 1,
         features: plan.features,
+        // Opened from the Dealer profile ("Upgrade / change plan"): come
+        // back to the Dealer page after paying.
+        ...(route?.params?.returnTo === "dealer" ? { returnTo: "dealer" } : {}),
       };
 
       try {
@@ -349,7 +364,7 @@ export default function MenuScreen({ navigation, route }) {
   const currentPlans = isAgentTab
     ? AGENT_PLANS
     : isDealerTab
-    ? DEALER_PLANS_LIST
+    ? []
     : propertyCategory === "residential"
       ? OWNER_PLANS.residential
       : OWNER_PLANS.commercial;
@@ -369,7 +384,7 @@ export default function MenuScreen({ navigation, route }) {
             <HugeChevronLeft size={22} color="#0F172A" />
           </TouchableOpacity>
           <Text style={styles.lockedTitle}>
-            {lockedTab === "agent" ? "Agent Plans" : lockedTab === "dealer" ? "Dealer Plans" : "Owner Plans"}
+            Plans
           </Text>
         </View>
       )}
@@ -377,7 +392,7 @@ export default function MenuScreen({ navigation, route }) {
       {/* ================= MAIN TWO-COLUMN VERTICAL TAB LAYOUT ================= */}
       <View style={styles.mainLayoutContainer}>
         {/* ================= LEFT COLUMN: VERTICAL TAB RAIL ================= */}
-        {!lockedTab && (
+        {(
         <View style={styles.verticalTabRail}>
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -424,6 +439,11 @@ export default function MenuScreen({ navigation, route }) {
         )}
 
         {/* ================= RIGHT COLUMN: SCROLLABLE CONTENT PANE ================= */}
+        {activeVerticalTab === "buyer" ? (
+          <View style={styles.contentPane}>
+            <BuyerPlansScreen embedded navigation={navigation} route={route} />
+          </View>
+        ) : (
         <ScrollView
           style={styles.contentPane}
           contentContainerStyle={styles.contentPaneScroll}
@@ -436,7 +456,7 @@ export default function MenuScreen({ navigation, route }) {
               <View style={styles.paneHeader}>
                 <View style={styles.headerRoleRow}>
                   <Text style={styles.paneMainTitle}>
-                    {isAgentTab ? "Agent Plans" : isDealerTab ? "Dealer Plans" : "Owner Plans"}
+                    {isAgentTab ? "Dealer Plans" : isDealerTab ? "Dealer Plans" : "Owner Plans"}
                   </Text>
                   <View
                     style={[
@@ -463,7 +483,7 @@ export default function MenuScreen({ navigation, route }) {
                   <View style={styles.ownerTestLeft}>
                     <Crown size={17} color="#2563EB" style={{ marginRight: 8 }} />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.ownerTestTitle}>Agent Free Trial</Text>
+                      <Text style={styles.ownerTestTitle}>Dealer Free Trial</Text>
                       <Text style={styles.ownerTestSub}>1 area · unlimited owner numbers</Text>
                     </View>
                   </View>
@@ -484,7 +504,7 @@ export default function MenuScreen({ navigation, route }) {
                     <Crown size={17} color="#2563EB" style={{ marginRight: 8 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.ownerTestTitle}>
-                        {agentPlan?.name || "Agent plan"} active
+                        {agentPlan?.name || "Dealer plan"} active
                       </Text>
                       <Text style={styles.ownerTestSub}>
                         {agentAllowance.used}/{agentPlan?.locationLimit || 0} localities
@@ -528,109 +548,45 @@ export default function MenuScreen({ navigation, route }) {
                 </View>
               )}
 
+              {/* Dealer: per-pincode plan (option tab -> pincodes -> pay) */}
+              {isDealerTab && (
+                <DealerPincodePlanPicker
+                  isLoggedIn={!!auth?.isAuthenticated}
+                  onLogin={() => requireAuth(() => {})}
+                  onContinue={(plan) => requireAuth(() => handleSelectPlan(plan, "Dealer"))}
+                />
+              )}
+
               {/* Section Header */}
+              {!isDealerTab && (
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.paneSectionHeader}>
                   CHOOSE A PLAN • {currentPlans.length} TIERS
                 </Text>
               </View>
+              )}
 
               {/* ================= COMPACT & SHORT REFERENCE PRICING CARDS ================= */}
               {currentPlans.map((plan) => (
-                <View
+                <PlanCard
                   key={plan.id}
-                  style={[
-                    styles.refCard,
-                    plan.isPopular && styles.refCardPopular,
-                  ]}
-                >
-                  {/* 1. Header: Plan Name + Popular badge */}
-                  <View style={styles.refCardHeader}>
-                    <Text style={styles.refPlanTitle}>
-                      {plan.titlePrefix ? (
-                        <Text
-                          style={{ color: plan.titlePrefixColor || "#2563EB" }}
-                        >
-                          {plan.titlePrefix}
-                        </Text>
-                      ) : null}
-                      <Text style={{ color: plan.titleColor || "#0F172A" }}>
-                        {plan.titlePrefix
-                          ? plan.name
-                              .replace(plan.titlePrefix.trim(), "")
-                              .replace(/\s+/g, " ")
-                              .trim()
-                          : plan.name}
-                      </Text>
-                    </Text>
-
-                    {plan.isPopular && (
-                      <View style={styles.refBadgePopular}>
-                        <Sparkles
-                          size={8.5}
-                          color="#FFFFFF"
-                          style={{ marginRight: 3 }}
-                        />
-                        <Text style={styles.refBadgePopularText}>POPULAR</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* 2. Big Price + 2-line Subtext */}
-                  <View style={styles.refPriceRow}>
-                    <Text style={styles.refPriceBig}>{plan.price}</Text>
-                    <View style={styles.refPriceSubBox}>
-                      <Text style={styles.refPriceSub1}>{plan.priceSub1}</Text>
-                      <Text style={styles.refPriceSub2}>{plan.priceSub2}</Text>
-                    </View>
-                  </View>
-
-                  {/* 3. Compact CTA Button */}
-                  <TouchableOpacity
-                    style={[
-                      styles.refCtaBtn,
-                      plan.isPopular
-                        ? styles.refCtaBtnPopular
-                        : styles.refCtaBtnDefault,
-                    ]}
-                    activeOpacity={0.82}
-                    onPress={() =>
-                      handleSelectPlan(
-                        plan,
-                        isAgentTab ? "Agent" : isDealerTab ? "Dealer" : "Owner",
-                      )
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.refCtaBtnText,
-                        plan.isPopular
-                          ? styles.refCtaBtnTextPopular
-                          : styles.refCtaBtnTextDefault,
-                      ]}
-                    >
-                      {plan.buttonText || "Get started"}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* 4. Full-Width Edge-to-Edge Divider */}
-                  <View style={styles.refDivider} />
-
-                  {/* 5. Minimalist 3-Point Checklist */}
-                  <View style={styles.refFeaturesList}>
-                    {plan.features.map((feature, fIdx) => (
-                      <View key={fIdx} style={styles.refFeatureRow}>
-                        <Check
-                          size={14}
-                          color="#0F172A"
-                          strokeWidth={2.4}
-                          style={styles.refCheckIcon}
-                        />
-                        <Text style={styles.refFeatureText}>{feature}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
+                  name={plan.name}
+                  titlePrefix={plan.titlePrefix}
+                  titlePrefixColor={plan.titlePrefixColor}
+                  titleColor={plan.titleColor}
+                  price={plan.price}
+                  priceSub1={plan.priceSub1}
+                  priceSub2={plan.priceSub2}
+                  isPopular={plan.isPopular}
+                  features={plan.features}
+                  buttonText={plan.buttonText || "Get started"}
+                  onPress={() =>
+                    handleSelectPlan(
+                      plan,
+                      isAgentTab ? "Agent" : isDealerTab ? "Dealer" : "Owner",
+                    )
+                  }
+                />
               ))}
             </View>
           )}
@@ -787,6 +743,7 @@ export default function MenuScreen({ navigation, route }) {
 
           <View style={{ height: 40 }} />
         </ScrollView>
+        )}
       </View>
     </View>
   );
@@ -1053,118 +1010,6 @@ const styles = StyleSheet.create({
   },
 
   /* ================= COMPACT & SHORT REFERENCE PRICING CARDS ================= */
-  refCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    marginBottom: 10,
-  },
-  refCardPopular: {
-    borderColor: "#EEF2F6",
-    borderWidth: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  refCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2,
-  },
-  refPlanTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-  },
-  refBadgePopular: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  refBadgePopularText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: 0.5,
-  },
-  refPriceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 3,
-    marginBottom: 10,
-  },
-  refPriceBig: {
-    fontSize: 27,
-    fontWeight: "800",
-    color: "#0F172A",
-    letterSpacing: -0.8,
-  },
-  refPriceSubBox: {
-    marginLeft: 8,
-    justifyContent: "center",
-  },
-  refPriceSub1: {
-    fontSize: 11,
-    color: "#475569",
-    fontWeight: "600",
-    lineHeight: 14,
-  },
-  refPriceSub2: {
-    fontSize: 10,
-    color: "#94A3B8",
-    fontWeight: "400",
-    lineHeight: 13,
-  },
-  refCtaBtn: {
-    height: 38,
-    borderRadius: 100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  refCtaBtnDefault: {
-    backgroundColor: "#2563EB",
-  },
-  refCtaBtnPopular: {
-    backgroundColor: "#2563EB",
-  },
-  refCtaBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  refCtaBtnTextDefault: {
-    color: "#FFFFFF",
-  },
-  refCtaBtnTextPopular: {
-    color: "#FFFFFF",
-  },
-  refDivider: {
-    height: 1,
-    backgroundColor: "#F1F5F9",
-    marginHorizontal: -15,
-    marginTop: 10,
-    marginBottom: 10,
-  },
-  refFeaturesList: {
-    gap: 6,
-  },
-  refFeatureRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  refCheckIcon: {
-    marginRight: 8,
-  },
-  refFeatureText: {
-    fontSize: 12,
-    color: "#1E293B",
-    fontWeight: "500",
-    lineHeight: 16,
-    flex: 1,
-  },
 
   /* ================= FLIGHT-STYLE MODULAR BLOCKS FOR PRICE ESTIMATOR ================= */
   flightModuleStack: {

@@ -4,16 +4,25 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Briefcase, Building2 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
+import { useOwner } from "../../owner/context/OwnerContext.js";
 
 const TABS = [
   { key: "sales", label: "Sales Hub", Icon: Briefcase },
   { key: "space", label: "My Property", Icon: Building2 },
 ];
 
-export default function DealerSpaceTabs({ value, onChange, style }) {
+// lockedKeys: tabs shown with a lock (e.g. "space" until the dealer buys an
+// owner plan); pressing one still calls onChange so the caller can redirect.
+// "My Property" is hidden until the dealer buys an Owner plan (Profile ->
+// Add Owner Plan); a Dealer plan alone opens only Sales Hub.
+export default function DealerSpaceTabs({ value, onChange, style, lockedKeys = [] }) {
+  const { hasOwnerPlan } = useOwner();
+  const tabs = hasOwnerPlan ? TABS : TABS.filter((t) => t.key !== "space");
+  // Dealer plan only: no switch and no title (Sales Hub is the whole page).
+  if (!hasOwnerPlan) return null;
   return (
     <View style={[styles.wrap, style]} accessibilityRole="tablist">
-      {TABS.map(({ key, label, Icon }) => {
+      {tabs.map(({ key, label, Icon }) => {
         const on = value === key;
         return (
           <TouchableOpacity
@@ -29,6 +38,7 @@ export default function DealerSpaceTabs({ value, onChange, style }) {
             </View>
             <Text style={[styles.label, on && styles.labelOn]} numberOfLines={1}>
               {label}
+              {lockedKeys.includes(key) ? " 🔒" : ""}
             </Text>
           </TouchableOpacity>
         );

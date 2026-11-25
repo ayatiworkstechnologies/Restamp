@@ -21,12 +21,10 @@ import MenuScreen from "../../features/buyer/screens/MenuScreen.js";
 import EnquiriesScreen from "../../features/buyer/screens/EnquiriesScreen.js";
 import NotificationScreen from "../../features/buyer/screens/NotificationScreen.js";
 import ActiveMembershipsScreen from "../../features/buyer/screens/ActiveMembershipsScreen.js";
-import BuyerPlansScreen from "../../features/buyer/screens/BuyerPlansScreen.js";
 
 import OwnerNavigator from "../../features/owner/navigation/OwnerNavigator.js";
 import DealerNavigator from "../../features/dealer/navigation/DealerNavigator.js";
 import PaymentHistoryScreen from "../../features/owner/screens/PaymentHistoryScreen.js";
-import OwnerPlansScreen from "../../features/owner/screens/OwnerPlansScreen.js";
 import OwnerPlanConfirmScreen from "../../features/owner/screens/OwnerPlanConfirmScreen.js";
 import OwnerPaymentScreen from "../../features/owner/screens/OwnerPaymentScreen.js";
 import OwnerPaymentSuccessScreen from "../../features/owner/screens/OwnerPaymentSuccessScreen.js";
@@ -36,13 +34,13 @@ import OwnerLeadDetailScreen from "../../features/owner/screens/OwnerLeadDetailS
 import OwnerPropertyLeadsScreen from "../../features/owner/screens/OwnerPropertyLeadsScreen.js";
 import OwnerVisitsScreen from "../../features/owner/screens/OwnerVisitsScreen.js";
 
-import AgentNavigator from "../../features/agent/navigation/AgentNavigator.js";
-import AgentLocationSelectScreen from "../../features/agent/screens/AgentLocationSelectScreen.js";
-import AgentPlanConfirmScreen from "../../features/agent/screens/AgentPlanConfirmScreen.js";
-import AgentPaymentScreen from "../../features/agent/screens/AgentPaymentScreen.js";
-import AgentPaymentSuccessScreen from "../../features/agent/screens/AgentPaymentSuccessScreen.js";
-import AgentLeadDetailScreen from "../../features/agent/screens/AgentLeadDetailScreen.js";
-import AgentEarningsScreen from "../../features/agent/screens/AgentEarningsScreen.js";
+import AgentNavigator from "../../features/dealerArea/navigation/DealerAreaNavigator.js";
+import AgentLocationSelectScreen from "../../features/dealerArea/screens/DealerAreaLocationSelectScreen.js";
+import AgentPlanConfirmScreen from "../../features/dealerArea/screens/DealerAreaPlanConfirmScreen.js";
+import AgentPaymentScreen from "../../features/dealerArea/screens/DealerAreaPaymentScreen.js";
+import AgentPaymentSuccessScreen from "../../features/dealerArea/screens/DealerAreaPaymentSuccessScreen.js";
+import AgentLeadDetailScreen from "../../features/dealerArea/screens/DealerAreaLeadDetailScreen.js";
+import AgentEarningsScreen from "../../features/dealerArea/screens/DealerAreaEarningsScreen.js";
 import LoginScreen from "../../features/auth/screens/LoginScreen.js";
 import { AGENT_MODULE_ENABLED } from "../constants/features.js";
 import { navigationRef } from "./navRef.js";
@@ -190,11 +188,20 @@ const guarded = (Component) => {
 const GuardedProfile = guarded(ProfileScreen);
 const GuardedEnquiries = guarded(EnquiriesScreen);
 const GuardedActiveMemberships = guarded(ActiveMembershipsScreen);
-const GuardedBuyerPlans = guarded(BuyerPlansScreen);
+// Every plan link opens the one Plans menu (RolePlans) on the matching tab;
+// the old standalone plan screens only redirect there.
+const plansRedirect = (tab) =>
+  function PlansRedirect({ navigation, route }) {
+    React.useEffect(() => {
+      navigation.replace("RolePlans", { ...(route?.params || {}), lockedTab: tab });
+    }, [navigation, route]);
+    return null;
+  };
+const GuardedBuyerPlans = plansRedirect("buyer");
 const GuardedNotifications = guarded(NotificationScreen);
 const GuardedOwnerNavigator = guarded(OwnerNavigator);
 const GuardedDealerNavigator = guarded(DealerNavigator);
-const GuardedOwnerPlans = guarded(OwnerPlansScreen);
+const GuardedOwnerPlans = plansRedirect("owner");
 const GuardedOwnerPlanConfirm = guarded(OwnerPlanConfirmScreen);
 const GuardedOwnerPayment = guarded(OwnerPaymentScreen);
 const GuardedOwnerPaymentSuccess = guarded(OwnerPaymentSuccessScreen);

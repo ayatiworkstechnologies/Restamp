@@ -292,6 +292,16 @@ async function authHeaders() {
   }
 }
 
+// Called once when an authenticated request is refused with 401: the stored
+// session token has expired or was revoked (production tokens last 30 min
+// and there is no refresh token). AuthContext registers it to end the stale
+// session so the app shows the real logged-out state instead of failing on
+// every protected request.
+let _onUnauthorized = null;
+export function setUnauthorizedHandler(fn) {
+  _onUnauthorized = typeof fn === "function" ? fn : null;
+}
+
 async function authedFetch(url, options = {}) {
   const headers = {
     Accept: "application/json",
@@ -308,6 +318,14 @@ async function authedFetch(url, options = {}) {
   if (response.ok) {
     if (response.status === 204) return null;
     return response.json();
+  }
+  // Login / OTP endpoints answer 401 for a wrong code: never a session expiry.
+  if (response.status === 401 && headers.Authorization && !/\/auth\//.test(url) && _onUnauthorized) {
+    try {
+      _onUnauthorized();
+    } catch {
+      // the handler must never mask the original error
+    }
   }
   throw await toHttpError(response);
 }

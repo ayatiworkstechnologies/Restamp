@@ -46,6 +46,7 @@ function OwnerPropertyCard({
   const isPending = property.status === "pending";
   const isActive = property.status === "active";
   const isClosed = property.status === "closed";
+  const isPaused = property.status === "paused";
 
   const formattedPrice =
     property.priceFormatted ||
@@ -295,7 +296,20 @@ function OwnerPropertyCard({
                 }}
               >
                 <PauseCircle size={18} color="#D97706" style={styles.sheetIcon} />
-                <Text style={styles.sheetItemText}>Pause Listing</Text>
+                <Text style={styles.sheetItemText}>Hide Listing</Text>
+              </TouchableOpacity>
+            )}
+
+            {isPaused && (
+              <TouchableOpacity
+                style={styles.sheetItem}
+                onPress={() => {
+                  setMenuVisible(false);
+                  onPublishListing?.(property);
+                }}
+              >
+                <CheckCircle2 size={18} color="#16A34A" style={styles.sheetIcon} />
+                <Text style={styles.sheetItemText}>Activate Listing</Text>
               </TouchableOpacity>
             )}
 

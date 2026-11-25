@@ -41,7 +41,7 @@ import Svg, { Defs, LinearGradient as SvgLinearGradient, RadialGradient, Stop, R
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useWishlist } from "../context/WishlistContext.js";
 import { useOwner } from "../../owner/context/OwnerContext.js";
-import { useAgent } from "../../agent/context/AgentContext.js";
+import { useAgent } from "../../dealerArea/context/DealerAreaContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 import { enterOwnerFlow } from "../../../shared/api/users.js";
@@ -264,7 +264,7 @@ export default function ProfileScreen({ navigation }) {
   if (!authUser) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <StatusBar barStyle="dark-content" backgroundColor="#F4F5F7" />
 
         <ScrollView
           style={styles.container}
@@ -312,7 +312,7 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" backgroundColor="#F4F5F7" />
 
       <ScrollView
         style={styles.container}
@@ -348,11 +348,7 @@ export default function ProfileScreen({ navigation }) {
             ) : (
               <Text style={styles.phoneText}>Phone not available</Text>
             )}
-            {userProfile.email ? (
-              <Text style={styles.emailText}>{userProfile.email}</Text>
-            ) : (
-              <Text style={styles.emailText}>Email not available</Text>
-            )}
+            {userProfile.email ? <Text style={styles.emailText}>{userProfile.email}</Text> : null}
 
             {authUser?.role === "OWNER" && (
               <View style={styles.verifiedBadge}>
@@ -363,53 +359,6 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Mode Switch Button (Switch to Post Property) */}
-        <TouchableOpacity
-          style={styles.modeSwitchBanner}
-          onPress={hasAgentPlan ? handleSwitchToAgent : handleSwitchToOwner}
-          activeOpacity={0.88}
-        >
-          {/* Gradient background */}
-          <View style={styles.modeSwitchGradient} pointerEvents="none">
-            <Svg width="100%" height="100%">
-              <Defs>
-                <SvgLinearGradient id="modeSwitchGrad" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0" stopColor="#3B82F6" />
-                  <Stop offset="0.55" stopColor="#2563EB" />
-                  <Stop offset="1" stopColor="#6D4FE8" />
-                </SvgLinearGradient>
-                <RadialGradient id="modeSwitchGlow" cx="0.12" cy="0.1" r="0.6">
-                  <Stop offset="0" stopColor="#5EEBF2" stopOpacity="0.45" />
-                  <Stop offset="1" stopColor="#5EEBF2" stopOpacity="0" />
-                </RadialGradient>
-              </Defs>
-              <Rect width="100%" height="100%" fill="url(#modeSwitchGrad)" />
-              <Rect width="100%" height="100%" fill="url(#modeSwitchGlow)" />
-            </Svg>
-          </View>
-          <View style={styles.modeSwitchLeft}>
-            <View style={styles.modeSwitchIconWrap}>
-              {hasAgentPlan ? (
-                <Briefcase size={22} color="#FFFFFF" />
-              ) : (
-                <Building2 size={22} color="#FFFFFF" />
-              )}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.modeSwitchTitle}>
-                {hasAgentPlan ? "Go to Agent Dashboard" : "Post your Property"}
-              </Text>
-              <Text style={styles.modeSwitchSub}>
-                {hasAgentPlan
-                  ? "Browse owner properties in your subscribed localities"
-                  : "List flats, villas & commercial properties as an Owner"}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.modeSwitchArrow}>
-            <ArrowRight size={16} color={COLORS.primary} />
-          </View>
-        </TouchableOpacity>
 
         {/* VIEW NUMBER BALANCE (buyer plan) */}
         {authed && isBuyerRole && buyerPlan ? (() => {
@@ -828,10 +777,7 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
+  safeArea: { flex: 1, backgroundColor: "#F4F5F7" },
   screenHeader: {
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -845,13 +791,8 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
     letterSpacing: -0.3,
   },
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  scrollContent: {
-    padding: 16,
-  },
+  container: { flex: 1, backgroundColor: "#F4F5F7" },
+  scrollContent: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 32 },
   loggedOutCard: {
     alignItems: "center",
     paddingTop: 48,
@@ -929,28 +870,8 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 
-  profileHeaderCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    marginRight: 14,
-    backgroundColor: "#F1F5F9",
-  },
+  profileHeaderCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 28, paddingVertical: 16, paddingHorizontal: 18, marginBottom: 16 },
+  avatar: { width: 54, height: 54, borderRadius: 27, marginRight: 14, backgroundColor: "#F1F5F9" },
   profileInfo: {
     flex: 1,
     justifyContent: "center",
@@ -959,27 +880,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  ownerName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0F172A",
-    letterSpacing: -0.3,
-  },
+  ownerName: { fontSize: 17, fontWeight: "600", color: "#111827", letterSpacing: -0.2 },
   pencilIcon: {
     marginLeft: 8,
   },
-  phoneText: {
-    fontSize: 12.5,
-    color: "#64748B",
-    marginTop: 3,
-    fontWeight: "400",
-  },
-  emailText: {
-    fontSize: 12,
-    color: "#94A3B8",
-    marginTop: 1,
-    fontWeight: "400",
-  },
+  phoneText: { fontSize: 13, color: "#6B7280", marginTop: 3, fontWeight: "400" },
+  emailText: { fontSize: 13, color: "#6B7280", marginTop: 1, fontWeight: "400" },
   verifiedBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -995,21 +901,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#16A34A",
   },
-  modeSwitchBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#2563EB",
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    marginBottom: 18,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
+  modeSwitchBanner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#1F1F22", borderRadius: 28, paddingVertical: 18, paddingHorizontal: 18, marginBottom: 16 },
   modeSwitchGradient: {
     position: "absolute",
     top: 0,
@@ -1025,44 +917,11 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
-  modeSwitchIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  modeSwitchTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  modeSwitchSub: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.85)",
-    marginTop: 3,
-    lineHeight: 16,
-    fontWeight: "400",
-  },
-  modeSwitchArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  menuGroup: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
+  modeSwitchIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.08)", justifyContent: "center", alignItems: "center", marginRight: 12 },
+  modeSwitchTitle: { fontSize: 16, fontWeight: "700", color: "#FFFFFF" },
+  modeSwitchSub: { fontSize: 12.5, color: "rgba(255,255,255,0.7)", marginTop: 4, lineHeight: 18, fontWeight: "400" },
+  modeSwitchArrow: { paddingHorizontal: 14, height: 36, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", backgroundColor: "rgba(255,255,255,0.08)", justifyContent: "center", alignItems: "center" },
+  menuGroup: { backgroundColor: "#FFFFFF", borderRadius: 28, paddingHorizontal: 20, paddingVertical: 6, marginBottom: 16 },
   balanceRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   balanceBig: { fontSize: 22, fontWeight: "700", color: "#0F172A", letterSpacing: -0.4 },
   balanceSub: { fontSize: 12.5, color: "#64748B", marginTop: 2 },
@@ -1077,34 +936,14 @@ const styles = StyleSheet.create({
   balanceFill: { height: 6, borderRadius: 3, backgroundColor: COLORS.primary },
   balanceFillEmpty: { backgroundColor: "#DC2626" },
   balanceMeta: { fontSize: 12, color: "#64748B", marginTop: 8, marginBottom: 6 },
-  groupHeading: {
-    fontSize: 11,
-    fontWeight: "500",
-    color: COLORS.muted,
-    letterSpacing: 0.6,
-    marginTop: 6,
-    marginBottom: 6,
-  },
-  menuRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
+  groupHeading: { fontSize: 11, fontWeight: "600", color: "#9CA3AF", letterSpacing: 0.8, marginTop: 12, marginBottom: 2 },
+  menuRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: "#F0F1F3" },
   menuLeft: {
     flexDirection: "row",
     alignItems: "center",
   },
-  menuIcon: {
-    marginRight: 12,
-  },
-  menuLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: COLORS.textDark,
-  },
+  menuIcon: { marginRight: 14 },
+  menuLabel: { fontSize: 15.5, fontWeight: "500", color: "#1F2937" },
   badgeRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1132,13 +971,7 @@ const styles = StyleSheet.create({
     color: COLORS.success,
     marginRight: 6,
   },
-  countBadge: {
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginRight: 6,
-  },
+  countBadge: { backgroundColor: "#F3F4F6", paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10, marginRight: 8 },
   countText: {
     fontSize: 11,
     fontWeight: "500",
@@ -1150,17 +983,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
     fontWeight: "400",
   },
-  logoutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FEF2F2",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    height: 48,
-    marginTop: 6,
-  },
+  logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF", borderRadius: 28, height: 56, marginTop: 4 },
   logoutText: {
     fontSize: 14,
     fontWeight: "500",

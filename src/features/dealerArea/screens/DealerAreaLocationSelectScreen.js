@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -21,51 +22,32 @@ import {
   Sparkles,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
-import { useAgent } from "../context/AgentContext.js";
+import { useAgent } from "../context/DealerAreaContext.js";
 import {
   addAgentPlanLocalities,
   fetchAgentPlan,
   startAgentTrial,
   AGENT_TRIAL_PLAN_ID,
-} from "../../../shared/api/agentPlans.js";
-import { promptAgentUpgrade } from "../utils/agentUpgrade.js";
+} from "../../../shared/api/dealerAreaPlans.js";
+import { promptAgentUpgrade } from "../utils/dealerAreaUpgrade.js";
+import {
+  AGENT_ZONES,
+  fetchAgentLocationGroups,
+  filterAgentGroups,
+  groupLabel,
+} from "../../../shared/api/dealerLocations.js";
 import {
   localityKey,
   locationSelectMode,
   newLocalitiesToAdd,
   planAllowance,
-} from "../utils/agentCore.js";
+} from "../utils/dealerAreaCore.js";
 
-const ALL_LOCALITY_NAMES = [
-  "Anna Nagar",
-  "Kilpauk",
-  "Mogappair",
-  "Adyar",
-  "Velachery",
-  "T. Nagar",
-  "Porur",
-  "Guindy",
-  "Nungambakkam",
-  "Tambaram",
-  "Alwarpet",
-  "Besant Nagar",
-  "ECR",
-  "OMR",
-  "Thiruvanmiyur",
-  "Vadapalani",
-  "Ambattur",
-  "Kodambakkam",
-  "Perambur",
-  "Medavakkam",
-  "Perungudi",
-  "Sholinganallur",
-  "Kotturpuram",
-  "Mylapore",
-  "Royapettah",
-];
+// Location options come from the backend Agent Location Master (one per PIN
+// code, the same list as the website): GET /locations/agent-groups.
 
 // The agent free trial: ONE area, no payment, unlimited owner numbers.
-const TRIAL_PLAN = { id: AGENT_TRIAL_PLAN_ID, name: "Agent Free Trial", locationLimit: 1, isTrial: true };
+const TRIAL_PLAN = { id: AGENT_TRIAL_PLAN_ID, name: "Dealer Free Trial", locationLimit: 1, isTrial: true };
 
 // `onTrialStarted`: set when AgentNavigator shows this screen as the
 // first-time setup (no plan yet); otherwise the trial opens the agent tabs.
@@ -88,7 +70,7 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
   // Plan passed from MenuScreen / the agent profile
   const initialPlan = (trialSetup ? TRIAL_PLAN : null) || route?.params?.plan || (allowance.active ? activePlan : null) || {
     id: "agent-pro",
-    name: "Agent Pro Plan",
+    name: "Dealer Pro Plan",
     locationLimit: 10,
     price: "₹6,999",
     priceNumeric: 6999,
@@ -99,16 +81,31 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
   const locationLimit = currentPlan.locationLimit || 10;
 
   // Selected localities state
-  const initialSelected = (trialSetup ? [] : null) || route?.params?.selectedLocalities || (allowance.active ? coveredLocalities : null) || [
-    "Anna Nagar",
-    "Kilpauk",
-    "Mogappair",
-    "Adyar",
-  ];
+  const initialSelected = (trialSetup ? [] : null) || route?.params?.selectedLocalities || (allowance.active ? coveredLocalities : null) || [];
   const [selectedLocalities, setSelectedLocalities] = useState(
     initialSelected.slice(0, locationLimit)
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [zoneFilter, setZoneFilter] = useState(null);
+  const [expanded, setExpanded] = useState(() => new Set());
+
+  // Agent Location Master groups (refreshed on every visit, so admin
+  // additions show up without an app release).
+  const [groups, setGroups] = useState([]);
+  const [groupsState, setGroupsState] = useState("loading"); // loading | ok | error
+  const loadGroups = useCallback(() => {
+    setGroupsState("loading");
+    fetchAgentLocationGroups({ force: true })
+      .then((items) => {
+        setGroups(items);
+        setGroupsState("ok");
+      })
+      .catch(() => setGroupsState("error"));
+  }, []);
+  useEffect(() => {
+    loadGroups();
+  }, [loadGroups]);
+  const groupByLabel = useMemo(() => new Map(groups.map((g) => [groupLabel(g), g])), [groups]);
 
   const selectedCount = selectedLocalities.length;
   const isLimitReached = selectedCount >= locationLimit;
@@ -146,9 +143,9 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
       id: "agent-starter",
       limit: 5,
       label: "5 Locations",
-      name: "Agent Starter Plan",
+      name: "Dealer Starter Plan",
       titlePrefix: "Starter ",
-      titleSuffix: "Agent (5 Locations)",
+      titleSuffix: "Dealer (5 Locations)",
       price: "₹2,999",
       priceSub1: "Essential coverage",
       priceSub2: "billed monthly • 30 days validity",
@@ -163,9 +160,9 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
       id: "agent-pro",
       limit: 10,
       label: "10 Locations",
-      name: "Agent Pro Plan",
+      name: "Dealer Pro Plan",
       titlePrefix: "Pro ",
-      titleSuffix: "Agent (10 Locations)",
+      titleSuffix: "Dealer (10 Locations)",
       price: "₹6,999",
       priceSub1: "Recommended • High coverage",
       priceSub2: "billed monthly • 30 days validity",
@@ -180,7 +177,7 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
       id: "agent-elite",
       limit: 15,
       label: "15 Locations",
-      name: "Agent Elite Plan",
+      name: "Dealer Elite Plan",
       titlePrefix: "Elite ",
       titleSuffix: "Agency (15 Locations)",
       price: "₹14,999",
@@ -211,20 +208,24 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
     }
   };
 
-  // Covered localities are listed even when spelled differently from the
-  // catalogue (e.g. "T Nagar" vs "T. Nagar"), so they never appear twice.
-  const localityOptions = useMemo(() => {
-    const listed = new Set(ALL_LOCALITY_NAMES.map(localityKey));
-    const extra = selectedLocalities.filter((loc) => !listed.has(localityKey(loc)));
-    return [...extra, ...ALL_LOCALITY_NAMES];
-  }, [selectedLocalities]);
-
-  // Filter localities based on search
+  // One option per PIN code. Covered areas from before the location master
+  // (older locality names) stay listed so they never disappear.
   const filteredLocalities = useMemo(() => {
-    if (!searchQuery.trim()) return localityOptions;
-    const q = localityKey(searchQuery);
-    return localityOptions.filter((loc) => localityKey(loc).includes(q));
-  }, [searchQuery, localityOptions]);
+    const labels = filterAgentGroups(groups, searchQuery, zoneFilter).map(groupLabel);
+    const listed = new Set(groups.map((g) => localityKey(groupLabel(g))));
+    const extra = searchQuery.trim() || zoneFilter
+      ? []
+      : selectedLocalities.filter((loc) => !listed.has(localityKey(loc)));
+    return [...extra, ...labels];
+  }, [groups, searchQuery, zoneFilter, selectedLocalities]);
+
+  const toggleExpanded = (label) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
 
   const toggleLocality = (locName) => {
     const key = localityKey(locName);
@@ -287,7 +288,7 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
         if (e && e.status === 409) {
           // The plan ended meanwhile: refresh it; the next Continue purchases.
           fetchAgentPlan().then((server) => server && applyServerPlan(server));
-          Alert.alert("Plan Not Active", "Your agent plan is no longer active. Choose a plan to continue.");
+          Alert.alert("Plan Not Active", "Your dealer plan is no longer active. Choose a plan to continue.");
           return;
         }
         if (e && e.status === 422 && typeof e.detail === "string") {
@@ -315,7 +316,7 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
         if (e && e.status === 409) {
           Alert.alert(
             "Free Trial Unavailable",
-            "This account already has an agent plan or has used its free trial. Choose a plan to add areas."
+            "This account already has an dealer plan or has used its free trial. Choose a plan to add areas."
           );
           return;
         }
@@ -483,7 +484,7 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
             <Search size={18} color="#94A3B8" style={{ marginRight: 10 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search Chennai locality..."
+              placeholder="Search area, locality or PIN code"
               placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -498,9 +499,42 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
           </View>
         </View>
 
+        {/* Zone filters: North / Central / South Chennai */}
+        <View style={styles.zoneChips}>
+          {[null, ...AGENT_ZONES].map((z) => {
+            const on = zoneFilter === z;
+            return (
+              <TouchableOpacity
+                key={z || "all"}
+                style={[styles.zoneChip, on && styles.zoneChipOn]}
+                onPress={() => setZoneFilter(z)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+              >
+                <Text style={[styles.zoneChipText, on && styles.zoneChipTextOn]}>{z ? z.replace(" Chennai", "") : "All"}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {groupsState === "loading" && <ActivityIndicator style={{ marginVertical: 20 }} color={COLORS.primary} />}
+        {groupsState === "error" && (
+          <TouchableOpacity onPress={loadGroups} style={{ marginVertical: 16 }}>
+            <Text style={styles.groupsError}>Couldn't load locations. Tap to retry.</Text>
+          </TouchableOpacity>
+        )}
+        {groupsState === "ok" && filteredLocalities.length === 0 && (
+          <Text style={styles.groupsEmpty}>No locations match your search.</Text>
+        )}
+
         {/* Localities List Card */}
         <View style={styles.localitiesCard}>
           {filteredLocalities.map((loc, index) => {
+            const group = groupByLabel.get(loc);
+            const names = group?.localities || [];
+            const isOpen = expanded.has(loc);
+            const shown = isOpen ? names : names.slice(0, 3);
             const isSelected = selectedKeys.has(localityKey(loc));
             const isDisabled = isLimitReached && !isSelected;
             const isLast = index === filteredLocalities.length - 1;
@@ -520,7 +554,7 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
                   <View style={[styles.pinIconBox, isSelected && styles.pinIconBoxSelected]}>
                     <MapPin size={16} color={isSelected ? "#2563EB" : "#64748B"} />
                   </View>
-                  <View>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text
                       style={[
                         styles.localityName,
@@ -528,9 +562,31 @@ export default function AgentLocationSelectScreen({ route, navigation, onTrialSt
                         isDisabled && styles.localityNameDisabled,
                       ]}
                     >
-                      {loc}
+                      {group ? group.primary_name : loc}
+                      {group ? <Text style={styles.localityPin}>{`  ${group.pincode}`}</Text> : null}
                     </Text>
-                    <Text style={styles.localityRegion}>Chennai Prime Zone</Text>
+                    <Text style={styles.localityRegion}>
+                      {!group
+                        ? "Covered area"
+                        : group.legacy
+                        ? `PIN ${group.pincode}`
+                        : `${group.zone} · ${names.length} ${names.length === 1 ? "locality" : "localities"}`}
+                    </Text>
+                    {names.length > 1 && (
+                      <Text style={styles.localityAssoc}>
+                        {shown.join(", ")}
+                        {names.length > shown.length ? "…" : ""}
+                      </Text>
+                    )}
+                    {names.length > 3 && (
+                      <Text
+                        style={styles.localityMore}
+                        onPress={() => toggleExpanded(loc)}
+                        accessibilityRole="button"
+                      >
+                        {isOpen ? "Show less" : `Show all ${names.length}`}
+                      </Text>
+                    )}
                   </View>
                 </View>
 
@@ -811,6 +867,23 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
+  zoneChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  zoneChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  zoneChipOn: { borderColor: COLORS.primary, backgroundColor: "#EFF6FF" },
+  zoneChipText: { fontSize: 13, color: "#475569", fontWeight: "600" },
+  zoneChipTextOn: { color: COLORS.primary },
+  groupsError: { color: "#DC2626", fontSize: 13, textAlign: "center" },
+  groupsEmpty: { color: "#94A3B8", fontSize: 13, textAlign: "center", marginVertical: 16 },
+  localityPin: { fontSize: 13, fontWeight: "600", color: "#64748B" },
+  localityAssoc: { fontSize: 12, color: "#64748B", marginTop: 3, lineHeight: 17 },
+  localityMore: { fontSize: 12, color: COLORS.primary, fontWeight: "600", marginTop: 3 },
   localityRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -825,8 +898,9 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   localityLeft: {
+    flex: 1,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   pinIconBox: {
     width: 38,

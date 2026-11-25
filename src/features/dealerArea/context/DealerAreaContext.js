@@ -2,9 +2,9 @@ import React, { createContext, useContext, useState, useMemo, useEffect, useCall
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 import { apiGetAuth } from "../../../shared/api/client.js";
 import { toUiProperty } from "../../../shared/api/mappers.js";
-import { fetchAgentPlan, toUiAgentPlan } from "../../../shared/api/agentPlans.js";
+import { fetchAgentPlan, toUiAgentPlan } from "../../../shared/api/dealerAreaPlans.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
-import { toAgentProfile } from "../utils/agentCore.js";
+import { toAgentProfile } from "../utils/dealerAreaCore.js";
 
 // Backend transaction type -> the deal key the agent screens filter on.
 const BADGE_BY_TRANSACTION = { BUY: "sale", RESALE: "resale", RENT: "rent", LEASE: "lease" };
@@ -57,7 +57,7 @@ export function AgentProvider({ children }) {
     setIsPlanExpired(false);
     setAgentPlan({
       id: plan?.id || "agent-pro",
-      name: plan?.name || "Agent Pro Plan",
+      name: plan?.name || "Dealer Pro Plan",
       locationLimit: locLimit,
       price: formattedPrice,
       amountPaid: formattedPrice,

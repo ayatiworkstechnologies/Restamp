@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState, useMemo } from "react";
 import { fetchMe, updateProfileName, updateProfileEmail } from "../api/auth.js";
 import { setMyRole } from "../../../shared/api/users.js";
-import { getAuthTokenSync, setAuthToken } from "../../../shared/api/client.js";
+import { getAuthTokenSync, setAuthToken, setUnauthorizedHandler } from "../../../shared/api/client.js";
 import { invalidateBuyerMode, noteServerRole } from "../../buyer/api/buyerMode.js";
 import { createContinuationStore } from "../continuation.js";
 import { resetToLogin } from "../../../shared/navigation/navRef.js";
@@ -221,6 +221,20 @@ export function AuthProvider({ children }) {
       // Navigation may not be mounted yet; the AppNavigator session effect
       // performs the same reset as soon as the auth state settles.
     }
+  }, []);
+
+  // Expired / revoked token (401 on an authenticated request): end the stale
+  // session WITHOUT navigating away or dropping a queued post-login action,
+  // so the screen can send the user to Login and resume what they were doing.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      if (!getAuthTokenSync()) return;
+      setAuthToken(null);
+      setUser(null);
+      invalidateBuyerMode();
+      setSessionVersion((v) => v + 1);
+    });
+    return () => setUnauthorizedHandler(null);
   }, []);
 
   const setPendingAction = useCallback((fn) => {

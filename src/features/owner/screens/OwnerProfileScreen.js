@@ -46,16 +46,26 @@ import { initialOwnerNameDraft, validateOwnerName, OWNER_NAME_MAX_LENGTH } from 
 
 export default function OwnerProfileScreen({ navigation, route }) {
   const isDealerMode = route?.params?.mode === "dealer";
-  const { ownerProfile, subscription, hasDealerPlan, dealerSubscription } = useOwner();
+  const { ownerProfile, subscription, hasDealerPlan, dealerSubscription, hasOwnerPlan, dealerCanPost, posterType } = useOwner();
   const plan = isDealerMode ? dealerSubscription : subscription;
   const planLimit = plan?.listingLimit === Infinity ? null : plan?.listingLimit;
   const planUsed = plan?.usedListings || 0;
   const openDealerPlans = () =>
     navigation.navigate("RolePlans", { lockedTab: "dealer" });
+  // Dealer accounts add an Owner plan to unlock My Properties; after paying
+  // they come back to the Dealer page.
+  const openOwnerPlansForDealer = () =>
+    navigation.navigate("RolePlans", { lockedTab: "owner", returnTo: "dealer" });
   const handleManagePlan = () => (isDealerMode ? openDealerPlans() : navigation.navigate("RolePlans", { lockedTab: "owner" }));
+  const dealerPincodes = isDealerMode ? dealerSubscription?.pincodes || [] : [];
   // Renew: an already-purchased plan goes straight to checkout for the same
   // plan; with no plan yet, the user picks one on the Plans page.
   const handleRenewPlan = () => {
+    // Dealer plans are bought per pincode: renew by picking pincodes again.
+    if (isDealerMode) {
+      openDealerPlans();
+      return;
+    }
     const catalogue = isDealerMode ? DEALER_PLANS_LIST : OWNER_PLANS_LIST;
     const current = plan?.hasPurchased ? catalogue.find((p) => p.id === plan.id) : null;
     if (!current) {
@@ -147,7 +157,7 @@ export default function OwnerProfileScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" backgroundColor="#F4F5F7" />
 
 
       <ScrollView
@@ -171,18 +181,10 @@ export default function OwnerProfileScreen({ navigation, route }) {
               activeOpacity={0.7}
             >
               <Text style={styles.ownerName}>{ownerProfile.name}</Text>
-              <Pencil size={15} color="#475569" style={styles.pencilIcon} />
             </TouchableOpacity>
 
             <Text style={styles.phoneText}>{ownerProfile.phone || "Phone not provided"}</Text>
-            <Text style={styles.emailText}>{ownerProfile.email || "Email not provided"}</Text>
-
-            {ownerProfile.verified && (
-              <View style={styles.verifiedBadge}>
-                <ShieldCheck size={12} color="#16A34A" style={{ marginRight: 4 }} />
-                <Text style={styles.verifiedBadgeText}>Verified Owner Partner</Text>
-              </View>
-            )}
+            {ownerProfile.email ? <Text style={styles.emailText}>{ownerProfile.email}</Text> : null}
           </View>
         </View>
 
@@ -197,7 +199,9 @@ export default function OwnerProfileScreen({ navigation, route }) {
                   {plan?.hasPurchased ? plan.planName || plan.name : "No active plan"}
                 </Text>
                 <Text style={styles.planLimitSub}>
-                  {planLimit == null
+                  {isDealerMode
+                    ? `Sales Hub · ${dealerPincodes.length} pincode${dealerPincodes.length === 1 ? "" : "s"}${dealerPincodes.length ? `: ${dealerPincodes.join(", ")}` : ""}`
+                    : planLimit == null
                     ? `${planUsed} Listings · Unlimited`
                     : `${planUsed}/${planLimit} Listings${planLimit - planUsed > 0 ? ` · ${planLimit - planUsed} remaining` : ""}`}
                 </Text>
@@ -220,6 +224,30 @@ export default function OwnerProfileScreen({ navigation, route }) {
               <Text style={styles.managePlanBtnText}>Manage Plan</Text>
               <ChevronRight size={14} color={COLORS.primary} style={{ marginLeft: "auto" }} />
             </TouchableOpacity>
+
+            {/* Dealer account: Owner plan add-on unlocks My Properties. */}
+            {isDealerMode && hasDealerPlan && (
+              <TouchableOpacity style={[styles.managePlanBtn, { marginTop: 8 }]} onPress={openOwnerPlansForDealer} activeOpacity={0.8}>
+                <Building2 size={14} color={COLORS.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.managePlanBtnText}>
+                  {hasOwnerPlan ? "Change Owner Plan" : "Add Owner Plan (My Properties)"}
+                </Text>
+                <ChevronRight size={14} color={COLORS.primary} style={{ marginLeft: "auto" }} />
+              </TouchableOpacity>
+            )}
+
+            {/* Dealer plan: only for accounts that are not Owners (Owner and
+                Dealer are mutually exclusive on the backend). */}
+            {!isDealerMode && posterType !== "OWNER" && !hasOwnerPlan && (
+              <TouchableOpacity style={[styles.managePlanBtn, { marginTop: 8 }]} onPress={openDealerPlans} activeOpacity={0.8}>
+                <Building2 size={14} color={COLORS.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.managePlanBtnText}>
+                  {hasDealerPlan ? "Change Dealer Plan" : "Upgrade to Dealer Plan"}
+                </Text>
+                <ChevronRight size={14} color={COLORS.primary} style={{ marginLeft: "auto" }} />
+              </TouchableOpacity>
+            )}
+
 
           </View>
         </View>
@@ -248,7 +276,11 @@ export default function OwnerProfileScreen({ navigation, route }) {
 
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => navigation.navigate("Properties")}
+            onPress={() => {
+              if (isDealerMode && !hasDealerPlan) openDealerPlans();
+              else if (isDealerMode && !hasOwnerPlan) openOwnerPlansForDealer();
+              else navigation.navigate("Properties");
+            }}
             activeOpacity={0.7}
           >
             <View style={styles.menuLeft}>
@@ -652,10 +684,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.white,
   },
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
+  safeArea: { flex: 1, backgroundColor: "#F4F5F7" },
   screenHeader: {
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -669,35 +698,10 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
     letterSpacing: -0.3,
   },
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  profileHeaderCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    marginRight: 14,
-    backgroundColor: "#F1F5F9",
-  },
+  container: { flex: 1, backgroundColor: "#F4F5F7" },
+  scrollContent: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 32 },
+  profileHeaderCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 28, paddingVertical: 16, paddingHorizontal: 18, marginBottom: 16 },
+  avatar: { width: 54, height: 54, borderRadius: 27, marginRight: 14, backgroundColor: "#F1F5F9" },
   profileInfo: {
     flex: 1,
     justifyContent: "center",
@@ -706,27 +710,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  ownerName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0F172A",
-    letterSpacing: -0.3,
-  },
+  ownerName: { fontSize: 17, fontWeight: "600", color: "#111827", letterSpacing: -0.2 },
   pencilIcon: {
     marginLeft: 8,
   },
-  phoneText: {
-    fontSize: 12.5,
-    color: "#64748B",
-    marginTop: 3,
-    fontWeight: "400",
-  },
-  emailText: {
-    fontSize: 12,
-    color: "#94A3B8",
-    marginTop: 1,
-    fontWeight: "400",
-  },
+  phoneText: { fontSize: 13, color: "#6B7280", marginTop: 3, fontWeight: "400" },
+  emailText: { fontSize: 13, color: "#6B7280", marginTop: 1, fontWeight: "400" },
   verifiedBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -742,93 +731,26 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#16A34A",
   },
-  modeSwitchBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: COLORS.primary,
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    marginBottom: 18,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
+  modeSwitchBanner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#1F1F22", borderRadius: 28, paddingVertical: 18, paddingHorizontal: 18, marginBottom: 16 },
   modeSwitchLeft: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
     marginRight: 12,
   },
-  modeSwitchIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  modeSwitchTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  modeSwitchSub: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.85)",
-    marginTop: 3,
-    lineHeight: 16,
-    fontWeight: "400",
-  },
-  modeSwitchArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  menuGroup: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  groupHeading: {
-    fontSize: 11,
-    fontWeight: "500",
-    color: COLORS.muted,
-    letterSpacing: 0.6,
-    marginTop: 6,
-    marginBottom: 6,
-  },
-  menuRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
+  modeSwitchIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.08)", justifyContent: "center", alignItems: "center", marginRight: 12 },
+  modeSwitchTitle: { fontSize: 16, fontWeight: "700", color: "#FFFFFF" },
+  modeSwitchSub: { fontSize: 12.5, color: "rgba(255,255,255,0.7)", marginTop: 4, lineHeight: 18, fontWeight: "400" },
+  modeSwitchArrow: { paddingHorizontal: 14, height: 36, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", backgroundColor: "rgba(255,255,255,0.08)", justifyContent: "center", alignItems: "center" },
+  menuGroup: { backgroundColor: "#FFFFFF", borderRadius: 28, paddingHorizontal: 20, paddingVertical: 6, marginBottom: 16 },
+  groupHeading: { fontSize: 11, fontWeight: "600", color: "#9CA3AF", letterSpacing: 0.8, marginTop: 12, marginBottom: 2 },
+  menuRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: "#F0F1F3" },
   menuLeft: {
     flexDirection: "row",
     alignItems: "center",
   },
-  menuIcon: {
-    marginRight: 12,
-  },
-  menuLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: COLORS.textDark,
-  },
+  menuIcon: { marginRight: 14 },
+  menuLabel: { fontSize: 15.5, fontWeight: "500", color: "#1F2937" },
   badgeRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -845,17 +767,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
     fontWeight: "400",
   },
-  logoutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FEF2F2",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    height: 48,
-    marginTop: 6,
-  },
+  logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF", borderRadius: 28, height: 56, marginTop: 4 },
   logoutText: {
     fontSize: 14,
     fontWeight: "500",

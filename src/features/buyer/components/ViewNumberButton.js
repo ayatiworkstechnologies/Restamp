@@ -18,8 +18,8 @@ import COLORS from "../../../shared/constants/colors.js";
 import { getRevealedContact, revealContact } from "../../../shared/api/contact.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
-import { isAgentAreaRequired } from "../../../shared/api/agentPlans.js";
-import { promptAgentUpgrade } from "../../agent/utils/agentUpgrade.js";
+import { isAgentAreaRequired } from "../../../shared/api/dealerAreaPlans.js";
+import { promptAgentUpgrade } from "../../dealerArea/utils/dealerAreaUpgrade.js";
 import { recordCallTap } from "../api/calls.js";
 import { ownerDialUrl } from "../utils/ownerContact.js";
 

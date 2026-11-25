@@ -111,7 +111,7 @@ export default function MessageScreen() {
           <Search size={16} color={COLORS.textSecondary} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search agents, owners or messages..."
+            placeholder="Search dealers, owners or messages..."
             placeholderTextColor={COLORS.muted}
             value={searchQuery}
             onChangeText={setSearchQuery}

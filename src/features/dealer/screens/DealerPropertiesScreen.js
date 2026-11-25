@@ -2,7 +2,7 @@
 // areas; My Property = the dealer's own listings.
 import React, { useState } from "react";
 import { View } from "react-native";
-import AgentPropertiesScreen from "../../agent/screens/AgentPropertiesScreen.js";
+import AgentPropertiesScreen from "../../dealerArea/screens/DealerAreaPropertiesScreen.js";
 import OwnerPropertiesScreen from "../../owner/screens/OwnerPropertiesScreen.js";
 import DealerSpaceTabs from "../components/DealerSpaceTabs.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";

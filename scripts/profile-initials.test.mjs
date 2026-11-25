@@ -46,8 +46,8 @@ const avatarScreens = [
   "features/owner/screens/OwnerPropertyLeadsScreen.js",
   "features/owner/screens/OwnerLeadDetailScreen.js",
   "features/owner/screens/OwnerDashboardScreen.js",
-  "features/agent/screens/AgentProfileScreen.js",
-  "features/agent/screens/AgentDashboardScreen.js",
+  "features/dealerArea/screens/DealerAreaProfileScreen.js",
+  "features/dealerArea/screens/DealerAreaDashboardScreen.js",
 ];
 const missing = avatarScreens.filter((f) => !src(f).includes("<InitialsAvatar"));
 check("I11 every user avatar uses the shared InitialsAvatar", missing.length === 0, missing);

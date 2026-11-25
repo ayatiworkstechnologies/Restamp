@@ -46,7 +46,7 @@ const { recordViewed } = await load("features/buyer/api/viewed.js");
 const { recordCallTap } = await load("features/buyer/api/calls.js");
 const owner = await load("features/owner/api/owner.js");
 const buyerPlans = await load("shared/api/buyerPlans.js");
-const agentPlans = await load("shared/api/agentPlans.js");
+const agentPlans = await load("shared/api/dealerAreaPlans.js");
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -100,7 +100,7 @@ await recordViewed(12);
 check("G6 an OWNER-mode account still records nothing", calls.length === 0);
 
 // --- A: agent Activity tab -------------------------------------------------------
-const nav = src("features/agent/navigation/AgentNavigator.js");
+const nav = src("features/dealerArea/navigation/DealerAreaNavigator.js");
 check("A1 the agent Activity tab renders the buyer My Activity screen",
   nav.includes('import SavedScreen from "../../buyer/screens/SavedScreen.js";') &&
   nav.includes('<SavedScreen {...props} browseRoute="Properties" />') &&
@@ -150,7 +150,7 @@ for (const screen of ["OwnerLeadsScreen.js", "OwnerPropertyLeadsScreen.js"]) {
 }
 
 // --- P: agent property sheet = buyer sheet -----------------------------------------
-const props = src("features/agent/screens/AgentPropertiesScreen.js");
+const props = src("features/dealerArea/screens/DealerAreaPropertiesScreen.js");
 const sheetCall = props.slice(props.indexOf("<PropertyDetailModal"), props.indexOf("/>", props.indexOf("<PropertyDetailModal")));
 check("P1 agent screen renders the buyer sheet with the buyer screens' props (no agent-only bar)",
   !sheetCall.includes("isAgentView") && !sheetCall.includes("onMatchToLead") && !sheetCall.includes("onContactOwner") &&
@@ -187,12 +187,12 @@ check("T1 an agent-area 402 is never mistaken for a buyer-plan 402",
 check("T2 the upgrade message is the server's (or the trial default)",
   agentPlans.agentAreaMessage(areaErr).includes("one area") &&
   agentPlans.agentAreaMessage({ status: 402, data: {} }) === agentPlans.AGENT_TRIAL_AREA_MESSAGE);
-const upgrade = src("features/agent/utils/agentUpgrade.js");
+const upgrade = src("features/dealerArea/utils/dealerAreaUpgrade.js");
 check("T3 Upgrade opens the agent plans (Menu -> Agent Plan) or, with the Agent role hidden, the Dealer plans; never the buyer plans",
   upgrade.includes('AGENT_ROLE_VISIBLE ? "Menu" : "RolePlans"') && upgrade.includes('{ initialTab: "agent" }') &&
   upgrade.includes('{ lockedTab: "dealer" }') &&
   !upgrade.includes("BuyerPlans") && !upgrade.includes("BUYER_PLANS_ROUTE"));
-const props2 = src("features/agent/screens/AgentPropertiesScreen.js");
+const props2 = src("features/dealerArea/screens/DealerAreaPropertiesScreen.js");
 check("T4 agent cards are the buyer search card with the wishlist heart; Match Lead is gone",
   props2.includes("<PropertySearchCard") && props2.includes("saved={isWishlisted(item.id)}") &&
   props2.includes("onToggleWishlist={toggleWishlist}") && !props2.includes("Match Lead") &&
@@ -217,18 +217,18 @@ check("T9 the property sheet passes the scope and offers the agent upgrade on ev
   modal2.includes("fetchListingDetail(backendId, { scope: listingScope })") &&
   modal2.includes("fetchSimilar(backendId, 5, { scope: listingScope })") &&
   (modal2.match(/if \(isAgentAreaRequired\(e\)\) \{/g) || []).length >= 5);
-const ctx2 = src("features/agent/context/AgentContext.js");
+const ctx2 = src("features/dealerArea/context/DealerAreaContext.js");
 check("T10 the free trial has no invented day count; the plan's load state is known",
   ctx2.includes(": null;") && ctx2.includes("setPlanLoaded(true)") && ctx2.includes("planLoaded,"));
 check("T11 startAgentTrial posts the one area to /broker/trial",
-  src("shared/api/agentPlans.js").includes('apiPost("/broker/trial", { locality: String(locality || "").trim() })'));
-const pick = src("features/agent/screens/AgentLocationSelectScreen.js");
+  src("shared/api/dealerAreaPlans.js").includes('apiPost("/broker/trial", { locality: String(locality || "").trim() })'));
+const pick = src("features/dealerArea/screens/DealerAreaLocationSelectScreen.js");
 check("T12 trial setup: exactly one area (a new pick replaces it), Start Free Trial, no payment route",
   pick.includes('route?.params?.trial === true && !allowance.active') && pick.includes("setSelectedLocalities([locName]);") &&
   pick.includes('"Start Free Trial (1 area)"') && pick.includes("startAgentTrial(selectedLocalities[0])"));
 check("T13 a trial agent trying a second area gets the upgrade prompt",
   pick.includes("if (isLimitReached && mode === \"add\" && activePlan?.isTrial) {") && pick.includes("promptAgentUpgrade(navigation, null);"));
-const nav2 = src("features/agent/navigation/AgentNavigator.js");
+const nav2 = src("features/dealerArea/navigation/DealerAreaNavigator.js");
 check("T14 an agent without a plan picks the trial area before the agent tabs open (only then)",
   nav2.includes("if (!planLoaded) return <AgentSpinner />;") && nav2.includes("if (!hasActivePlan) {") &&
   nav2.includes("route={{ params: { trial: true } }}") && nav2.includes("return <AgentModeGate />;"));
@@ -248,11 +248,11 @@ check("U2 the agent tabs open only after the server confirms BROKER, then the in
   gate.includes('await ensureRole(auth, "BROKER");') && gate.indexOf("reloadInventory();") > gate.indexOf("ensureRole(auth") &&
   gate.includes('if (roleState === "error")') && gate.includes("onPress={confirmRole}") &&
   gate.indexOf("return <AgentTabs />;") > gate.indexOf('if (roleState === "pending")'));
-const ctxU = src("features/agent/context/AgentContext.js");
+const ctxU = src("features/dealerArea/context/DealerAreaContext.js");
 check("U3 a failed inventory load is an error state with a reload, never an empty list posing as 'no properties'",
   ctxU.includes('setInventoryStatus(failed ? "error" : "ready");') && ctxU.includes("}, [localitiesKey, inventoryVersion]);") &&
   ctxU.includes("inventoryStatus,\n    reloadInventory,"));
-const propsU = src("features/agent/screens/AgentPropertiesScreen.js");
+const propsU = src("features/dealerArea/screens/DealerAreaPropertiesScreen.js");
 check("U4 Properties shows loading / 'Could not load properties.' + Try Again before the empty state",
   propsU.indexOf('inventoryStatus === "loading"') > -1 &&
   propsU.indexOf('"Could not load properties."') < propsU.indexOf('"No properties available in your selected locations."') &&

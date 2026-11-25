@@ -40,7 +40,7 @@ import { fetchOwnerVisits } from "../../../shared/api/visits.js";
 import RestampLogo from "../../../shared/components/RestampLogo.js";
 import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 import DealerSpaceTabs from "../../dealer/components/DealerSpaceTabs.js";
-import { useAgent } from "../../agent/context/AgentContext.js";
+import { useAgent } from "../../dealerArea/context/DealerAreaContext.js";
 import { AGENT_MODULE_ENABLED } from "../../../shared/constants/features.js";
 import { formatListingLimit } from "../data/ownerPlans.js";
 
@@ -53,7 +53,7 @@ export default function OwnerDashboardScreen({ navigation, route }) {
     Platform.OS === "android" ? (StatusBar.currentHeight || 28) : 0
   );
 
-  const { properties: localProperties, leads, subscription: ownerSubscription, dealerSubscription, ownerProfile } = useOwner();
+  const { properties: localProperties, leads, subscription: ownerSubscription, dealerSubscription, ownerProfile, dealerCanPost, hasOwnerPlan } = useOwner();
   const subscription = isDealer ? dealerSubscription : ownerSubscription;
   const { user: authUser } = useAuth();
   // The owning account of this dashboard. The backend scopes the API
@@ -187,7 +187,20 @@ export default function OwnerDashboardScreen({ navigation, route }) {
   const areaLimit = areaPlan?.locationLimit || 0;
   // Area features ride on the agent module: hidden while it is switched off.
   const showDealerAreas = isDealer && AGENT_MODULE_ENABLED;
-  const [dealerTab, setDealerTab] = useState(AGENT_MODULE_ENABLED ? "sales" : "space");
+  const [dealerTab, setDealerTabRaw] = useState("sales");
+  // "My Property" (own listings) opens only after the dealer buys an Owner
+  // plan; until then it is hidden and the dealer sees Sales Hub only.
+  const dealerSpaceLocked = isDealer && !hasOwnerPlan;
+  const setDealerTab = (key) => {
+    if (key === "space" && dealerSpaceLocked) {
+      navigation.navigate("RolePlans", { lockedTab: "owner", returnTo: "dealer" });
+      return;
+    }
+    setDealerTabRaw(key);
+  };
+  useEffect(() => {
+    if (dealerSpaceLocked && dealerTab === "space") setDealerTabRaw("sales");
+  }, [dealerSpaceLocked, dealerTab]);
   const openDealerAreas = async (screen) => {
     if (openingAreas) return;
     setOpeningAreas(true);
@@ -293,7 +306,7 @@ export default function OwnerDashboardScreen({ navigation, route }) {
                 <MapPin size={18} color="#2563EB" style={{ marginRight: 6 }} />
                 <Text style={styles.sectionTitle}>Your Areas</Text>
               </View>
-              <Text style={styles.planKey}>{dealerAreas.length}/{areaLimit}</Text>
+              <Text style={styles.planKey}>{areaLimit ? `${dealerAreas.length}/${areaLimit}` : dealerAreas.length}</Text>
             </View>
             <View style={[styles.minimalListCard, styles.areasCard]}>
               {dealerAreas.length ? (
@@ -307,10 +320,23 @@ export default function OwnerDashboardScreen({ navigation, route }) {
                 </View>
               ) : (
                 <Text style={styles.areasEmpty}>
-                  Choose up to {areaLimit} areas to browse owner properties and get owner numbers.
+                  {areaLimit
+                    ? `Choose up to ${areaLimit} areas to browse owner properties and get owner numbers.`
+                    : "Buy pincodes on the Dealer plan to browse owner properties and get owner numbers there."}
                 </Text>
               )}
               <View style={styles.areaBtnRow}>
+                {areaLimit === 0 && (
+                  <TouchableOpacity
+                    style={[styles.areaBtn, !dealerAreas.length && styles.areaBtnPrimary]}
+                    onPress={() => navigation.navigate("RolePlans", { lockedTab: "dealer" })}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.areaBtnText, !dealerAreas.length && styles.areaBtnTextPrimary]}>
+                      {dealerAreas.length ? "Change pincodes" : "Buy pincodes"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 {dealerAreas.length < areaLimit && (
                   <TouchableOpacity
                     style={[styles.areaBtn, !dealerAreas.length && styles.areaBtnPrimary]}

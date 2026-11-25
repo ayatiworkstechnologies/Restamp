@@ -4,16 +4,15 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  ArrowLeft,
   ShieldCheck,
-  CheckCircle2,
 } from "../../../shared/components/HugeIcon.js";
 import { useOwner } from "../context/OwnerContext.js";
+import PlanCard from "../../../shared/components/PlanCard.js";
+import PaymentHeader from "../../../shared/components/PaymentHeader.js";
 
 import { OWNER_PLANS_LIST } from "../data/ownerPlans.js";
 
@@ -54,22 +53,7 @@ export default function OwnerPlansScreen({ navigation }) {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* TOP HEADER: Circular Back Button | Screen Title */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.circleBackBtn}
-          onPress={handleBackToBuyer}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={20} color="#0F172A" strokeWidth={2.2} />
-        </TouchableOpacity>
-
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Choose Your Owner Plan</Text>
-        </View>
-
-        <View style={{ width: 40 }} />
-      </View>
+      <PaymentHeader title="Choose Your Owner Plan" onBack={handleBackToBuyer} />
 
       <ScrollView
         style={styles.container}
@@ -91,58 +75,22 @@ export default function OwnerPlansScreen({ navigation }) {
           <Text style={styles.paneSectionHeader}>CHOOSE A PLAN • 7 TIERS</Text>
         </View>
 
-        {/* ================= 7 SELLER PLAN PRICING CARDS ================= */}
+        {/* Shared plan cards — identical to the Owner / Dealer / Agent plan list */}
         {currentPlans.map((plan) => (
-          <View key={plan.id} style={styles.planCard}>
-            {/* 1. Header: Plan Name */}
-            <Text style={styles.planName}>{plan.name}</Text>
-
-            {/* 2. Price Row: Large Current Price + Original Strikethrough Price */}
-            <View style={styles.priceRow}>
-              <Text style={styles.priceBig}>{plan.price}</Text>
-              {plan.originalPrice ? (
-                <Text style={styles.originalPriceText}>{plan.originalPrice}</Text>
-              ) : null}
-            </View>
-
-            {/* 3. Subtitle / Duration */}
-            <Text style={styles.billingText}>{plan.billingText}</Text>
-
-            {/* 4. Subtle Edge-to-Edge Divider */}
-            <View style={styles.cardDivider} />
-
-            {/* 5. Property Listings Count Row */}
-            <View style={styles.listingsRow}>
-              <Text style={styles.listingsLabel}>Post Count</Text>
-              <Text style={styles.listingsValue}>{plan.listingLimitLabel}</Text>
-            </View>
-
-            {/* 6. Feature List with Green Check Circles */}
-            <View style={styles.featuresList}>
-              {plan.features.map((feature, fIdx) => (
-                <View key={fIdx} style={styles.featureRow}>
-                  <CheckCircle2
-                    size={17}
-                    color="#22C55E"
-                    strokeWidth={2.4}
-                    style={styles.checkIcon}
-                  />
-                  <Text style={styles.featureText}>{feature}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* 7. Action CTA Button */}
-            <TouchableOpacity
-              style={styles.choosePlanBtn}
-              activeOpacity={0.8}
-              onPress={() => handleSelectPlan(plan)}
-            >
-              <Text style={styles.choosePlanText}>
-                {plan.buttonText || "Choose Plan"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <PlanCard
+            key={plan.id}
+            name={plan.name}
+            titlePrefix={plan.titlePrefix}
+            titlePrefixColor={plan.titlePrefixColor}
+            titleColor={plan.titleColor}
+            price={plan.price}
+            priceSub1={plan.priceSub1}
+            priceSub2={plan.priceSub2}
+            isPopular={plan.isPopular}
+            features={plan.features}
+            buttonText={plan.buttonText || "Choose Plan"}
+            onPress={() => handleSelectPlan(plan)}
+          />
         ))}
 
         {/* Assurance Box */}
@@ -163,40 +111,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 14,
-    backgroundColor: "#FFFFFF",
-  },
-  circleBackBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F1F5F9",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#0F172A",
-    letterSpacing: -0.3,
   },
   container: {
     flex: 1,
@@ -251,101 +165,6 @@ const styles = StyleSheet.create({
   },
 
   /* ================= SLEEK DARK PRICING CARDS ================= */
-  planCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    marginBottom: 16,
-  },
-  planName: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1E293B",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  priceRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  priceBig: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#0F172A",
-    letterSpacing: -0.5,
-  },
-  originalPriceText: {
-    fontSize: 16,
-    fontWeight: "400",
-    color: "#64748B",
-    textDecorationLine: "line-through",
-    marginLeft: 10,
-  },
-  billingText: {
-    fontSize: 14,
-    color: "#64748B",
-    fontWeight: "400",
-    marginBottom: 18,
-  },
-  cardDivider: {
-    height: 1,
-    backgroundColor: "#E2E8F0",
-    marginHorizontal: -20,
-    marginBottom: 18,
-  },
-  listingsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  listingsLabel: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#0F172A",
-  },
-  listingsValue: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  featuresList: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  featureRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  checkIcon: {
-    marginRight: 10,
-  },
-  featureText: {
-    fontSize: 14,
-    color: "#1E293B",
-    fontWeight: "400",
-    lineHeight: 20,
-    flex: 1,
-  },
-  choosePlanBtn: {
-    marginTop: 6,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#FFFFFF",
-  },
-  choosePlanText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#0F172A",
-  },
 
   assuranceBox: {
     flexDirection: "row",

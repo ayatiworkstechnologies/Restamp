@@ -10,9 +10,9 @@ import {
 } from "react-native";
 import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
+import PaymentHeader from "../../../shared/components/PaymentHeader.js";
+import PaymentFooter from "../../../shared/components/PaymentFooter.js";
 import {
-  ArrowLeft,
-  MoreVertical,
   Crown,
   Check,
   Tag,
@@ -24,19 +24,14 @@ import COLORS from "../../../shared/constants/colors.js";
 export default function AgentPlanConfirmScreen({ route, navigation }) {
   const plan = route?.params?.plan || {
     id: "agent-pro",
-    name: "Agent Pro Plan",
+    name: "Dealer Pro Plan",
     locationLimit: 10,
     price: "₹6,999",
     priceNumeric: 6999,
     validity: "1 Month",
   };
 
-  const selectedLocalities = route?.params?.selectedLocalities || [
-    "Anna Nagar",
-    "Kilpauk",
-    "Mogappair",
-    "Adyar",
-  ];
+  const selectedLocalities = route?.params?.selectedLocalities || [];
 
   const [couponCode, setCouponCode] = useState("");
   const [discount, setDiscount] = useState(0);
@@ -73,32 +68,16 @@ export default function AgentPlanConfirmScreen({ route, navigation }) {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* TOP HEADER: Circular Back Button | Centered Title | Circular More Button */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.circleBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={20} color="#111111" strokeWidth={2.2} />
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>Confirm Plan</Text>
-
-        <TouchableOpacity
-          style={styles.circleBtn}
-          onPress={() =>
+      <PaymentHeader
+        title="Confirm Plan"
+        onBack={() => navigation.goBack()}
+        onRightPress={() =>
             Alert.alert(
               "Plan Information",
               `${plan.name} gives you direct buyer leads across ${selectedLocalities.length} selected localities with 0% brokerage assurance.`,
             )
           }
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MoreVertical size={20} color="#111111" strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
+      />
 
       <ScrollView
         style={styles.container}
@@ -264,16 +243,7 @@ export default function AgentPlanConfirmScreen({ route, navigation }) {
         <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* BOTTOM FIXED CTA: Sleek Rounded Pill "Proceed to Payment" */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={styles.payNowBtn}
-          onPress={handleProceedToPayment}
-          activeOpacity={0.88}
-        >
-          <Text style={styles.payNowBtnText}>Proceed to Payment</Text>
-        </TouchableOpacity>
-      </View>
+      <PaymentFooter primaryLabel="Proceed to Payment" onPrimary={handleProceedToPayment} />
     </SafeAreaView>
   );
 }
@@ -282,36 +252,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 16,
-    backgroundColor: "#FFFFFF",
-  },
-  circleBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "500",
-    color: "#111111",
-    letterSpacing: -0.3,
   },
   container: {
     flex: 1,
@@ -502,29 +442,5 @@ const styles = StyleSheet.create({
     color: "#15803D",
     fontWeight: "400",
     flex: 1,
-  },
-  bottomBar: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 22,
-    backgroundColor: "#FFFFFF",
-  },
-  payNowBtn: {
-    height: 54,
-    borderRadius: 10,
-    backgroundColor: "#2563EB",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  payNowBtnText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "500",
-    letterSpacing: 0.2,
   },
 });

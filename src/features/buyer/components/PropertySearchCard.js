@@ -17,8 +17,8 @@ import SafeImage from "../../../shared/components/SafeImage.js";
 import { getRevealedContact, revealContact } from "../../../shared/api/contact.js";
 import { OWNER_NAME_FALLBACK, ownerDialUrl, ownerNameFor, ownerWhatsAppUrl } from "../utils/ownerContact.js";
 import { isBuyerPlanRequired, BUYER_PLANS_ROUTE } from "../../../shared/api/buyerPlans.js";
-import { isAgentAreaRequired } from "../../../shared/api/agentPlans.js";
-import { promptAgentUpgrade } from "../../agent/utils/agentUpgrade.js";
+import { isAgentAreaRequired } from "../../../shared/api/dealerAreaPlans.js";
+import { promptAgentUpgrade } from "../../dealerArea/utils/dealerAreaUpgrade.js";
 import { recordCallTap } from "../api/calls.js";
 import { getAuthTokenSync } from "../../../shared/api/client.js";
 import {
@@ -430,7 +430,7 @@ export function ViewNumberSheet({ state }) {
           {/* Header Row */}
           <View style={styles.sheetHeaderRow}>
             <View>
-              <Text style={styles.sheetTitle}>Contact Seller / Agent</Text>
+              <Text style={styles.sheetTitle}>Contact Seller / Dealer</Text>
               <Text style={styles.sheetSubtitle}>Verified Real Estate Partner</Text>
             </View>
             <TouchableOpacity

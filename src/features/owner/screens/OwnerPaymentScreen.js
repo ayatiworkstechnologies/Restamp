@@ -6,16 +6,15 @@ import {
   StatusBar,
   TouchableOpacity,
   TextInput,
-  ActivityIndicator,
   Modal,
   Pressable,
   Alert,
 } from "react-native";
 import { ScrollView } from "../../../shared/components/KeyboardSafe.js";
 import { SafeAreaView } from "react-native-safe-area-context";
+import PaymentHeader from "../../../shared/components/PaymentHeader.js";
+import PaymentFooter from "../../../shared/components/PaymentFooter.js";
 import {
-  ArrowLeft,
-  MoreVertical,
   Plus,
   Check,
   CreditCard,
@@ -26,24 +25,25 @@ import {
 import COLORS from "../../../shared/constants/colors.js";
 import StatusSheet from "../../../shared/components/StatusSheet.js";
 import { useOwner } from "../context/OwnerContext.js";
-import { useAgent } from "../../agent/context/AgentContext.js";
-import { fetchAgentPlan } from "../../../shared/api/agentPlans.js";
+import { useAgent } from "../../dealerArea/context/DealerAreaContext.js";
+import { fetchAgentPlan } from "../../../shared/api/dealerAreaPlans.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
-import { ensureOwnerRole } from "../../../shared/api/users.js";
+import { useRequireAuth } from "../../auth/useRequireAuth.js";
+import { isPosterTypeConflict, posterTypeConflictMessage } from "../../../shared/api/subscriptions.js";
 import { subscribeOwnerPlan, subscribeDealerPlan } from "../../../shared/api/ownerPlans.js";
 
 export default function OwnerPaymentScreen({ route, navigation }) {
   const auth = useAuth();
-  const { activateSubscription, activateDealerSubscription } = useOwner();
+  const { activateSubscription, activateDealerSubscription, refreshPlans } = useOwner();
   const { applyServerPlan } = useAgent();
   const plan = route?.params?.plan || {
-    id: "owner-startup",
-    name: "Startup Plan",
-    price: "₹499",
-    validity: "30 Days",
-    listingLimit: 1,
+    id: "owner-super",
+    name: "Super Plan",
+    price: "₹999",
+    validity: "45 Days",
+    listingLimit: 3,
   };
-  const totalAmount = route?.params?.totalAmount || 499;
+  const totalAmount = route?.params?.totalAmount || 999;
   const formattedAmount = route?.params?.formattedAmount || `₹${totalAmount.toLocaleString("en-IN")}`;
   // Order summary from the confirmed plan (price before coupon, coupon discount).
   const orderAmount = route?.params?.basePrice ?? plan.priceNumeric ?? totalAmount;
@@ -90,6 +90,16 @@ export default function OwnerPaymentScreen({ route, navigation }) {
   ]);
 
   // Simulated payment (no gateway connected yet), same as the agent flow.
+
+  // Expired session (401): the stale session has been cleared app-wide; offer
+  // Log in, then retry this payment once the user is back.
+  const requireAuth = useRequireAuth(navigation);
+  const promptRelogin = () =>
+    Alert.alert("Session expired", "Your login has expired. Log in again to complete your purchase.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Log in", onPress: () => requireAuth(() => handlePay(true)) },
+    ]);
+
   const handlePay = (shouldSucceed = true) => {
     if (isProcessing) return;
     setIsProcessing(true);
@@ -103,36 +113,47 @@ export default function OwnerPaymentScreen({ route, navigation }) {
       }
       const txnId = `SIM-${Date.now().toString().slice(-8)}`;
       const isDealer = plan?.kind === "dealer";
-      // Save the plan on the server so it survives logout and role switches.
-      // If this backend has no plan endpoint yet, the plan stays active for
-      // this session only.
-      if (isDealer) {
-        activateDealerSubscription({ ...plan, amountPaid: formattedAmount, txnId });
-        subscribeDealerPlan(plan.id)
-          // The dealer plan includes area access: load it into the app.
-          .then(() => fetchAgentPlan())
-          .then((server) => {
+      // Activate on the server FIRST (payment bypass, no money charged) and
+      // show success only once it confirms. activatePlan switches the app
+      // mode to OWNER / BROKER as the backend requires.
+      const save = isDealer
+        ? subscribeDealerPlan(plan.id, plan.localities || []).then(async () => {
+            activateDealerSubscription({ ...plan, amountPaid: formattedAmount, txnId });
+            const server = await fetchAgentPlan();
             if (server) applyServerPlan?.(server);
           })
-          .catch((e) => {
-            console.warn("[dealer-plan] not saved on server:", e?.status || e?.message);
+        : subscribeOwnerPlan(plan.id).then(() => {
+            activateSubscription({ ...plan, amountPaid: formattedAmount, txnId });
           });
-      } else {
-        activateSubscription({ ...plan, amountPaid: formattedAmount, txnId });
-        subscribeOwnerPlan(plan.id).catch((e) => {
-          console.warn("[owner-plan] not saved on server:", e?.status || e?.message);
+      save
+        .then(() => {
+          auth?.refreshMe?.().catch?.(() => {});
+          refreshPlans?.();
+          const areaCount = (plan.localities || []).length;
+          pendingSuccess.current = ["OwnerPaymentSuccess", {
+            kind: isDealer ? "dealer" : "owner",
+            returnTo: plan.returnTo,
+            planName: plan.name,
+            planValidity: plan.validity || "30 Days",
+            listingLimit: isDealer
+              ? `Sales Hub · ${areaCount} area${areaCount === 1 ? "" : "s"}`
+              : `Up to ${plan.listingLimit || 1} Active Listing${(plan.listingLimit || 1) > 1 ? "s" : ""}`,
+            amountPaid: formattedAmount,
+            txnId,
+          }];
+          setSheetStatus("success");
+        })
+        .catch((e) => {
+          setSheetStatus(null);
+          if (isPosterTypeConflict(e)) {
+            Alert.alert("Plan not available on this account", posterTypeConflictMessage(e));
+          } else if (e?.status === 401 || e?.kind === "login") {
+            promptRelogin();
+          } else {
+            const msg = typeof e?.detail === "string" ? e.detail : e?.data?.message;
+            Alert.alert("Couldn't activate plan", msg || "The plan could not be activated. Please try again.");
+          }
         });
-      }
-      ensureOwnerRole(auth).catch(() => {});
-      pendingSuccess.current = ["OwnerPaymentSuccess", {
-        kind: isDealer ? "dealer" : "owner",
-        planName: plan.name,
-        planValidity: plan.validity || "30 Days",
-        listingLimit: `Up to ${plan.listingLimit || 1} Active Listing${(plan.listingLimit || 1) > 1 ? "s" : ""}`,
-        amountPaid: formattedAmount,
-        txnId,
-      }];
-        setSheetStatus("success");
     }, 1200);
   };
 
@@ -178,27 +199,11 @@ export default function OwnerPaymentScreen({ route, navigation }) {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* TOP HEADER: Circular Back Button | Centered Title | Circular More Button */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.circleBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={20} color="#111111" strokeWidth={2.2} />
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>Payment Method</Text>
-
-        <TouchableOpacity
-          style={styles.circleBtn}
-          onPress={() => handlePay(false)}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MoreVertical size={20} color="#111111" strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
+      <PaymentHeader
+        title="Payment Method"
+        onBack={() => navigation.goBack()}
+        onRightPress={() => handlePay(false)}
+      />
 
       <ScrollView
         style={styles.container}
@@ -393,21 +398,7 @@ export default function OwnerPaymentScreen({ route, navigation }) {
         <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* BOTTOM FIXED CTA: Sleek Rounded Pill "Pay Now" */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={styles.payNowBtn}
-          onPress={() => handlePay(true)}
-          disabled={isProcessing}
-          activeOpacity={0.88}
-        >
-          {isProcessing ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.payNowBtnText}>Pay Now</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      <PaymentFooter primaryLabel="Pay Now" onPrimary={() => handlePay(true)} loading={isProcessing} />
 
       <StatusSheet
         visible={sheetStatus !== null}
@@ -470,36 +461,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 16,
-    backgroundColor: "#FFFFFF",
-  },
-  circleBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EEF2F6",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "500",
-    color: "#111111",
-    letterSpacing: -0.3,
   },
   container: {
     flex: 1,
@@ -715,30 +676,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "400",
     color: "#94A3B8",
-  },
-  bottomBar: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 22,
-    backgroundColor: "#FFFFFF",
-  },
-  payNowBtn: {
-    height: 54,
-    borderRadius: 10,
-    backgroundColor: "#2563EB",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  payNowBtnText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "500",
-    letterSpacing: 0.2,
   },
   modalBackdrop: {
     flex: 1,

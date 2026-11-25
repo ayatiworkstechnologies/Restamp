@@ -28,7 +28,7 @@ import {
   Building2,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
-import { useAgent } from "../context/AgentContext.js";
+import { useAgent } from "../context/DealerAreaContext.js";
 import StatusBadge from "../../owner/components/StatusBadge.js";
 
 const FILTER_TABS = [
@@ -117,7 +117,7 @@ export default function AgentLeadsScreen({ navigation }) {
       return;
     }
     const text = encodeURIComponent(
-      `Hello ${lead.customerName}! I am your RESTAMP Certified Agent regarding your requirement for ${lead.requirement} in ${lead.preferredLocality}. I have matching verified owner listings ready.`
+      `Hello ${lead.customerName}! I am your RESTAMP Certified Dealer regarding your requirement for ${lead.requirement} in ${lead.preferredLocality}. I have matching verified owner listings ready.`
     );
     Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`).catch(() => {
       Alert.alert("WhatsApp Unavailable", "Could not launch WhatsApp.");

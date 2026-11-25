@@ -20,8 +20,8 @@ import {
   SlidersHorizontal,
 } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
-import { useAgent } from "../context/AgentContext.js";
-import { ALL_LOCATIONS, filterAgentProperties, locationFilterOptions } from "../utils/agentCore.js";
+import { useAgent } from "../context/DealerAreaContext.js";
+import { ALL_LOCATIONS, filterAgentProperties, locationFilterOptions } from "../utils/dealerAreaCore.js";
 import PropertyDetailModal from "../../buyer/components/PropertyDetailModal.js";
 import PropertySearchCard, { useViewNumber, ViewNumberSheet } from "../../buyer/components/PropertySearchCard.js";
 import EmptyState from "../../owner/components/EmptyState.js";
@@ -64,7 +64,7 @@ export default function AgentPropertiesScreen({ navigation, headerAccessory = nu
   const [activePropertyModal, setActivePropertyModal] = useState(null);
 
 
-  // Every filter and the smart search apply together (agentCore.js), so a
+  // Every filter and the smart search apply together (dealerAreaCore.js), so a
   // locality, deal, type, BHK or budget choice never resets another.
   const filteredProperties = useMemo(
     () =>

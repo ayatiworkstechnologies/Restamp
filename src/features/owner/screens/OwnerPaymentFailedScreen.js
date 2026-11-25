@@ -6,10 +6,10 @@ import {
   StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AlertCircle, RefreshCw, Layers, ArrowLeft } from "../../../shared/components/HugeIcon.js";
+import { AlertCircle } from "../../../shared/components/HugeIcon.js";
 import COLORS from "../../../shared/constants/colors.js";
-import PrimaryButton from "../components/PrimaryButton.js";
-import SecondaryButton from "../components/SecondaryButton.js";
+import PaymentHeader from "../../../shared/components/PaymentHeader.js";
+import PaymentFooter from "../../../shared/components/PaymentFooter.js";
 
 export default function OwnerPaymentFailedScreen({ route, navigation }) {
   const plan = route?.params?.plan;
@@ -24,17 +24,16 @@ export default function OwnerPaymentFailedScreen({ route, navigation }) {
     });
   };
 
+  // "Change Plan" and the header back button both return to the plan list.
   const handleChangePlan = () => {
-    navigation.navigate("OwnerPlans");
-  };
-
-  const handleBackToPlans = () => {
     navigation.navigate("OwnerPlans");
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+      <PaymentHeader title="Payment" onBack={handleChangePlan} />
 
       <View style={styles.container}>
         <View style={styles.iconCircle}>
@@ -52,33 +51,14 @@ export default function OwnerPaymentFailedScreen({ route, navigation }) {
           <Text style={styles.errorItem}>• Insufficient balance or incorrect UPI PIN</Text>
           <Text style={styles.errorItem}>• Card payment limits exceeded</Text>
         </View>
-
-        {/* Buttons as explicitly specified in prompt */}
-        <View style={styles.buttonStack}>
-          <PrimaryButton
-            title="Retry Payment"
-            onPress={handleRetry}
-            icon={RefreshCw}
-            style={styles.primaryBtn}
-          />
-
-          <SecondaryButton
-            title="Change Plan"
-            onPress={handleChangePlan}
-            icon={Layers}
-            variant="outline"
-            style={styles.secondaryBtn}
-          />
-
-          <SecondaryButton
-            title="Back to Plans"
-            onPress={handleBackToPlans}
-            icon={ArrowLeft}
-            variant="subtle"
-            style={styles.secondaryBtn}
-          />
-        </View>
       </View>
+
+      <PaymentFooter
+        primaryLabel="Retry Payment"
+        onPrimary={handleRetry}
+        secondaryLabel="Change Plan"
+        onSecondary={handleChangePlan}
+      />
     </SafeAreaView>
   );
 }
@@ -92,14 +72,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     backgroundColor: "#FFFFFF",
   },
   iconCircle: {
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: "#FEF2F2",
+    backgroundColor: COLORS.errorBg,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
@@ -125,11 +105,10 @@ const styles = StyleSheet.create({
   errorCard: {
     width: "100%",
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: COLORS.border,
     padding: 16,
-    marginBottom: 28,
   },
   errorLabel: {
     fontSize: 12,
@@ -142,15 +121,5 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: 4,
     lineHeight: 18,
-  },
-  buttonStack: {
-    width: "100%",
-    gap: 12,
-  },
-  primaryBtn: {
-    width: "100%",
-  },
-  secondaryBtn: {
-    width: "100%",
   },
 });

@@ -41,9 +41,9 @@ import {
   maxPhoneDigits,
 } from "../phone.js";
 import { planLoginResume } from "../requireAuth.js";
-import { fetchAgentPlan } from "../../../shared/api/agentPlans.js";
+import { fetchAgentPlan } from "../../../shared/api/dealerAreaPlans.js";
 import { AGENT_MODULE_ENABLED, AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
-import { AGENT_UPGRADE_ROUTE, AGENT_UPGRADE_PARAMS } from "../../agent/utils/agentUpgrade.js";
+import { AGENT_UPGRADE_ROUTE, AGENT_UPGRADE_PARAMS } from "../../dealerArea/utils/dealerAreaUpgrade.js";
 import RestampLoginLogo from "../../../shared/components/RestampLoginLogo.js";
 
 // Development OTP code chip: appears only when the backend returned a code
@@ -84,8 +84,8 @@ const WELCOME_SLIDES = [
     ? [
         {
           key: "agent",
-          image: require("../../../../assets/welcome-agent.jpg"),
-          title: "Work as an agent",
+          image: require("../../../../assets/welcome-dealer.jpg"),
+          title: "Work as an dealer",
           body: "Access properties in your chosen areas and manage your leads.",
         },
       ]
@@ -273,7 +273,9 @@ export default function LoginScreen({ navigation }) {
     if (!AGENT_MODULE_ENABLED) return;
     const plan = await fetchAgentPlan();
     hasAgentPlanRef.current = !!plan && AGENT_ROLE_VISIBLE;
-    hasDealerAreaPlanRef.current = !!plan && plan.is_dealer === true && !AGENT_ROLE_VISIBLE;
+    // Agent role hidden: every BROKER plan is a Dealer plan on this backend
+    // (no separate is_dealer flag).
+    hasDealerAreaPlanRef.current = !!plan && !AGENT_ROLE_VISIBLE;
   };
 
   const enterAfterLogin = () => {
@@ -1075,7 +1077,7 @@ export default function LoginScreen({ navigation }) {
                 { key: "buyer", title: "Buyer", sub: "Find a property · free" },
                 { key: "owner", title: "Owner", sub: "List my property · needs Owner Plan" },
                 ...(AGENT_MODULE_ENABLED && AGENT_ROLE_VISIBLE
-                  ? [{ key: "agent", title: "Agent", sub: "Broker properties · needs Agent Plan, 1 area free" }]
+                  ? [{ key: "agent", title: "Dealer", sub: "Broker properties · needs Dealer Plan, 1 area free" }]
                   : []),
                 { key: "dealer", title: "Dealer", sub: "Post and manage properties · needs Dealer Plan" },
               ].map((r) => {

@@ -22,7 +22,7 @@ export const COPY = {
     disclaimer: "AI can make mistakes. Verify property details directly with owners.",
     routeBuyer: "Explore properties",
     routeOwner: "Open listings",
-    routeAgent: "Open agent dashboard",
+    routeAgent: "Open dealer dashboard",
     languageLabel: "Chat language",
     languageChanged: "Switching languages starts a new conversation.",
     startRecording: "Speak to Reva",

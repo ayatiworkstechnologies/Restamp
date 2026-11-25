@@ -26,10 +26,10 @@ cpSync(SRC, join(tmp, "src"), { recursive: true });
 writeFileSync(join(tmp, "package.json"), '{"type":"module"}');
 const load = (rel) => import(pathToFileURL(join(tmp, "src", rel)).href);
 
-const core = await load("features/agent/utils/agentCore.js");
+const core = await load("features/dealerArea/utils/dealerAreaCore.js");
 const mappers = await load("shared/api/mappers.js");
 const client = await load("shared/api/client.js");
-const agentPlans = await load("shared/api/agentPlans.js");
+const agentPlans = await load("shared/api/dealerAreaPlans.js");
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -60,10 +60,10 @@ const bare = toAgentProfile({ id: 9, name: "User" });
 check("P4 an account with nothing set still yields a profile (no crash)", bare && bare.name === null &&
   bare.phone === null && bare.email === null);
 check("P5 logged out -> no profile", toAgentProfile(null) === null && toAgentProfile({}) === null);
-const ctxSrc = src("features/agent/context/AgentContext.js");
+const ctxSrc = src("features/dealerArea/context/DealerAreaContext.js");
 check("P6 context derives agentProfile from the authenticated user", ctxSrc.includes("toAgentProfile(authUser)") &&
   !/useState\(null\);\s*\n[^\n]*\n?[^\n]*agentProfile/.test(ctxSrc));
-const profileSrc = src("features/agent/screens/AgentProfileScreen.js");
+const profileSrc = src("features/dealerArea/screens/DealerAreaProfileScreen.js");
 check("P7 profile screen has no unrelated agent email, invented counts or fixed expiry",
   !/vikram/i.test(profileSrc) && !profileSrc.includes("|| 126") && !profileSrc.includes("|| 18") &&
   !profileSrc.includes("20 Nov 2026") && profileSrc.includes("agentPlan?.expiryDate"));
@@ -121,7 +121,7 @@ check("L8 picking the same locality again keeps it (no cycling)",
 check("L9 locality + deal + BHK + budget combine",
   JSON.stringify(ids(core.filterAgentProperties(inventory, { locality: "Adyar", deal: "Rent", bhk: "2 BHK", budget: "Under ₹25K" }))) === "[1]");
 check("L10 locality + type", JSON.stringify(ids(core.filterAgentProperties(inventory, { locality: "T Nagar", type: "House" }))) === "[6]");
-const propsSrc = src("features/agent/screens/AgentPropertiesScreen.js");
+const propsSrc = src("features/dealerArea/screens/DealerAreaPropertiesScreen.js");
 check("L11 the location chip opens a picker; no tap-to-advance cycling",
   propsSrc.includes("onPress={() => setLocalityPickerOpen(true)}") && !propsSrc.includes("% options.length") &&
   propsSrc.includes("setSelectedLocalityFilter(option);"));
@@ -191,7 +191,7 @@ check("A7 addAgentPlanLocalities POSTs /broker/plan/localities with the new name
   JSON.parse(calls[0].body).localities.join() === "Velachery" && !calls[0].url.includes("subscribe"), calls);
 check("A8 server remaining allowance reaches the UI plan", agentPlans.toUiAgentPlan(added).localitiesRemaining === 1);
 
-const pickSrc = src("features/agent/screens/AgentLocationSelectScreen.js");
+const pickSrc = src("features/dealerArea/screens/DealerAreaLocationSelectScreen.js");
 const addBranch = pickSrc.slice(pickSrc.indexOf("const handleContinue"), pickSrc.indexOf('navigation.navigate("AgentPlanConfirm"'));
 check("A9 picker adds under the active plan before any route to payment",
   addBranch.includes('if (mode === "add") {') && addBranch.includes("addUnderActivePlan();") &&

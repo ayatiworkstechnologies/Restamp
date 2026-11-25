@@ -1,5 +1,5 @@
 import { Alert } from "react-native";
-import { agentAreaMessage } from "../../../shared/api/agentPlans.js";
+import { agentAreaMessage } from "../../../shared/api/dealerAreaPlans.js";
 import { AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 
 // The existing agent subscription flow: Menu -> Agent Plan tab (plan cards ->

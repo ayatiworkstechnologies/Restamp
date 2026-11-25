@@ -34,7 +34,7 @@ import {
 } from "../../../shared/components/HugeIcon.js";
 
 import COLORS from "../../../shared/constants/colors.js";
-import { useAgent } from "../context/AgentContext.js";
+import { useAgent } from "../context/DealerAreaContext.js";
 import StatusBadge from "../../owner/components/StatusBadge.js";
 
 const FILTER_TABS = [
@@ -93,7 +93,7 @@ export default function AgentEarningsScreen({ navigation }) {
   const handleShareInvoice = async (invoice) => {
     try {
       await Share.share({
-        message: `RESTAMP Agent Commission Statement\nInvoice: ${invoice.invoiceId}\nAgent: ${agentProfile?.name || "Agent"}\nAmount: ${invoice.commissionFormatted}\nStatus: ${invoice.payoutStatus.toUpperCase()}\nClient: ${invoice.clientName}`,
+        message: `RESTAMP Dealer Commission Statement\nInvoice: ${invoice.invoiceId}\nAgent: ${agentProfile?.name || "Agent"}\nAmount: ${invoice.commissionFormatted}\nStatus: ${invoice.payoutStatus.toUpperCase()}\nClient: ${invoice.clientName}`,
       });
     } catch (e) {
       // Fallback
@@ -458,8 +458,8 @@ export default function AgentEarningsScreen({ navigation }) {
                 {/* Agent & Client Details */}
                 <View style={styles.slipPartyRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.partyRole}>AGENT PARTNER</Text>
-                    <Text style={styles.partyName}>{agentProfile?.name || "Agent"}</Text>
+                    <Text style={styles.partyRole}>DEALER PARTNER</Text>
+                    <Text style={styles.partyName}>{agentProfile?.name || "Dealer"}</Text>
                     <Text style={styles.partyMeta}>
                       RERA: {agentProfile?.reraNumber || "Not provided"}
                     </Text>

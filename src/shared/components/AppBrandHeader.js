@@ -13,7 +13,7 @@ import COLORS from "../constants/colors.js";
 import { useAuth } from "../../features/auth/context/AuthContext.js";
 import { enterBuyerFlow, enterOwnerFlow, ensureRole } from "../api/users.js";
 import { useOwner } from "../../features/owner/context/OwnerContext.js";
-import { useAgent } from "../../features/agent/context/AgentContext.js";
+import { useAgent } from "../../features/dealerArea/context/DealerAreaContext.js";
 import { useRequireAuth } from "../../features/auth/useRequireAuth.js";
 import { getUnreadCount, subscribeNotifications } from "../data/notificationsStore.js";
 import { useReva } from "../../features/reva/context/RevaContext.js";
@@ -22,7 +22,7 @@ import { useReva } from "../../features/reva/context/RevaContext.js";
 const ROLE_BADGE = {
   owner: { label: "Owner", bg: "#EFF6FF", fg: "#1D4ED8" },
   dealer: { label: "Dealer", bg: "#FEF3C7", fg: "#B45309" },
-  agent: { label: "Agent", bg: "#ECFDF5", fg: "#047857" },
+  agent: { label: "Dealer", bg: "#ECFDF5", fg: "#047857" },
 };
 
 export function RoleBadge({ role }) {

@@ -8,7 +8,7 @@ import AppNavigator from "./src/shared/navigation/AppNavigator";
 enableScreens(true);
 import { WishlistProvider } from "./src/features/buyer/context/WishlistContext";
 import { OwnerProvider } from "./src/features/owner/context/OwnerContext";
-import { AgentProvider } from "./src/features/agent/context/AgentContext";
+import { AgentProvider } from "./src/features/dealerArea/context/DealerAreaContext";
 import { AuthProvider } from "./src/features/auth/context/AuthContext";
 import { RevaProvider, RevaChatbot } from "./src/features/reva";
 import AnimatedSplashScreen from "./src/shared/components/AnimatedSplashScreen";

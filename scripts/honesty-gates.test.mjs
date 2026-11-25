@@ -118,7 +118,7 @@ check(
   "A5 Profile's agent flag gate stays in place",
   /const hasAgentPlan =\s*\n\s*AGENT_MODULE_ENABLED &&/.test(src("features/buyer/screens/ProfileScreen.js"))
 );
-const agentCtxSrc = src("features/agent/context/AgentContext.js");
+const agentCtxSrc = src("features/dealerArea/context/DealerAreaContext.js");
 check(
   "A6 agent context actions are no-ops while disabled",
   (agentCtxSrc.match(/if \(!AGENT_MODULE_ENABLED\) return null;/g) || []).length >= 4

@@ -10,11 +10,11 @@ import {
   HugeUser,
 } from "../../../shared/components/HugeIcon.js";
 
-import AgentDashboardScreen from "../screens/AgentDashboardScreen.js";
-import AgentPropertiesScreen from "../screens/AgentPropertiesScreen.js";
-import AgentProfileScreen from "../screens/AgentProfileScreen.js";
-import AgentLocationSelectScreen from "../screens/AgentLocationSelectScreen.js";
-import { useAgent } from "../context/AgentContext.js";
+import AgentDashboardScreen from "../screens/DealerAreaDashboardScreen.js";
+import AgentPropertiesScreen from "../screens/DealerAreaPropertiesScreen.js";
+import AgentProfileScreen from "../screens/DealerAreaProfileScreen.js";
+import AgentLocationSelectScreen from "../screens/DealerAreaLocationSelectScreen.js";
+import { useAgent } from "../context/DealerAreaContext.js";
 import { roleTabScreenOptions } from "../../../shared/navigation/roleTabOptions.js";
 import COLORS from "../../../shared/constants/colors.js";
 import { useAuth } from "../../auth/context/AuthContext.js";

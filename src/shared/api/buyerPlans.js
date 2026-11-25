@@ -5,17 +5,19 @@
  * 402 { detail: { code: "BUYER_PLAN_REQUIRED" } } once the buyer's plan has
  * no leads left. Callers send the buyer to the BuyerPlans screen on that.
  *
- * Purchases are SIMULATED (no payment gateway yet): subscribe records a
- * simulated payment on the server and activates the plan.
+ * Purchases use the backend payment bypass (POST /subscriptions/bypass, no
+ * money charged; see shared/api/subscriptions.js). The old simulated
+ * /buyer/plans/{code}/subscribe is refused outside development.
  */
-import { apiGet, apiGetAuth, apiPost } from "./client.js";
+import { apiGet, apiGetAuth } from "./client.js";
 import { withBuyerMode } from "../../features/buyer/api/buyerMode.js";
+import { activatePlan } from "./subscriptions.js";
 
 export const BUYER_PLANS_ROUTE = "BuyerPlans";
 
 export function isBuyerPlanRequired(e) {
   // An agent-area refusal is also a 402, but it needs an AGENT plan, never
-  // the buyer plans (shared/api/agentPlans.js: isAgentAreaRequired).
+  // the buyer plans (shared/api/dealerAreaPlans.js: isAgentAreaRequired).
   if (!e || e.status !== 402) return false;
   const code = e.data && e.data.code;
   return !code || code === "BUYER_PLAN_REQUIRED";
@@ -30,10 +32,11 @@ export async function fetchMyBuyerPlan() {
   return withBuyerMode(() => apiGetAuth("/buyer/plan"));
 }
 
+/** Activate a buyer plan, then return the buyer plan status (same shape as
+ *  fetchMyBuyerPlan). Buyer plans activate in any app mode. */
 export async function subscribeBuyerPlan(code) {
-  return withBuyerMode(() =>
-    apiPost(`/buyer/plans/${encodeURIComponent(code)}/subscribe`)
-  );
+  await activatePlan(code, "BUYER");
+  return fetchMyBuyerPlan();
 }
 
 export function formatPlanPrice(paise) {

@@ -35,7 +35,7 @@ import {
 
 import COLORS from "../../../shared/constants/colors.js";
 import InitialsAvatar from "../../../shared/components/InitialsAvatar.js";
-import { useAgent } from "../context/AgentContext.js";
+import { useAgent } from "../context/DealerAreaContext.js";
 import AppBrandHeader from "../../../shared/components/AppBrandHeader.js";
 import StatusBadge from "../../owner/components/StatusBadge.js";
 
@@ -76,7 +76,7 @@ export default function AgentDashboardScreen({ navigation }) {
       ? "Good Afternoon,"
       : "Good Evening,";
 
-  const rawAgentName = agentProfile?.name || "Agent";
+  const rawAgentName = agentProfile?.name || "Dealer";
   const agentName = rawAgentName.endsWith(",") ? rawAgentName : `${rawAgentName},`;
 
   // Calculate summary counts
@@ -150,7 +150,7 @@ export default function AgentDashboardScreen({ navigation }) {
             <View style={styles.expiredLeft}>
               <AlertTriangle size={20} color="#DC2626" style={{ marginRight: 10 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.expiredTitle}>Your {agentPlan?.isDealer ? "Dealer" : "Agent"} Plan has expired.</Text>
+                <Text style={styles.expiredTitle}>Your {agentPlan?.isDealer ? "Dealer" : "Dealer"} Plan has expired.</Text>
                 <Text style={styles.expiredSub}>
                   Renew to unlock new property listings and fresh customer enquiries.
                 </Text>
@@ -417,7 +417,7 @@ export default function AgentDashboardScreen({ navigation }) {
               <ShieldCheck size={18} color={COLORS.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.subLabel}>{agentPlan?.isDealer ? "Dealer Subscription" : "Agent Subscription"}</Text>
+              <Text style={styles.subLabel}>{agentPlan?.isDealer ? "Dealer Subscription" : "Dealer Subscription"}</Text>
               <Text style={styles.subTitle} numberOfLines={1}>
                 {agentPlan?.name || "No active plan"}
               </Text>

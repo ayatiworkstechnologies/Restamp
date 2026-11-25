@@ -5,8 +5,9 @@
  *   GET  /broker/plan                    -> { has_plan, plan_id, plan_name,
  *                                            locality_limit, valid_until,
  *                                            localities[] }
- *   POST /broker/plans/{id}/subscribe    -> same shape + transaction_id
- *        body { localities: [names] }       (PAYMENT IS SIMULATED server-side)
+ *   Purchase = POST /subscriptions/bypass (BROKER plan code, after switching
+ *        the mode to BROKER) + POST /broker/plan/localities. The simulated
+ *        /broker/plans/{id}/subscribe is refused outside development.
  *   POST /broker/plan/localities         -> same shape + added_localities
  *        body { localities: [names] }       uses the ACTIVE plan's unused
  *                                           allowance: no payment; 409 without
@@ -15,7 +16,49 @@
  * Purchasing grants coverage for the chosen localities and switches the
  * account's role to BROKER.
  */
-import { apiGetAuth, apiPost } from "./client.js";
+import { apiGet, apiGetAuth, apiPost } from "./client.js";
+import { activatePlan } from "./subscriptions.js";
+import { toPlanChoice } from "./dealerLocations.js";
+
+/** Purchasable BROKER plans: [{ code, app_id, name, price_paise,
+ *  duration_days, locality_limit }]. [] on error. */
+export async function fetchBrokerPlanCatalogue() {
+  try {
+    const data = await apiGet("/broker/plans");
+    return Array.isArray(data?.items) ? data.items : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Server plan code for an app card id ("agent-starter") or a code. */
+export async function brokerPlanCode(planIdOrCode) {
+  const items = await fetchBrokerPlanCatalogue();
+  const hit = items.find((p) => p.app_id === planIdOrCode || p.code === planIdOrCode);
+  return hit ? hit.code : planIdOrCode;
+}
+
+/** Smallest purchasable BROKER plan covering `count` localities (largest if none). */
+export async function brokerPlanCodeFor(count) {
+  const items = (await fetchBrokerPlanCatalogue())
+    .filter((p) => (p.price_paise || 0) > 0)
+    .sort((a, b) => (a.locality_limit || 0) - (b.locality_limit || 0));
+  const fit = items.find((p) => (p.locality_limit || 0) >= count) || items[items.length - 1];
+  if (!fit) throw new Error("No dealer plan is available right now. Please try again.");
+  return fit.code;
+}
+
+/**
+ * Activate a BROKER plan by code and add the chosen localities. Resolves to
+ * the /broker/plan status (+ unmatched/unavailable localities). Rejects on
+ * failure (including 409 POSTER_TYPE_CONFLICT for an Owner account).
+ */
+export async function activateBrokerPlan(code, localities) {
+  await activatePlan(code, "BROKER");
+  const names = Array.isArray(localities) ? localities : [];
+  if (names.length) return addAgentPlanLocalities(names);
+  return (await fetchAgentPlan()) || {};
+}
 
 /** The caller's active agent plan, or null (no plan / not logged in / error). */
 export async function fetchAgentPlan() {
@@ -29,9 +72,7 @@ export async function fetchAgentPlan() {
 
 /** Buy an agent plan for the chosen locality names. Rejects on failure. */
 export async function subscribeAgentPlan(planId, localities) {
-  return apiPost(`/broker/plans/${encodeURIComponent(planId)}/subscribe`, {
-    localities: Array.isArray(localities) ? localities : [],
-  });
+  return activateBrokerPlan(await brokerPlanCode(planId), localities);
 }
 
 /**
@@ -39,9 +80,9 @@ export async function subscribeAgentPlan(planId, localities) {
  * includes them). Rejects with the ApiError on failure.
  */
 export async function addAgentPlanLocalities(localities) {
-  return apiPost("/broker/plan/localities", {
-    localities: Array.isArray(localities) ? localities : [],
-  });
+  // Agent Location Master labels go as stable group ids; older names as names.
+  const choice = await toPlanChoice(localities);
+  return apiPost("/broker/plan/localities", choice);
 }
 
 export const AGENT_AREA_REQUIRED_CODE = "AGENT_AREA_NOT_IN_PLAN";
@@ -70,7 +111,9 @@ export function agentAreaMessage(e) {
  * or the trial was already used, (422) if the area is not served.
  */
 export async function startAgentTrial(locality) {
-  return apiPost("/broker/trial", { locality: String(locality || "").trim() });
+  const label = String(locality || "").trim();
+  const { group_ids } = await toPlanChoice([label]);
+  return apiPost("/broker/trial", group_ids.length ? { group_id: group_ids[0] } : { locality: label });
 }
 
 /** Server plan -> the agentPlan shape the agent screens already read. */

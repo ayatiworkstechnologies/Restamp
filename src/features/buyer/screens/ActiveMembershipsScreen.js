@@ -19,7 +19,7 @@ import {
   Briefcase,
 } from "../../../shared/components/HugeIcon.js";
 import { useOwner } from "../../owner/context/OwnerContext.js";
-import { useAgent } from "../../agent/context/AgentContext.js";
+import { useAgent } from "../../dealerArea/context/DealerAreaContext.js";
 import { useAuth } from "../../auth/context/AuthContext.js";
 import { AGENT_MODULE_ENABLED, AGENT_ROLE_VISIBLE } from "../../../shared/constants/features.js";
 import COLORS from "../../../shared/constants/colors.js";
@@ -198,7 +198,7 @@ export default function ActiveMembershipsScreen({ navigation }) {
                 <Text style={styles.ticketDetailLabel}>Plan:</Text>
                 <Text style={styles.ticketDetailValue}>
                   {hasAgentPlan
-                    ? (agentPlan?.name || "Agent Pro Plan")
+                    ? (agentPlan?.name || "Dealer Pro Plan")
                     : (subscription?.planName || "Startup Plan")}
                 </Text>
               </View>
@@ -264,7 +264,7 @@ export default function ActiveMembershipsScreen({ navigation }) {
               <View style={styles.addOtherLeft}>
                 <Briefcase size={16} color="#2563EB" style={{ marginRight: 10 }} />
                 <View>
-                  <Text style={styles.addOtherTitle}>Add Agent Membership</Text>
+                  <Text style={styles.addOtherTitle}>Add Dealer Membership</Text>
                   <Text style={styles.addOtherSub}>Claim buyer leads in your top Chennai localities</Text>
                 </View>
               </View>
